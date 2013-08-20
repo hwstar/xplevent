@@ -214,10 +214,9 @@ static void shutdownHandler(int onSignal)
 
 
 /*
- * Heartbeat logger
+ * Select Callback for counting rows
  */
-
-// Select Callback for heartbeat logger
+ 
 static int countRows(void* objptr, int argc, char **argv, char **colnames )
 {
 	if(objptr)
@@ -225,7 +224,12 @@ static int countRows(void* objptr, int argc, char **argv, char **colnames )
 	return 0;
 }
 
-// Logger function
+
+/*
+ * Heartbeat logger
+ */
+
+
 static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 {
 	int errs = 0;
@@ -298,8 +302,157 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 	}		
 }
 
+/*
+ * Trigger message logger
+ */
 
 
+static void logTriggerMessage(xPL_MessagePtr theMessage)
+{
+	int errs = 0;
+	int numRows = 0;
+	unsigned bufInitSize = 32768;
+	unsigned nvInitSize = 512;
+	int i;
+	const String vendor = xPL_getSourceVendor(theMessage);
+	const String device = xPL_getSourceDeviceID(theMessage);
+	const String instance_id = xPL_getSourceInstanceID(theMessage);
+	const xPL_NameValueListPtr msgBody = xPL_getMessageBody(theMessage);
+	char * subaddress = NULL;
+	char * nvpairs;
+	const String schema_class = xPL_getSchemaClass(theMessage);
+	const String schema_type = xPL_getSchemaType(theMessage); 
+	char *buffer;
+	char source[96];
+	char schema[64];
+	String errorMessage;
+	
+
+	// Test for valid schema
+	if(!schema_class || !schema_type){
+		debug(DEBUG_UNEXPECTED, "logTriggerMessage: Bad or missing schema");
+		return;
+	}
+	// Allocate buffer
+	buffer = malloc(bufInitSize);
+	if(!buffer)
+		MALLOC_ERROR;
+	*buffer = 0; // Empty string	
+	
+	// Allocate space for nvpairs
+	nvpairs = malloc(nvInitSize);
+	if(!nvpairs)
+		MALLOC_ERROR;
+	*nvpairs = 0; // Empty string
+	
+	
+
+
+	// Make combined schema string;
+	snprintf(schema, 63, "%s.%s", schema_class, schema_type);
+	debug(DEBUG_ACTION, "Schema: %s", schema);
+	
+	// Test for sensor.basic
+	if(!strcmp(schema, "sensor.basic"))
+		subaddress = xPL_getMessageNamedValue(theMessage, "device");
+	
+	// Test for hvac.zone or security.gateway
+	if((!strcmp(schema, "hvac.zone")) || (!strcmp(schema, "security.gateway")))
+		subaddress = xPL_getMessageNamedValue(theMessage, "zone");
+	
+	// Make source name with sub-address if available
+	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
+	if(subaddress){
+		snprintf(source + strlen(source), 31, ":%s", subaddress);
+	}
+	
+	debug(DEBUG_EXPECTED,"Trigger message received from: %s", source);
+
+		// Build name/value pair list
+	if(msgBody){
+		for(i = 0; i < msgBody-> namedValueCount; i++){
+			if(!msgBody->namedValues[i]->isBinary){
+				if(i)
+					snprintf(nvpairs + strlen(nvpairs), 2, ","); 
+				snprintf(nvpairs + strlen(nvpairs), 32, "%s=%s",
+				msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
+				if(strlen(nvpairs) > nvInitSize - 128){
+					debug(DEBUG_EXPECTED,"Increasing nvpairs buffer size");
+					// Double the buffer size
+					nvInitSize <<= 1;
+					// Re-allocate the buffer
+					if(!(nvpairs = realloc(nvpairs, nvInitSize)))
+						MALLOC_ERROR;
+				}
+			}
+			else
+				debug(DEBUG_UNEXPECTED, "Skipping binary message");
+		}
+		debug(DEBUG_ACTION, "Name value pairs: %s", nvpairs);
+	}
+	else{
+		debug(DEBUG_UNEXPECTED, "Missing message body");
+	}
+	
+	// Transaction start
+	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
+	if(errorMessage){
+		errs++;
+		debug(DEBUG_UNEXPECTED,"Sqlite error: %s", errorMessage);
+		sqlite3_free(errorMessage);
+	}	
+
+	// See if source is already in the table
+
+	snprintf(buffer, 127, "SELECT * FROM triglog WHERE source='%s'", source);
+	if(!errs){
+		sqlite3_exec(myDB, buffer, countRows, &numRows, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite select error on triglog: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+		
+		if(numRows){
+			// Delete any rows if they exist
+			snprintf(buffer, 127,"DELETE FROM triglog WHERE source='%s'", source);
+			sqlite3_exec(myDB, buffer, countRows, NULL, &errorMessage);
+			if(errorMessage){
+				debug(DEBUG_UNEXPECTED,"Sqlite delete error on triglog: %s", errorMessage);
+				sqlite3_free(errorMessage);
+				errs++;
+			}
+		}
+	}
+	if(!errs){
+		// Insert new record
+		snprintf(buffer, 32767, "INSERT INTO triglog VALUES ('%s','%s','%s',DATETIME())", source, schema, nvpairs);
+		sqlite3_exec(myDB, buffer, countRows, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite insert error on triglog: %s", errorMessage);
+			sqlite3_free(errorMessage);
+			errs++;
+		}
+	}			
+	if(!errs){
+		// Transaction commit	
+		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite commit error on triglog: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}	
+	}
+	else{
+		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite rollback error triglog: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}
+	if(nvpairs)
+		free(nvpairs); // Free name-value pairs buffer
+	if(buffer)
+		free(buffer);
+}
 
 /*
  * Our xPL listener
@@ -315,6 +468,10 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 		if((mtype == xPL_MESSAGE_STATUS) && !strcmp(class, "hbeat") && !strcmp(type, "app")){
 			// Log heartbeat messages
 			logHeartBeatMessage(theMessage);
+		}
+		else if(mtype == xPL_MESSAGE_TRIGGER){
+			// Log trigger message
+			logTriggerMessage(theMessage);
 		}
 	}
 }
