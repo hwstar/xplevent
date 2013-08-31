@@ -43,12 +43,13 @@
 #include <sys/stat.h>
 #include <xPL.h>
 #include <sqlite3.h>
+#include <talloc.h>
+#include  "defs.h"
 #include "types.h"
 #include "notify.h"
 #include "confread.h"
+#include "parser.h"
 
-
-#define MALLOC_ERROR	malloc_error(__FILE__,__LINE__)
 
 #define SHORT_OPTIONS "c:d:f:hi:l:ns:v"
 
@@ -84,6 +85,8 @@ static Bool noBackground = FALSE;
 
 static clOverride_t clOverride = {0,0,0,0};
 
+static TALLOC_CTX *masterCTX = NULL;
+
 static xPL_ServicePtr xpleventService = NULL;
 static xPL_MessagePtr xpleventTriggerMessage = NULL;
 static xPL_MessagePtr xpleventConfirmMessage = NULL;
@@ -116,15 +119,6 @@ static struct option longOptions[] = {
 	{0, 0, 0, 0}
 };
 
-
-/*
- * Malloc error handler
- */
- 
-static void malloc_error(String file, int line)
-{
-	fatal("Out of memory in file %s, at line %d");
-}
 
 
 
@@ -334,15 +328,13 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 		return;
 	}
 	// Allocate buffer
-	buffer = malloc(bufInitSize);
-	if(!buffer)
-		MALLOC_ERROR;
+	buffer = talloc_array(masterCTX, char, bufInitSize);
+	ASSERT_FAIL(buffer)
 	*buffer = 0; // Empty string	
 	
 	// Allocate space for nvpairs
-	nvpairs = malloc(nvInitSize);
-	if(!nvpairs)
-		MALLOC_ERROR;
+	nvpairs = talloc_array(masterCTX, char, nvInitSize);
+	ASSERT_FAIL(nvpairs)
 	*nvpairs = 0; // Empty string
 	
 	
@@ -381,8 +373,8 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 					// Double the buffer size
 					nvInitSize <<= 1;
 					// Re-allocate the buffer
-					if(!(nvpairs = realloc(nvpairs, nvInitSize)))
-						MALLOC_ERROR;
+					nvpairs = talloc_realloc(masterCTX, nvpairs, char, nvInitSize);
+					ASSERT_FAIL(nvpairs);
 				}
 			}
 			else
@@ -449,9 +441,9 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 		}
 	}
 	if(nvpairs)
-		free(nvpairs); // Free name-value pairs buffer
+		talloc_free(nvpairs); // Free name-value pairs buffer
 	if(buffer)
-		free(buffer);
+		talloc_free(buffer);
 }
 
 /*
@@ -463,8 +455,8 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 {
 	if(xPL_isBroadcastMessage(theMessage)){ /* If broadcast message */
 		int mtype = xPL_getMessageType(theMessage);
-		const String class = xPL_getSchemaClass(theMessage);
-		const String type = xPL_getSchemaType(theMessage);
+		const char *class = xPL_getSchemaClass(theMessage);
+		const char *type = xPL_getSchemaType(theMessage);
 		if((mtype == xPL_MESSAGE_STATUS) && !strcmp(class, "hbeat") && !strcmp(type, "app")){
 			// Log heartbeat messages
 			logHeartBeatMessage(theMessage);
@@ -521,13 +513,9 @@ void showHelp(void)
 * Default error handler for confreadScan()
 */
 
-static void confDefErrorHandler( int etype, int linenum, String info)
+static void confDefErrorHandler( int etype, int linenum, const char *info)
 {
 	switch(etype){
-
-		case CRE_MALLOC:
-			error("Memory allocation error in confread.c, line %d", linenum);
-			break;
 
 		case CRE_SYNTAX:
 			error("Syntax error in config file on line: %d", linenum);
@@ -559,9 +547,11 @@ int main(int argc, char *argv[])
 	int longindex;
 	int rc;
 	int optchar;
-	String p;
+	const char *p;
 	
-		
+	masterCTX = talloc_new(NULL);
+	ASSERT_FAIL(masterCTX);
+
 
 	/* Set the program name */
 	progName=argv[0];
@@ -584,7 +574,7 @@ int main(int argc, char *argv[])
 		
 				/* Was it a config file switch? */
 			case 'c':
-				confreadStringCopy(configFile, optarg, WS_SIZE - 1);
+				ConfReadStringCopy(configFile, optarg, WS_SIZE - 1);
 				debug(DEBUG_ACTION,"New config file path is: %s", configFile);
 				break;
 				
@@ -601,7 +591,7 @@ int main(int argc, char *argv[])
 
 			/* Was it a pid file switch? */
 			case 'f':
-				confreadStringCopy(pidFile, optarg, WS_SIZE - 1);
+				ConfReadStringCopy(pidFile, optarg, WS_SIZE - 1);
 				clOverride.pid_file = 1;
 				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
 				break;
@@ -613,13 +603,13 @@ int main(int argc, char *argv[])
 
 				/* Specify interface to broadcast on */
 			case 'i': 
-				confreadStringCopy(interface, optarg, WS_SIZE -1);
+				ConfReadStringCopy(interface, optarg, WS_SIZE -1);
 				clOverride.interface = 1;
 				break;
 
 			case 'l':
 				/* Override log path*/
-				confreadStringCopy(logPath, optarg, WS_SIZE - 1);
+				ConfReadStringCopy(logPath, optarg, WS_SIZE - 1);
 				clOverride.log_path = 1;
 				debug(DEBUG_ACTION,"New log path is: %s",
 				logPath);
@@ -634,14 +624,14 @@ int main(int argc, char *argv[])
 
 			
 			case 'o': /* Instance ID */
-				confreadStringCopy(sqliteFile, optarg, WS_SIZE);
+				ConfReadStringCopy(sqliteFile, optarg, WS_SIZE);
 				clOverride.sqlitefile = 1;
 				debug(DEBUG_ACTION,"New sqlite file is: %s", sqliteFile);
 				break;			
 			
 			
 			case 's': /* Instance ID */
-				confreadStringCopy(instanceID, optarg, WS_SIZE);
+				ConfReadStringCopy(instanceID, optarg, WS_SIZE);
 				clOverride.instance_id = 1;
 				debug(DEBUG_ACTION,"New instance ID is: %s", instanceID);
 				break;
@@ -668,27 +658,27 @@ int main(int argc, char *argv[])
 
 	/* Attempt to read a config file */
 	
-	if((configEntry = confreadScan(configFile, confDefErrorHandler))){
+	if((configEntry = ConfReadScan(masterCTX, configFile, confDefErrorHandler))){
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
-		if((!clOverride.instance_id) && (p = confreadValueBySectKey(configEntry, "general", "instance-id")))
-			confreadStringCopy(instanceID, p, sizeof(instanceID));
+		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configEntry, "general", "instance-id")))
+			ConfReadStringCopy(instanceID, p, sizeof(instanceID));
 		
 		/* Interface */
-		if((!clOverride.interface) && (p = confreadValueBySectKey(configEntry, "general", "interface")))
-			confreadStringCopy(interface, p, sizeof(interface));
+		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configEntry, "general", "interface")))
+			ConfReadStringCopy(interface, p, sizeof(interface));
 			
 		/* pid file */
-		if((!clOverride.pid_file) && (p = confreadValueBySectKey(configEntry, "general", "pid-file")))
-			confreadStringCopy(pidFile, p, sizeof(pidFile));	
+		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(configEntry, "general", "pid-file")))
+			ConfReadStringCopy(pidFile, p, sizeof(pidFile));	
 						
 		/* log path */
-		if((!clOverride.log_path) && (p = confreadValueBySectKey(configEntry, "general", "log-path")))
-			confreadStringCopy(logPath, p, sizeof(logPath));
+		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configEntry, "general", "log-path")))
+			ConfReadStringCopy(logPath, p, sizeof(logPath));
 		
 		/* sqlite-file */
-		if((!clOverride.sqlitefile) && (p = confreadValueBySectKey(configEntry, "general", "sqlite-file")))
-			confreadStringCopy(sqliteFile, p, sizeof(sqliteFile));
+		if((!clOverride.sqlitefile) && (p = ConfReadValueBySectKey(configEntry, "general", "sqlite-file")))
+			ConfReadStringCopy(sqliteFile, p, sizeof(sqliteFile));
 		
 	}
 	else

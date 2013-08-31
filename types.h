@@ -7,7 +7,7 @@
 
 /* Define common types */
 #ifndef COMMON_TYPES
-typedef enum { FALSE, TRUE }  Bool;
+typedef char Bool;
 typedef char * String;
 #define COMMON_TYPES
 #endif

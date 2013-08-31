@@ -5,9 +5,11 @@ VERSION = 0.0.1
 CONTACT = <hwstar@rodgers.sdcoxmail.com>
 
 CC = gcc
-LIBS = -lm -lxPL -lsqlite3
+LIBS = -lm -lxPL -lsqlite3 -ltalloc
 #CFLAGS = -O2 -Wall  -D'PACKAGE="$(PACKAGE)"' -D'VERSION="$(VERSION)"' -D'EMAIL="$(CONTACT)"'
 CFLAGS = -g3 -Wall  -D'PACKAGE="$(PACKAGE)"' -D'VERSION="$(VERSION)"' -D'EMAIL="$(CONTACT)"'
+LEX=flex
+ACC=lemon
 
 # Install paths for built executables
 
@@ -19,21 +21,41 @@ DAEMONDIR = /usr/local/bin
 
 # Object file lists
 
-OBJS = $(PACKAGE).o notify.o confread.o  
+OBJS = notify.o confread.o parser.o lex.o grammar.o
+
+PACKAGE_OBJS = $(PACKAGE).o $(OBJS)
+
+PTEST_OBJS = ptest.o $(OBJS)
 
 #Dependencies
 
-all: $(PACKAGE) 
+all: $(PACKAGE) ptest
 
-$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h types.h
+ptest.o:	Makefile ptest.c notify.h confread.h parser.h types.h defs.h
+
+$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h
+
 
 #Rules
 
-$(PACKAGE): $(OBJS)
-	$(CC) $(CFLAGS) -o $(PACKAGE) $(OBJS) $(LIBS)
+
+grammar.c:	grammar.y parse.h parser.h types.h defs.h
+	$(ACC) grammar.y
+
+lex.c:	lex.l lex.h grammar.c grammar.y parse.h parser.h types.h defs.h
+	$(LEX) -o lex.c lex.l
+	
+parser.o:	parser.c grammar.c lex.c lex.l grammar.y
+
+ptest: $(PTEST_OBJS)
+	$(CC) $(CFLAGS) -o ptest $(PTEST_OBJS) $(LIBS)
+
+$(PACKAGE): $(PACKAGE_OBJS)
+	$(CC) $(CFLAGS) -o $(PACKAGE) $(PACKAGE_OBJS) $(LIBS)
+	
 
 clean:
-	-rm -f $(PACKAGE) *.o core
+	-rm -f $(PACKAGE)  ptest *.o lex.c grammar.c grammar.h grammar.out core
 
 install:
 	cp $(PACKAGE) $(DAEMONDIR)

@@ -32,6 +32,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <time.h>
+#include "defs.h"
+#include "types.h"
 #include "notify.h"
 
 #define LOGOUT (output == NULL ? stderr : output)

@@ -2,7 +2,7 @@
 /*
  * confread.c Created 7/07/12
  * 
- *  Copyright (C) 2012  Stephen Rodgers
+ *  Copyright (C) 2012,2013  Stephen Rodgers
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -29,7 +29,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <talloc.h>
 
+#include "defs.h"
+#include "types.h"
 #include "confread.h"
 #include "notify.h"
 
@@ -54,31 +57,20 @@ enum { TOK_ERR = -1, TOK_NL=0, TOK_SECTION, TOK_KEY, TOK_VALUE, TOK_COMMENT};
 
 /* Internal functions */
 
-static int linescan(String *lp, String tokstring);
-static String removespctab(String line);
-static char copyuntil(String dest, String *srcp, int max_dest_len, const String stopchrs);
+static int linescan(char **lp, char * tokstring);
+static char *removespctab(char * line);
+static char copyuntil(char * dest, char **srcp, int max_dest_len,  char *stopchrs);
 
-/* 
- * Allocate a memory block and zero it out
- */
 
-static void *mallocz(size_t size)
-{
-	void *m = malloc(size);
-	if(m)
-		memset(m, 0, size);
-	return m;
-}
- 
 
 /*
 * Hash a string
 */
 
-uint32_t confreadHash(const String key)
+static unsigned confreadHash(const char * key)
 {
 	int len = strlen(key);
-	register uint32_t hash, i;
+	register unsigned hash, i;
 
 	if(!key)
 		return 0;
@@ -105,9 +97,9 @@ uint32_t confreadHash(const String key)
 * match, return a nul.
 */
 
-static char copyuntil(String dest, String *srcp, int max_dest_len, const String stopchrs){
+static char copyuntil(char *dest, char **srcp, int max_dest_len, char *stopchrs){
 
-	String p = "";
+	char *p = "";
 	int i;
 
 	/* Note: max_dest_len check below accounts for NUL at eos. */
@@ -154,7 +146,7 @@ static char copyuntil(String dest, String *srcp, int max_dest_len, const String 
 * Remove spaces and tabs from the line in place
 */
 			
-static String removespctab(String line)
+static char *removespctab(char *line)
 {
 	int si = 0, di = 0;
 
@@ -176,7 +168,7 @@ static String removespctab(String line)
 * in that case, throw the characters away until the next token is detected.
 */
 
-static int linescan(String *lp, String tokstring){
+static int linescan(char **lp, char *tokstring){
 
 	int retval = TOK_ERR;
 	
@@ -253,7 +245,7 @@ static int linescan(String *lp, String tokstring){
 * Safer string copy
 */
 
-String confreadStringCopy(String dest, const String src, int charsToCopy)
+char *ConfReadStringCopy(char *dest, const char *src, int charsToCopy)
 {
 	if((!dest) || (!src))
 		return NULL;
@@ -270,9 +262,9 @@ String confreadStringCopy(String dest, const String src, int charsToCopy)
 */
 
 
-SectionEntryPtr_t confreadFindSection(ConfigEntryPtr_t ce, const String section)
+SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const char *section)
 {
-	uint32_t sh;
+	unsigned sh;
 	SectionEntryPtr_t se;
 
 	if((!ce) || (ce->magic != CE_MAGIC) || (!ce->head))
@@ -293,7 +285,7 @@ SectionEntryPtr_t confreadFindSection(ConfigEntryPtr_t ce, const String section)
 * Return the section name, or NULL if it does not exist
 */
 
-const String confreadGetSection(SectionEntryPtr_t se)
+const char *ConfReadGetSection(SectionEntryPtr_t se)
 {
 	if((!se) || (se->magic != KE_MAGIC) || (!se->section))
 		return NULL;
@@ -305,7 +297,7 @@ const String confreadGetSection(SectionEntryPtr_t se)
 * Return a pointer to the first section entry if it exists. If it does not exist, return NULL
 */
 
-SectionEntryPtr_t confreadGetFirstSection(ConfigEntryPtr_t ce)
+SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce)
 {
 	if((!ce) || (ce->magic != CE_MAGIC) || (!ce->head))
 		return NULL;
@@ -316,7 +308,7 @@ SectionEntryPtr_t confreadGetFirstSection(ConfigEntryPtr_t ce)
 * Return a pointer to the next section entry if it exists. If it does not exist, return NULL
 */
 
-SectionEntryPtr_t confreadGetNextSection(SectionEntryPtr_t se)
+SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se)
 {
 	if((!se) || (se->magic != SE_MAGIC) || (!se->next))
 		return NULL;
@@ -327,7 +319,7 @@ SectionEntryPtr_t confreadGetNextSection(SectionEntryPtr_t se)
 * Return the line number for the section entry
 */
 
-unsigned confreadSectionLineNum(SectionEntryPtr_t se)
+unsigned ConfReadSectionLineNum(SectionEntryPtr_t se)
 {
 	if((!se) || (se->magic != SE_MAGIC))
 		return 0;
@@ -340,9 +332,9 @@ unsigned confreadSectionLineNum(SectionEntryPtr_t se)
 * Return a pointer to the matching key in a section if it exists
 */
 
-KeyEntryPtr_t confreadFindKey(SectionEntryPtr_t se, const String key)
+KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const char *key)
 {
-	uint32_t kh;
+	unsigned kh;
 	KeyEntryPtr_t ke;
 
 	if((!se) || (se->magic != SE_MAGIC) || (!se->key_head))
@@ -361,7 +353,7 @@ KeyEntryPtr_t confreadFindKey(SectionEntryPtr_t se, const String key)
 * Return a key from a key struct
 */
 
-const String confreadGetKey(KeyEntryPtr_t ke)
+const char *ConfReadGetKey(KeyEntryPtr_t ke)
 {
 	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->key))
 		return NULL;
@@ -373,7 +365,7 @@ const String confreadGetKey(KeyEntryPtr_t ke)
 * Return a line number from a key entry
 */
 
-unsigned confreadKeyLineNum(KeyEntryPtr_t ke)
+unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke)
 {
 	if((!ke) || (ke->magic != KE_MAGIC))
 		return 0;
@@ -385,7 +377,7 @@ unsigned confreadKeyLineNum(KeyEntryPtr_t ke)
 * Return first key structure in a given section if it exists
 */
 
-KeyEntryPtr_t confreadGetFirstKey(SectionEntryPtr_t se)
+KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se)
 {
 
 	if((!se) || (se->magic != SE_MAGIC) || (!se->key_head))
@@ -398,7 +390,7 @@ KeyEntryPtr_t confreadGetFirstKey(SectionEntryPtr_t se)
 * Return the next key structure pointed to by the current key structure if it exists
 */
 
-KeyEntryPtr_t confreadGetNextKey(KeyEntryPtr_t ke)
+KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke)
 {
 	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->next))
 		return NULL;
@@ -410,7 +402,7 @@ KeyEntryPtr_t confreadGetNextKey(KeyEntryPtr_t ke)
 * Return a value associated with a key struct
 */
 
-const String confreadGetValue(KeyEntryPtr_t ke)
+const char *ConfReadGetValue(KeyEntryPtr_t ke)
 {
 	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->value))
 		return NULL;
@@ -422,9 +414,9 @@ const String confreadGetValue(KeyEntryPtr_t ke)
 /*
  * Return value string by section entry and key name
  */
-const String confreadValueBySectEntKey(SectionEntryPtr_t se, const String key)
+const char *ConfReadValueBySectEntKey(SectionEntryPtr_t se, const char *key)
 {
-	return confreadGetValue(confreadFindKey(se, key));
+	return ConfReadGetValue(ConfReadFindKey(se, key));
 }
 
 /*
@@ -432,15 +424,15 @@ const String confreadValueBySectEntKey(SectionEntryPtr_t se, const String key)
 */
 
 
-KeyEntryPtr_t confreadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String section, const String key)
+KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key)
 {
 	SectionEntryPtr_t se;
 
 	if((!section) || (!key))
 		return NULL;
 
- 	se = confreadFindSection(ce, section);
-	return confreadFindKey(se, key);
+ 	se = ConfReadFindSection(ce, section);
+	return ConfReadFindKey(se, key);
 
 }
 
@@ -448,19 +440,19 @@ KeyEntryPtr_t confreadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String sectio
 * Return first Key in section
 */
 
-KeyEntryPtr_t confreadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String section)
+KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const char *section)
 {
-	SectionEntryPtr_t se = confreadFindSection(ce, section);
-	return confreadGetFirstKey(se);
+	SectionEntryPtr_t se = ConfReadFindSection(ce, section);
+	return ConfReadGetFirstKey(se);
 }
 
 /*
 * Return a count of the number of entries in a section
 */
 
-unsigned confreadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section)
+unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const char *section)
 {
-	SectionEntryPtr_t se = confreadFindSection(ce, section);
+	SectionEntryPtr_t se = ConfReadFindSection(ce, section);
 	if(se)
 		return se->entry_count;
 	else
@@ -472,10 +464,10 @@ unsigned confreadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section)
 * Find a value by section and key
 */
 
-const String confreadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key)
+const char *ConfReadValueBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key)
 {
-	KeyEntryPtr_t ke = confreadKeyEntryBySectKey(ce, section, key);
-	return confreadGetValue(ke);
+	KeyEntryPtr_t ke = ConfReadKeyEntryBySectKey(ce, section, key);
+	return ConfReadGetValue(ke);
 
 }
 
@@ -483,9 +475,9 @@ const String confreadValueBySectKey(ConfigEntryPtr_t ce, const String section, c
 * Find value by section and key, convert to unsigned int, return in res. 
 */
 
-Bool confreadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res)
+int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const char *section, const char *key, unsigned *res)
 {
-	String num = confreadValueBySectKey(ce, section, key);
+	const char *num = ConfReadValueBySectKey(ce, section, key);
 	if(num && res){
 		long val = strtol(num, NULL, 0);
 		if((errno != ERANGE) && (val > 0) && (val <= UINT_MAX)){
@@ -502,13 +494,9 @@ Bool confreadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section,
 * Default error handler for confreadScan()
 */
 
-void confreadDefErrorHandler( int etype, int linenum, String info)
+void ConfReadDefErrorHandler( int etype, int linenum, const char *info)
 {
 	switch(etype){
-
-		case CRE_MALLOC:
-			error("Memory allocation error in confread.c, line %d", linenum);
-			break;
 
 		case CRE_SYNTAX:
 			error("Syntax error in config file on line: %d", linenum);
@@ -537,41 +525,9 @@ void confreadDefErrorHandler( int etype, int linenum, String info)
 * Free all data structures associated with our config files
 */
 
-void confreadFree(ConfigEntryPtr_t ce)
+void ConfReadFree(ConfigEntryPtr_t ce)
 {
-	SectionEntryPtr_t se, sef;
-	KeyEntryPtr_t kv, kvf;
-
-	if((!ce) || (ce->magic != CE_MAGIC))
-		return;
-
-	se = ce->tail; /* Start at end of section list and work back */
-	
-	while((se) && (se->magic == SE_MAGIC)){
-		se->magic = 0; /* Clear the magic # */
-		kv = se->key_tail; /* Start at end of kv list and work back */
-		while((kv) && (kv->magic == KE_MAGIC)){
-			kv->magic = 0; /* Clear the magic # */
-			if(kv->value)
-				free(kv->value);
-			if(kv->key)
-				free(kv->key);
-			kvf = kv; /* note this structure for freeing */
-			kv = kv->prev;
-			free(kvf);
-		}
-		if(se->section)
-			free(se->section);
-		sef = se; /* note this structure for freeing */
-		se = se->prev;
-		free(sef);
-	}
-	if(ce->line)
-		free(ce->line);
-	if(ce->work_string)
-		free(ce->work_string);
-	ce->magic = 0; /* Clear the magic # */
-	free(ce);
+	talloc_free(ce);
 }
 
 
@@ -579,7 +535,7 @@ void confreadFree(ConfigEntryPtr_t ce)
 * Dump all printable fields in all data structures associated with the config file
 */
 
-void confreadDebugDump(ConfigEntryPtr_t ce)
+void ConfReadDebugDump(ConfigEntryPtr_t ce)
 {
 	SectionEntryPtr_t se;
 	KeyEntryPtr_t kv;
@@ -620,9 +576,9 @@ void confreadDebugDump(ConfigEntryPtr_t ce)
 */
 
 
-ConfigEntryPtr_t confreadScan(String thePath, void (*error_callback)(int type, int linenum, String info )){
+ConfigEntryPtr_t ConfReadScan(void *ctx, const char *thePath, void (*error_callback)(int type, int linenum, const char *info )){
 	FILE *conf_file;
-	String p;
+	char *p;
 	ConfigEntryPtr_t ce = NULL;
 	SectionEntryPtr_t se = NULL;
 	KeyEntryPtr_t kv = NULL;
@@ -631,15 +587,13 @@ ConfigEntryPtr_t confreadScan(String thePath, void (*error_callback)(int type, i
 	/* User our built in handler if no error handler is specified */
 
 	if(!error_callback)
-		error_callback = confreadDefErrorHandler;
+		error_callback = ConfReadDefErrorHandler;
 
 	/* Allocate a config entry */
 
-	if(!(ce = mallocz(sizeof(ConfigEntry_t)))){
-		debug(DEBUG_UNEXPECTED, "Can't malloc config entry in confReadScan()");
-		(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-		return NULL;
-	}
+	ce = talloc_zero(ctx, ConfigEntry_t);
+	ASSERT_FAIL(ce)
+	
 	
 	/* Initialize config entry */
 	ce->magic = CE_MAGIC;
@@ -647,22 +601,14 @@ ConfigEntryPtr_t confreadScan(String thePath, void (*error_callback)(int type, i
 	
 	/* Allocate a line buffer */
 
-	if(!(ce->line = mallocz(MAX_CONFIG_LINE))){
-		debug(DEBUG_UNEXPECTED, "Can't malloc line buffer in confReadScan()");
-		confreadFree(ce);
-		(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-		return NULL;
-	}
+	ce->line = talloc_zero_array(ctx, char, MAX_CONFIG_LINE);
+	ASSERT_FAIL(ce->line)
 
 
 	/* Allocate a line buffer */
 
-	if(!(ce->work_string = mallocz(MAX_CONFIG_LINE))){
-		debug(DEBUG_UNEXPECTED, "Can't malloc work string in confReadScan()");
-		confreadFree(ce);
-		(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-		return NULL;
-	}
+	ce->work_string = talloc_zero_array(ctx, char, MAX_CONFIG_LINE);
+	ASSERT_FAIL(ce->work_string)
 
 
 	/* Open the config file */
@@ -697,20 +643,16 @@ ConfigEntryPtr_t confreadScan(String thePath, void (*error_callback)(int type, i
 			
 			case TOK_SECTION:
 
-				if(!(se = mallocz(sizeof(SectionEntry_t)))){
-					confreadFree(ce);
-					(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-					return NULL;
-				}
+				se = talloc_zero(ctx, SectionEntry_t);
+				ASSERT_FAIL(se)
+				
 				/* Initialize section entry */
 				se->magic = SE_MAGIC;
 
 				/* Copy the section name into the new entry */
-				if(!(se->section = strdup(ce->work_string))){
-					confreadFree(ce);
-					(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-					return NULL;
-				}
+				se->section = talloc_strdup(ctx, ce->work_string);
+				ASSERT_FAIL(se->section);
+			
 				/* Hash the section */
 				se->hash = confreadHash(se->section);
 
@@ -746,21 +688,17 @@ ConfigEntryPtr_t confreadScan(String thePath, void (*error_callback)(int type, i
 
 				kv = NULL;
 				if(se){	/* There has to be a section defined */
-					if(!(kv = mallocz(sizeof(KeyEntry_t)))){
-						confreadFree(ce);
-						(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-						return NULL;
-					}
+					kv = talloc_zero(ctx, KeyEntry_t);
+					ASSERT_FAIL(kv)
+					
 		
 					/* Initialize section entry */
 					kv->magic = KE_MAGIC;
 
 					/* Save the key */
-					if(!(kv->key = strdup(ce->work_string))){
-						confreadFree(ce);
-						(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-						return NULL;
-					}
+					kv->key = talloc_strdup(ctx, ce->work_string);
+					ASSERT_FAIL(kv->key);
+				
 
 					/* Hash the key */
 					kv->hash = confreadHash(kv->key);
@@ -775,11 +713,9 @@ ConfigEntryPtr_t confreadScan(String thePath, void (*error_callback)(int type, i
 					case TOK_VALUE:
 						if(kv && se){
 							/* Save value */
-							if(!(kv->value = strdup(ce->work_string))){
-								confreadFree(ce);
-								(*error_callback)(CRE_MALLOC, __LINE__, NULL);
-								return NULL;
-							}
+							kv->value = talloc_strdup(ctx, ce->work_string);
+							ASSERT_FAIL(kv->value)
+						
 							/* Count the new entry */
 							se->entry_count++;
 							/* Insert new key/value into list in current section */

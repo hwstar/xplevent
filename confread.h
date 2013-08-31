@@ -9,11 +9,10 @@
 #ifndef CONFSCAN_H
 #define CONFSCAN_H
 
-#include "types.h"
 
 /* Enums */
 
-enum {CRE_SYNTAX, CRE_MALLOC, CRE_IO, CRE_FOPEN};
+enum {CRE_SYNTAX, CRE_IO, CRE_FOPEN};
 
 /* Typedefs */
 
@@ -27,11 +26,11 @@ typedef ConfigEntry_t * ConfigEntryPtr_t;
 /* Entry for a key table entry */
 
 struct	keyent{
-	uint32_t magic;
-	uint32_t hash;
+	unsigned magic;
+	unsigned hash;
 	unsigned linenum;
-	String key;
-	String value;
+	char *key;
+	char *value;
 	KeyEntryPtr_t prev;
 	KeyEntryPtr_t next;	
 };
@@ -39,11 +38,11 @@ struct	keyent{
 /* Entry for a section block table */
 
 struct sectionent{
-	uint32_t magic;
-	uint32_t hash;
+	unsigned magic;
+	unsigned hash;
 	unsigned linenum;
 	unsigned entry_count;
-	String section;
+	char *section;
 	KeyEntryPtr_t key_head;
 	KeyEntryPtr_t key_tail;
 	SectionEntryPtr_t prev;
@@ -52,9 +51,9 @@ struct sectionent{
 
 
 struct configent{
-	uint32_t magic;
-	String line;
-	String work_string;
+	unsigned magic;
+	char *line;
+	char *work_string;
 	SectionEntryPtr_t head;
 	SectionEntryPtr_t tail;
 };
@@ -65,44 +64,44 @@ struct configent{
 */
 
 /* Config functions */
-ConfigEntryPtr_t confreadScan(const String confpath, void (*error_callback)(int type, int linenum, const String info));
-void confreadFree(ConfigEntry_t *theConfig);
+ConfigEntryPtr_t ConfReadScan(void *ctx, const char *thePath, void (*error_callback)(int type, int linenum, const char *info));
+void ConfReadFree(ConfigEntry_t *theConfig);
 
 /* Section functions */
-SectionEntryPtr_t confreadFindSection(ConfigEntryPtr_t ce, const String section);
-const String confreadGetSection(SectionEntryPtr_t se);
-SectionEntryPtr_t confreadGetFirstSection(ConfigEntryPtr_t ce);
-SectionEntryPtr_t confreadGetNextSection(SectionEntryPtr_t se);
-unsigned confreadSectionLineNum(SectionEntryPtr_t se);
+SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const char *section);
+const char *ConfReadGetSection(SectionEntryPtr_t se);
+SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce);
+SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se);
+unsigned ConfReadSectionLineNum(SectionEntryPtr_t se);
 
 /* Key Functions */
-KeyEntryPtr_t confreadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String section, const String key);
-KeyEntryPtr_t confreadFindKey(SectionEntryPtr_t se, const String key);
-const String confreadGetKey(KeyEntryPtr_t ke);
-KeyEntryPtr_t confreadGetFirstKey(SectionEntryPtr_t se);
-KeyEntryPtr_t confreadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String section);
-KeyEntryPtr_t confreadGetNextKey(KeyEntryPtr_t ke);
-unsigned confreadKeyLineNum(KeyEntryPtr_t ke);
-unsigned confreadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section);
+KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key);
+KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const char *key);
+const char *ConfReadGetKey(KeyEntryPtr_t ke);
+KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se);
+KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const char * section);
+KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke);
+unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke);
+unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const char * section);
 
 
 
 /* Value functions */
-const String confreadGetValue(KeyEntryPtr_t ke);
-const String confreadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key);
-Bool confreadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res);
-const String confreadValueBySectEntKey(SectionEntryPtr_t se, const String key);
+const char * ConfReadGetValue(KeyEntryPtr_t ke);
+const char * ConfReadValueBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key);
+int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const char *section, const char *key, unsigned *res);
+const char * ConfReadValueBySectEntKey(SectionEntryPtr_t se, const char *key);
 
 /*Default error handler*/
-void confreadDefErrorHandler( int etype, int linenum, const String info);
+void ConfReadDefErrorHandler( int etype, int linenum, const char *info);
 
 /* Utility Functions */
 
-String confreadStringCopy(String dest, const String src, int charsToCopy);
-uint32_t confreadHash(const String key);
+char * ConfReadStringCopy(char *dest, const char *src, int charsToCopy);
+unsigned ConfReadHash(const char *key);
 
 /* Debugging functions */
-void confreadDebugDump(ConfigEntryPtr_t ce);
+void ConfReadDebugDump(ConfigEntryPtr_t ce);
 
 
 #endif	
