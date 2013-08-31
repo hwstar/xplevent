@@ -57,9 +57,9 @@ enum { TOK_ERR = -1, TOK_NL=0, TOK_SECTION, TOK_KEY, TOK_VALUE, TOK_COMMENT};
 
 /* Internal functions */
 
-static int linescan(char **lp, char * tokstring);
-static char *removespctab(char * line);
-static char copyuntil(char * dest, char **srcp, int max_dest_len,  char *stopchrs);
+static int linescan(String *lp, String tokstring);
+static String removespctab(String line);
+static char copyuntil(String dest, String *srcp, int max_dest_len,  String stopchrs);
 
 
 
@@ -67,7 +67,7 @@ static char copyuntil(char * dest, char **srcp, int max_dest_len,  char *stopchr
 * Hash a string
 */
 
-static unsigned confreadHash(const char * key)
+static unsigned confreadHash(const String key)
 {
 	int len = strlen(key);
 	register unsigned hash, i;
@@ -97,7 +97,7 @@ static unsigned confreadHash(const char * key)
 * match, return a nul.
 */
 
-static char copyuntil(char *dest, char **srcp, int max_dest_len, char *stopchrs){
+static char copyuntil(String dest, String *srcp, int max_dest_len, String stopchrs){
 
 	char *p = "";
 	int i;
@@ -146,7 +146,7 @@ static char copyuntil(char *dest, char **srcp, int max_dest_len, char *stopchrs)
 * Remove spaces and tabs from the line in place
 */
 			
-static char *removespctab(char *line)
+static String removespctab(String line)
 {
 	int si = 0, di = 0;
 
@@ -168,7 +168,7 @@ static char *removespctab(char *line)
 * in that case, throw the characters away until the next token is detected.
 */
 
-static int linescan(char **lp, char *tokstring){
+static int linescan(String *lp, String tokstring){
 
 	int retval = TOK_ERR;
 	
@@ -245,7 +245,7 @@ static int linescan(char **lp, char *tokstring){
 * Safer string copy
 */
 
-char *ConfReadStringCopy(char *dest, const char *src, int charsToCopy)
+String ConfReadStringCopy(String dest, const String src, int charsToCopy)
 {
 	if((!dest) || (!src))
 		return NULL;
@@ -262,7 +262,7 @@ char *ConfReadStringCopy(char *dest, const char *src, int charsToCopy)
 */
 
 
-SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const char *section)
+SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const String section)
 {
 	unsigned sh;
 	SectionEntryPtr_t se;
@@ -285,7 +285,7 @@ SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const char *section)
 * Return the section name, or NULL if it does not exist
 */
 
-const char *ConfReadGetSection(SectionEntryPtr_t se)
+const String ConfReadGetSection(SectionEntryPtr_t se)
 {
 	if((!se) || (se->magic != KE_MAGIC) || (!se->section))
 		return NULL;
@@ -332,7 +332,7 @@ unsigned ConfReadSectionLineNum(SectionEntryPtr_t se)
 * Return a pointer to the matching key in a section if it exists
 */
 
-KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const char *key)
+KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key)
 {
 	unsigned kh;
 	KeyEntryPtr_t ke;
@@ -353,7 +353,7 @@ KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const char *key)
 * Return a key from a key struct
 */
 
-const char *ConfReadGetKey(KeyEntryPtr_t ke)
+const String ConfReadGetKey(KeyEntryPtr_t ke)
 {
 	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->key))
 		return NULL;
@@ -402,7 +402,7 @@ KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke)
 * Return a value associated with a key struct
 */
 
-const char *ConfReadGetValue(KeyEntryPtr_t ke)
+const String ConfReadGetValue(KeyEntryPtr_t ke)
 {
 	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->value))
 		return NULL;
@@ -414,7 +414,7 @@ const char *ConfReadGetValue(KeyEntryPtr_t ke)
 /*
  * Return value string by section entry and key name
  */
-const char *ConfReadValueBySectEntKey(SectionEntryPtr_t se, const char *key)
+const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key)
 {
 	return ConfReadGetValue(ConfReadFindKey(se, key));
 }
@@ -424,7 +424,7 @@ const char *ConfReadValueBySectEntKey(SectionEntryPtr_t se, const char *key)
 */
 
 
-KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key)
+KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String section, const String key)
 {
 	SectionEntryPtr_t se;
 
@@ -440,7 +440,7 @@ KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const char *section
 * Return first Key in section
 */
 
-KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const char *section)
+KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String section)
 {
 	SectionEntryPtr_t se = ConfReadFindSection(ce, section);
 	return ConfReadGetFirstKey(se);
@@ -450,7 +450,7 @@ KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const char *sect
 * Return a count of the number of entries in a section
 */
 
-unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const char *section)
+unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section)
 {
 	SectionEntryPtr_t se = ConfReadFindSection(ce, section);
 	if(se)
@@ -464,7 +464,7 @@ unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const char *section)
 * Find a value by section and key
 */
 
-const char *ConfReadValueBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key)
+const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key)
 {
 	KeyEntryPtr_t ke = ConfReadKeyEntryBySectKey(ce, section, key);
 	return ConfReadGetValue(ke);
@@ -475,7 +475,7 @@ const char *ConfReadValueBySectKey(ConfigEntryPtr_t ce, const char *section, con
 * Find value by section and key, convert to unsigned int, return in res. 
 */
 
-int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const char *section, const char *key, unsigned *res)
+int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res)
 {
 	const char *num = ConfReadValueBySectKey(ce, section, key);
 	if(num && res){
@@ -494,7 +494,7 @@ int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const char *section, c
 * Default error handler for confreadScan()
 */
 
-void ConfReadDefErrorHandler( int etype, int linenum, const char *info)
+void ConfReadDefErrorHandler( int etype, int linenum, const String info)
 {
 	switch(etype){
 
@@ -576,7 +576,7 @@ void ConfReadDebugDump(ConfigEntryPtr_t ce)
 */
 
 
-ConfigEntryPtr_t ConfReadScan(void *ctx, const char *thePath, void (*error_callback)(int type, int linenum, const char *info )){
+ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_callback)(int type, int linenum, const String info )){
 	FILE *conf_file;
 	char *p;
 	ConfigEntryPtr_t ce = NULL;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <talloc.h>
 #include "defs.h"
+#include "types.h"
 #include "notify.h"
 #include "parser.h"
 
@@ -16,7 +17,7 @@ int debugLvl = 4;
  * Print the contents of a hash entry
  */
  
-void hashWalkPrint(const char *key, const char *value)
+void hashWalkPrint(const String key, const String value)
 {
 		debug(DEBUG_EXPECTED,"Key: %s, Value: %s", key, value);
 }

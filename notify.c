@@ -39,7 +39,7 @@
 #define LOGOUT (output == NULL ? stderr : output)
 
 /* Program name */
-extern char *progName;
+extern String progName;
 
 /* Debug level. */
 extern int debugLvl;
@@ -51,7 +51,7 @@ FILE *output = NULL;
 * Redirect logging and error output
 */
 
-void notify_logpath(char *path)
+void notify_logpath(const String path)
 {
   FILE *f;
 
@@ -66,7 +66,7 @@ void notify_logpath(char *path)
 
 /* Fatal error handler with strerror(errno) reason */
 
-void fatal_with_reason(int error, char *message, ...)
+void fatal_with_reason(int error, const String message, ...)
 {
     va_list ap;
     
@@ -82,7 +82,7 @@ void fatal_with_reason(int error, char *message, ...)
 
 
 /* Fatal error handler. */
-void fatal(char *message, ...) {
+void fatal(const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
 	
@@ -98,7 +98,7 @@ void fatal(char *message, ...) {
 
 
 /* Normal error handler. */
-void error(char *message, ...) {
+void error(const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
 	
@@ -113,7 +113,7 @@ void error(char *message, ...) {
 
 
 /* Warning handler. */
-void warn(char *message, ...) {
+void warn(const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
 	
@@ -129,7 +129,7 @@ void warn(char *message, ...) {
 
 
 /* Debugging error handler. */
-void debug(int level, char *message, ...) {
+void debug(int level, const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
 	time_t t;
@@ -158,7 +158,7 @@ void debug(int level, char *message, ...) {
 
 /* Print a debug string with a buffer of bytes to print */
 
-void debug_hexdump(int level, void *buf, int buflen, char *message, ...){
+void debug_hexdump(int level, const void *buf, int buflen, const String message, ...){
 	int i;
 	va_list ap;
 	va_start(ap, message);

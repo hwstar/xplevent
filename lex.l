@@ -1,11 +1,11 @@
 %{
 #include <stdio.h>
 #include <talloc.h>
-#include "notify.h"
-#include "grammar.h"
 #include "defs.h"
 #include "types.h"
 #include "parser.h"
+#include "notify.h"
+#include "grammar.h"
 
 
 #define yyterminate() return(0)
@@ -103,7 +103,7 @@ int yyLex(void)
 
 tokenPtr_t yyTokenVal(void *context)
 {
-	char *res = NULL;
+	String res = NULL;
 	tokenPtr_t token;
 	
 	/* Context must be valid */

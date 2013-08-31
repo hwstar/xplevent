@@ -2,7 +2,7 @@
 /*
  * confread.h
  * 
- *  Copyright (C) 2012  Stephen Rodgers
+ *  Copyright (C) 2012,2013  Stephen Rodgers
  * 
  */
 
@@ -29,8 +29,8 @@ struct	keyent{
 	unsigned magic;
 	unsigned hash;
 	unsigned linenum;
-	char *key;
-	char *value;
+	String key;
+	String value;
 	KeyEntryPtr_t prev;
 	KeyEntryPtr_t next;	
 };
@@ -42,7 +42,7 @@ struct sectionent{
 	unsigned hash;
 	unsigned linenum;
 	unsigned entry_count;
-	char *section;
+	String section;
 	KeyEntryPtr_t key_head;
 	KeyEntryPtr_t key_tail;
 	SectionEntryPtr_t prev;
@@ -52,8 +52,8 @@ struct sectionent{
 
 struct configent{
 	unsigned magic;
-	char *line;
-	char *work_string;
+	String line;
+	String work_string;
 	SectionEntryPtr_t head;
 	SectionEntryPtr_t tail;
 };
@@ -64,41 +64,41 @@ struct configent{
 */
 
 /* Config functions */
-ConfigEntryPtr_t ConfReadScan(void *ctx, const char *thePath, void (*error_callback)(int type, int linenum, const char *info));
+ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_callback)(int type, int linenum, const String info));
 void ConfReadFree(ConfigEntry_t *theConfig);
 
 /* Section functions */
-SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const char *section);
-const char *ConfReadGetSection(SectionEntryPtr_t se);
+SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const String section);
+const String ConfReadGetSection(SectionEntryPtr_t se);
 SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce);
 SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se);
 unsigned ConfReadSectionLineNum(SectionEntryPtr_t se);
 
 /* Key Functions */
-KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key);
-KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const char *key);
-const char *ConfReadGetKey(KeyEntryPtr_t ke);
+KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String section, const String key);
+KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key);
+const String ConfReadGetKey(KeyEntryPtr_t ke);
 KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se);
-KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const char * section);
+KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String ection);
 KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke);
 unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke);
-unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const char * section);
+unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section);
 
 
 
 /* Value functions */
-const char * ConfReadGetValue(KeyEntryPtr_t ke);
-const char * ConfReadValueBySectKey(ConfigEntryPtr_t ce, const char *section, const char *key);
-int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const char *section, const char *key, unsigned *res);
-const char * ConfReadValueBySectEntKey(SectionEntryPtr_t se, const char *key);
+const String ConfReadGetValue(KeyEntryPtr_t ke);
+const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key);
+int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res);
+const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key);
 
-/*Default error handler*/
-void ConfReadDefErrorHandler( int etype, int linenum, const char *info);
+/* Default error handler */
+void ConfReadDefErrorHandler( int etype, int linenum, const String info);
 
 /* Utility Functions */
 
-char * ConfReadStringCopy(char *dest, const char *src, int charsToCopy);
-unsigned ConfReadHash(const char *key);
+String ConfReadStringCopy(String dest, const String src, int charsToCopy);
+unsigned ConfReadHash(const String key);
 
 /* Debugging functions */
 void ConfReadDebugDump(ConfigEntryPtr_t ce);

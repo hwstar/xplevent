@@ -30,25 +30,25 @@
 #define DEBUG_MAX 5
 
 // Call to redirect the error and log output to a different file (i.e. /tmp/logfile)
-void notify_logpath(char *path);
+void notify_logpath(const String path);
 
 // Fatal error handler with strerror(errno);
-void fatal_with_reason(int error, char *message, ...);
+void fatal_with_reason(int error, const String message, ...);
 
 /* Fatal error handler. */
-void fatal(char *message, ...);
+void fatal(const String message, ...);
 
 /* Debugging handler. */
-void debug(int level, char *message, ...);
+void debug(int level, const String message, ...);
 
 /* Debugging handler with hexdump feature */
 
-void debug_hexdump(int level, void *buf, int buflen, char *message, ...);
+void debug_hexdump(int level, const void *buf, int buflen, const String message, ...);
 
 /* Normal error handler. */
-void error(char *message, ...);
+void error(const String message, ...);
 
 /* Warning handler. */
-void warn(char *message, ...);
+void warn(const String message, ...);
 
 #endif

@@ -89,7 +89,6 @@ static TALLOC_CTX *masterCTX = NULL;
 
 static xPL_ServicePtr xpleventService = NULL;
 static xPL_MessagePtr xpleventTriggerMessage = NULL;
-static xPL_MessagePtr xpleventConfirmMessage = NULL;
 static ConfigEntryPtr_t	configEntry = NULL;
 
 static sqlite3 *myDB = NULL;
@@ -211,7 +210,7 @@ static void shutdownHandler(int onSignal)
  * Select Callback for counting rows
  */
  
-static int countRows(void* objptr, int argc, char **argv, char **colnames )
+static int countRows(void *objptr, int argc, String *argv, String *colnames )
 {
 	if(objptr)
 		(*((int *) objptr))++;
@@ -297,12 +296,14 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 }
 
 /*
- * Trigger message logger
+ * Trigger message processor
  */
 
 
-static void logTriggerMessage(xPL_MessagePtr theMessage)
+static void processTriggerMessage(xPL_MessagePtr theMessage)
 {
+	ASSERT_FAIL(theMessage);
+	
 	int errs = 0;
 	int numRows = 0;
 	unsigned bufInitSize = 32768;
@@ -312,14 +313,18 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 	const String device = xPL_getSourceDeviceID(theMessage);
 	const String instance_id = xPL_getSourceInstanceID(theMessage);
 	const xPL_NameValueListPtr msgBody = xPL_getMessageBody(theMessage);
-	char * subaddress = NULL;
-	char * nvpairs;
+	String subaddress = NULL;
+	String nvpairs;
 	const String schema_class = xPL_getSchemaClass(theMessage);
 	const String schema_type = xPL_getSchemaType(theMessage); 
-	char *buffer;
+	String buffer;
 	char source[96];
 	char schema[64];
 	String errorMessage;
+	
+	
+	
+
 	
 
 	// Test for valid schema
@@ -462,8 +467,8 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 			logHeartBeatMessage(theMessage);
 		}
 		else if(mtype == xPL_MESSAGE_TRIGGER){
-			// Log trigger message
-			logTriggerMessage(theMessage);
+			// Process trigger message
+			processTriggerMessage(theMessage);
 		}
 	}
 }
@@ -513,7 +518,7 @@ void showHelp(void)
 * Default error handler for confreadScan()
 */
 
-static void confDefErrorHandler( int etype, int linenum, const char *info)
+static void confDefErrorHandler( int etype, int linenum, const String info)
 {
 	switch(etype){
 
@@ -547,7 +552,7 @@ int main(int argc, char *argv[])
 	int longindex;
 	int rc;
 	int optchar;
-	const char *p;
+	String p;
 	
 	masterCTX = talloc_new(NULL);
 	ASSERT_FAIL(masterCTX);
@@ -683,7 +688,10 @@ int main(int argc, char *argv[])
 	}
 	else
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
-
+		
+	/* Set the xPL interface */
+	xPL_setBroadcastInterface(interface);
+		
 	/* Turn on library debugging for level 5 */
 	if(debugLvl >= 5)
 		xPL_setDebugging(TRUE);
@@ -769,8 +777,7 @@ int main(int argc, char *argv[])
 	}
 	debug(DEBUG_STATUS,"Initializing xPL library");
 	
-	/* Set the xPL interface */
-	xPL_setBroadcastInterface(interface);
+
 
 	/* Start xPL up */
 	if (!xPL_initialize(xPL_getParsedConnectionType())) {
@@ -782,11 +789,8 @@ int main(int argc, char *argv[])
   	xPL_setServiceVersion(xpleventService, VERSION);
 
 	/*
-	* Create trigger message objecta
+	* Create trigger message object
 	*/
-
-	xpleventConfirmMessage = xPL_createBroadcastMessage(xpleventService, xPL_MESSAGE_TRIGGER);
-	xPL_setSchema(xpleventConfirmMessage, "x10", "confirm");
 
 	xpleventTriggerMessage = xPL_createBroadcastMessage(xpleventService, xPL_MESSAGE_TRIGGER);
 	xPL_setSchema(xpleventTriggerMessage, "x10", "basic");

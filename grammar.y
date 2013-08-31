@@ -142,9 +142,9 @@ expression ::= lhash(A) EQUALS rvalue(B) .
 
 expression ::= lhash(A) EQUALS rhash(B) .
 {	
-	const char *val;
+	const String val = ParserHashGetValue(parseCtrl->argsHead, B->stringVal);
 	
-	if(!(val = ParserHashGetValue(parseCtrl->argsHead, B->stringVal))){
+	if(!val){
 		debug(DEBUG_UNEXPECTED, "Cannot find key %s in args", B->stringVal);
 		parseCtrl->failReason = talloc_asprintf(parseCtrl, "Key %s does not exist in hash %s on line %d",
 		B->stringVal, A->stringVal, parseCtrl->lineNo);
@@ -195,8 +195,8 @@ rvalue(A) ::= INTLIT(B) .
 rvalue(A) ::= STRINGLIT(B) .
 {
 	tokenPtr_t token;
-	char *s = NULL;
-	char *p;
+	String s = NULL;
+	String p;
 	int i;
 	
 	ASSERT_FAIL(B)

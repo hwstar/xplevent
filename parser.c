@@ -35,7 +35,7 @@ static ParseCtrlPtr_t parseCtrl; /* Not re-entrant because of this */
 * Hash a string
 */
 
-static uint32_t hash(const char *key)
+static uint32_t hash(const String key)
 {
 	int len = strlen(key);
 	register uint32_t hash, i;
@@ -86,10 +86,10 @@ static void parserFree(void *ctx)
 
 static void sendXPLCommand(ParseCtrlPtr_t this)
 {
-	const char *tag;
-	const char *hash;
+	String tag;
+	String hash;
 	TALLOC_CTX *ctx = talloc_new(this);
-	char *vendor, *device, *instance;
+	String vendor, device, instance;
 	ParseHashKVPtr_t kvp;
 	xPL_MessagePtr msg;
 
@@ -172,7 +172,7 @@ end:
  * 
  */
 
-int ParserSplitXPLTag(TALLOC_CTX *ctx, const char *tag, char **vendor, char **device, char **instance)
+int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String *device, String *instance)
 {
 	int res = PASS;
 	int done = FALSE;
@@ -312,7 +312,7 @@ void ParserAddFunctionArg(struct ParseCtrl_s *this, void *arg, argType_t type)
  */
 
 
-const char *ParserFunctionArg(argListEntryPtr_t ale, int argNum)
+const String ParserFunctionArg(argListEntryPtr_t ale, int argNum)
 {
 	int i;
 	
@@ -370,7 +370,7 @@ void ParserPostFunctionCleanup(struct ParseCtrl_s *this)
  * Get a value from the hash
  */
 
-const char *ParserHashGetValue(void *pHead, const char *key)
+const String ParserHashGetValue(void *pHead, const String key)
 {
 	unsigned kh;
 	ParseHashKVPtr_t ke;
@@ -394,7 +394,7 @@ const char *ParserHashGetValue(void *pHead, const char *key)
  * Replace any entry with a matching key which is already there
  */
  
-void ParserHashAddKeyValue(void **ppHead, void *tallocContext, const char *key, const char *value)
+void ParserHashAddKeyValue(void **ppHead, void *tallocContext, const String key, const String value)
 {
 	ParseHashKVPtrPtr_t pph = (ParseHashKVPtrPtr_t) ppHead;
 	ParseHashKVPtr_t ke, keNew, kePrev;
@@ -451,7 +451,7 @@ void ParserHashAddKeyValue(void **ppHead, void *tallocContext, const char *key, 
  * Walk the list calling a callback function with each key/value
  */
  
-void ParserHashWalk(void *pHead, void (*parseHashWalkCallback)(const char *key, const char *value))
+void ParserHashWalk(void *pHead, void (*parseHashWalkCallback)(const String key, const String value))
 {
 	ParseHashKVPtr_t ph = (ParseHashKVPtr_t) pHead;
 	ParseHashKVPtr_t ke;
@@ -473,7 +473,7 @@ void ParserHashWalk(void *pHead, void (*parseHashWalkCallback)(const char *key, 
 * Lex, parse and execute event code
 */
 
-int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const char *str)
+int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 {
 	int tokenID;
 	int res = FAIL;
