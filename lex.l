@@ -89,6 +89,7 @@ void yyInit(void * context)
 void yyScanString(const char *s)
 {   
 	ASSERT_FAIL(s);
+	yy_scan_string(s);
 }
 
 void yyDeleteBuffer(void)
@@ -131,5 +132,10 @@ void yySetInputFile(FILE * f)
 {
 	ASSERT_FAIL(f)
 	yyin = f;
+}
+
+void yyLexDestroy(void)
+{
+	yylex_destroy();
 }
 

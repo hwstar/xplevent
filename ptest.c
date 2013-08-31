@@ -60,11 +60,14 @@ int main(int argc, char *argv[])
 	if(ParserHCLScan(parseCtrl, (*argv[1] == 'f'), argv[2])){
 		debug(DEBUG_UNEXPECTED, "%s", parseCtrl->failReason);
 	}
-		
+	if(parseCtrl->failReason)
+		debug(DEBUG_UNEXPECTED,"Parse Error: %s", parseCtrl->failReason);	
 		
 	debug(DEBUG_EXPECTED,"***** Output hash contents *****");
 	ParserHashWalk(parseCtrl->xplOutHead, hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** Output hash contents *****");
+	
+	
 	
 	talloc_report(top, stdout);
 	

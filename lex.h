@@ -5,6 +5,7 @@ void yyScanString(const char *s);
 void yyDeleteBuffer(void);
 int yyLex(void);
 void yySetInputFile(FILE *f);
+void yyLexDestroy(void);
 const tokenPtr_t yyTokenVal(void *context);
 #endif
 

@@ -296,6 +296,70 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 }
 
 /*
+ * Callback for parseHCL for debugging
+ */
+
+
+static void kvDump(const String key, const String value)
+{
+	ASSERT_FAIL(key)
+	ASSERT_FAIL(value)
+	debug(DEBUG_EXPECTED, "Key = %s, Value = %s", key, value);
+}
+
+
+/*
+ * We received a message we need to act on.
+ * 
+ * Parse the string passed in
+ */
+
+static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
+{
+	int i;
+	Bool res = PASS;
+	ParseCtrlPtr_t parseCtrl;
+	xPL_NameValueListPtr msgBody; 
+	
+	ASSERT_FAIL(triggerMessage)
+	ASSERT_FAIL(hcl)
+	
+	msgBody = xPL_getMessageBody(triggerMessage);
+	
+	
+	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
+
+	parseCtrl = talloc_zero(masterCTX, ParseCtrl_t);
+	ASSERT_FAIL(parseCtrl);
+	
+	/* Initialize and fill %args */
+
+	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
+		if(!msgBody->namedValues[i]->isBinary){
+			ParserHashAddKeyValue(&parseCtrl->argsHead, parseCtrl,
+			msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
+		}
+	}
+	debug(DEBUG_ACTION, "Args:");
+	
+	ParserHashWalk(parseCtrl->argsHead, kvDump);
+	
+	res = ParserHCLScan(parseCtrl, FALSE, hcl);
+	
+	if(parseCtrl->failReason){
+		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
+	}
+	
+	talloc_free(parseCtrl);
+
+	debug(DEBUG_ACTION, "***Parsing complete***");
+	
+	return res;
+	
+}
+
+
+/*
  * Trigger message processor
  */
 
@@ -321,7 +385,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	char source[96];
 	char schema[64];
 	String errorMessage;
-	
+
 	
 	
 
@@ -365,6 +429,12 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	
 	debug(DEBUG_EXPECTED,"Trigger message received from: %s", source);
 
+	/*
+	 * Check to see if this is a trigger message we need to act on
+	 */
+	 
+	parseHCL(theMessage,"$xplout{command} = \"test\";"); // FIXME
+	
 		// Build name/value pair list
 	if(msgBody){
 		for(i = 0; i < msgBody-> namedValueCount; i++){
@@ -445,6 +515,9 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 			sqlite3_free(errorMessage);
 		}
 	}
+	
+
+	
 	if(nvpairs)
 		talloc_free(nvpairs); // Free name-value pairs buffer
 	if(buffer)

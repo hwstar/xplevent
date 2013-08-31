@@ -483,6 +483,8 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 	
 	ASSERT_FAIL(parseCtrl);
 	
+	
+	
 	/* Initialize parser control variables */
 	
 	
@@ -513,16 +515,16 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 			return res;
 		}
 	}
-	
+
 	/* Set lexer up for string input */
 	
 	while((!parseCtrl->failReason) && (tokenID = yyLex())){
-		
 		pToken = yyTokenVal(parseCtrl);
 		parseCtrl->lineNo = pToken->lineNo;
 		pToken->tokenID = tokenID;
 		Parse(pParser, tokenID, pToken, parseCtrl);
 	}
+
 	
 	/* Force parser to terminate */
 	if(!parseCtrl->failReason){
@@ -533,6 +535,10 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 	/* Free flex buffer if string mode */
 	if(!fileMode)
 		yyDeleteBuffer();	
+	
+	/* Reset the lexer */
+	
+	yyLexDestroy();
 	
 	/* Free parser */
 	ParseFree(pParser, parserFree);
