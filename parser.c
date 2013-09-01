@@ -88,6 +88,8 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 {
 	String tag;
 	String hash;
+	String class;
+	String schema;
 	TALLOC_CTX *ctx = talloc_new(this);
 	String vendor, device, instance;
 	ParseHashKVPtr_t kvp;
@@ -96,15 +98,20 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 
 	ASSERT_FAIL(ctx)
 			
-	if(this->numFuncArgs != 2){
-		this->failReason = talloc_asprintf(this, "Incorrect number of arguments passed to xplcmd, requires 2, got %d",
+	if(this->numFuncArgs != 4){
+		this->failReason = talloc_asprintf(this, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
 		this->numFuncArgs);
 		goto end;
 	}
 	tag = ParserFunctionArg(this->argListHead, 0);
 	ASSERT_FAIL(tag)
-	hash = ParserFunctionArg(this->argListHead, 1);
+	class = ParserFunctionArg(this->argListHead, 1);
+	ASSERT_FAIL(class)
+	schema = ParserFunctionArg(this->argListHead, 2);
+	ASSERT_FAIL(schema)
+	hash = ParserFunctionArg(this->argListHead, 3);
 	ASSERT_FAIL(hash)
+	
 	if(ParserSplitXPLTag(ctx, tag, &vendor, &device, &instance)){
 		this->failReason = talloc_asprintf(this, "Bad xPL Tag: %s", tag);
 		goto end;
@@ -120,6 +127,11 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 		/* Create xpl command message */
 		msg = xPL_createTargetedMessage(this->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
 		ASSERT_FAIL(msg)
+		
+		/* Set message schema */
+		xPL_setSchema(msg, class, schema); 
+		
+		/* Clear name/value pairs */
 		xPL_clearMessageNamedValues(msg);
 	}
 	else{

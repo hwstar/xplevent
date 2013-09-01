@@ -332,6 +332,10 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	parseCtrl = talloc_zero(masterCTX, ParseCtrl_t);
 	ASSERT_FAIL(parseCtrl);
 	
+	
+	/* Set the pointer to the service */
+	parseCtrl->xplServicePtr = xpleventService;
+	
 	/* Initialize and fill %args */
 
 	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
@@ -357,6 +361,28 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	return res;
 	
 }
+
+/*
+ * Trigger action callback
+ */
+ 
+
+static int trigactionSelect(void *objptr, int argc, String *argv, String *colnames)
+{
+	String *ppAction = (String *) objptr;
+	
+	ASSERT_FAIL(ppAction)
+	
+	ASSERT_FAIL(3 == argc)
+	
+	*ppAction = talloc_strdup(masterCTX, argv[2]);
+	
+	ASSERT_FAIL(*ppAction);	
+	
+	
+	return 1; /* Abort on first match */
+}
+
 
 
 /*
@@ -385,6 +411,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	char source[96];
 	char schema[64];
 	String errorMessage;
+	String action = NULL;
 
 	
 	
@@ -433,9 +460,50 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	 * Check to see if this is a trigger message we need to act on
 	 */
 	 
-	parseHCL(theMessage,"$xplout{command} = \"test\";"); // FIXME
+	// Transaction start
+	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
+	if(errorMessage){
+		errs++;
+		debug(DEBUG_UNEXPECTED,"Sqlite error on trigaction: %s", errorMessage);
+		sqlite3_free(errorMessage);
+	}
+
+	snprintf(buffer, 127, "SELECT * FROM trigaction WHERE source='%s'", source);
+	if(!errs){
+		sqlite3_exec(myDB, buffer, trigactionSelect, (void *) &action , &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite select error on trigaction: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}
+  
 	
-		// Build name/value pair list
+	
+	if(!errs){
+		// Transaction commit	
+		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite commit error on trigaction: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}	
+	
+	
+
+	 		
+	errs = 0;
+	
+	 
+	if(action){
+		parseHCL(theMessage, action);
+		talloc_free(action);
+	}
+	
+	/*
+	 * Update trigger log
+	 */
+	 
+	// Build name/value pair list
 	if(msgBody){
 		for(i = 0; i < msgBody-> namedValueCount; i++){
 			if(!msgBody->namedValues[i]->isBinary){
