@@ -47,11 +47,11 @@ int main(int argc, char *argv[])
 	ASSERT_FAIL(top)
 	
 	
-	ParserHashAddKeyValue(&parseCtrl->argsHead, parseCtrl,"current","78.0");
-	ParserHashAddKeyValue(&parseCtrl->argsHead, parseCtrl,"units","Fahrenheit");
+	ParserHashAddKeyValue(&parseCtrl->pcodeHeader->argsHead, parseCtrl,"current","78.0");
+	ParserHashAddKeyValue(&parseCtrl->pcodeHeader->argsHead, parseCtrl,"units","Fahrenheit");
 	
 	debug(DEBUG_EXPECTED,"***** Input hash contents *****");
-	ParserHashWalk(parseCtrl->argsHead, hashWalkPrint);
+	ParserHashWalk(parseCtrl->pcodeHeader->argsHead, hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** Input hash contents *****");
 			
 
@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
 		debug(DEBUG_UNEXPECTED,"Parse Error: %s", parseCtrl->failReason);	
 		
 	debug(DEBUG_EXPECTED,"***** Output hash contents *****");
-	ParserHashWalk(parseCtrl->xplOutHead, hashWalkPrint);
+	ParserHashWalk(parseCtrl->pcodeHeader->xplOutHead, hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** Output hash contents *****");
 	
 	

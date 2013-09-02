@@ -320,6 +320,8 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	Bool res = PASS;
 	ParseCtrlPtr_t parseCtrl;
 	xPL_NameValueListPtr msgBody; 
+	pcodeHeaderPtr_t ph = NULL;
+	
 	
 	ASSERT_FAIL(triggerMessage)
 	ASSERT_FAIL(hcl)
@@ -332,21 +334,30 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	parseCtrl = talloc_zero(masterCTX, ParseCtrl_t);
 	ASSERT_FAIL(parseCtrl);
 	
+	/* Initialize pcode header */
+	
+	ph = talloc_zero(masterCTX, pcodeHeader_t);
+	ASSERT_FAIL(ph);
+	
+	/* Save pointer to pcode header in parse control block */
+	
+	parseCtrl->pcodeHeader = ph;
+	 
 	
 	/* Set the pointer to the service */
-	parseCtrl->xplServicePtr = xpleventService;
+	ph->xplServicePtr = xpleventService;
 	
 	/* Initialize and fill %args */
 
 	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
 		if(!msgBody->namedValues[i]->isBinary){
-			ParserHashAddKeyValue(&parseCtrl->argsHead, parseCtrl,
+			ParserHashAddKeyValue(&ph->argsHead, parseCtrl,
 			msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
 		}
 	}
 	debug(DEBUG_ACTION, "Args:");
 	
-	ParserHashWalk(parseCtrl->argsHead, kvDump);
+	ParserHashWalk(ph->argsHead, kvDump);
 	
 	res = ParserHCLScan(parseCtrl, FALSE, hcl);
 	
@@ -357,6 +368,10 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	talloc_free(parseCtrl);
 
 	debug(DEBUG_ACTION, "***Parsing complete***");
+	
+	ParserDumpPcodeList(ph); // DEBUG
+	
+	talloc_free(ph);
 	
 	return res;
 	
@@ -380,7 +395,7 @@ static int trigactionSelect(void *objptr, int argc, String *argv, String *colnam
 	ASSERT_FAIL(*ppAction);	
 	
 	
-	return 1; /* Abort on first match */
+	return 0;
 }
 
 
@@ -487,10 +502,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 			sqlite3_free(errorMessage);
 		}
 	}	
-	
-	
-
-	 		
+			
 	errs = 0;
 	
 	 

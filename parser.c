@@ -21,6 +21,7 @@
 
 #define KE_MAGIC	0x4F7B127A
 #define AL_MAGIC	0x689C9A2F
+#define PC_MAGIC	0x9A905437
 
 
 
@@ -90,26 +91,31 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 	String hash;
 	String class;
 	String schema;
-	TALLOC_CTX *ctx = talloc_new(this);
+	TALLOC_CTX *ctx;
 	String vendor, device, instance;
 	ParseHashKVPtr_t kvp;
+	pcodeHeaderPtr_t ph;
 	xPL_MessagePtr msg;
 
-
+	ASSERT_FAIL(this)
+	ph = this->pcodeHeader;
+	ASSERT_FAIL(ph);
+	
+	ctx = talloc_new(ph);
 	ASSERT_FAIL(ctx)
 			
-	if(this->numFuncArgs != 4){
+	if(ph->numFuncArgs != 4){
 		this->failReason = talloc_asprintf(this, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
-		this->numFuncArgs);
+		ph->numFuncArgs);
 		goto end;
 	}
-	tag = ParserFunctionArg(this->argListHead, 0);
+	tag = ParserFunctionArg(ph->argListHead, 0);
 	ASSERT_FAIL(tag)
-	class = ParserFunctionArg(this->argListHead, 1);
+	class = ParserFunctionArg(ph->argListHead, 1);
 	ASSERT_FAIL(class)
-	schema = ParserFunctionArg(this->argListHead, 2);
+	schema = ParserFunctionArg(ph->argListHead, 2);
 	ASSERT_FAIL(schema)
-	hash = ParserFunctionArg(this->argListHead, 3);
+	hash = ParserFunctionArg(ph->argListHead, 3);
 	ASSERT_FAIL(hash)
 	
 	if(ParserSplitXPLTag(ctx, tag, &vendor, &device, &instance)){
@@ -121,11 +127,11 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 		goto end;
 	}
 
-	if(this->xplServicePtr){
+	if(ph->xplServicePtr){
 	
 			
 		/* Create xpl command message */
-		msg = xPL_createTargetedMessage(this->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
+		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
 		ASSERT_FAIL(msg)
 		
 		/* Set message schema */
@@ -142,9 +148,9 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 	}		
 
 					
-	for(kvp = this->xplOutHead; kvp; kvp = kvp->next){
+	for(kvp = ph->xplOutHead; kvp; kvp = kvp->next){
 		
-		if(!this->xplServicePtr){
+		if(!ph->xplServicePtr){
 			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
 		}
 		else{
@@ -154,7 +160,7 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 	
 	debug(DEBUG_ACTION, "***Sending xPL command***");
 	
-	if(this->xplServicePtr){
+	if(ph->xplServicePtr){
 		xPL_sendMessage(msg);
 		xPL_releaseMessage(msg);
 	}
@@ -162,8 +168,8 @@ static void sendXPLCommand(ParseCtrlPtr_t this)
 end:
 	/* Free the xplout hash */
 	
-	talloc_free(this->xplOutContext);
-	this->xplOutContext = this->xplOutHead = NULL;
+	talloc_free(ph->xplOutContext);
+	ph->xplOutContext = ph->xplOutHead = NULL;
 	
 	/* Free the context used here */
 	
@@ -269,44 +275,48 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
  * Add a function argument to the argument list
  */
 
-void ParserAddFunctionArg(struct ParseCtrl_s *this, void *arg, argType_t type)
+void ParserAddFunctionArg(ParseCtrlPtr_t this, void *arg, argType_t type)
 {
-	argListEntryPtr_t head,newale; 
+	argListEntryPtr_t newale; 
+	pcodeHeaderPtr_t ph;
 	
 	debug(DEBUG_ACTION,"Adding function argument: %s, with type: %d ", arg, type);
 	
 	ASSERT_FAIL(this && arg)
 	
-	/* Cast to useable type */	
-	head = (argListEntryPtr_t) this->argListHead;
+	ph = this->pcodeHeader;
+	
+	ASSERT_FAIL(ph)
+	
+
 	
 	
 	
-	if(!head){
+	if(ph->argListHead){
 		/* List empty, create talloc context for this list */
-	    this->argListContext = talloc_new(this);
-		ASSERT_FAIL(this->argListContext);
+	    ph->argListContext = talloc_new(ph);
+		ASSERT_FAIL(ph->argListContext);
 	}
 	
 	/* Create the new list entry */
 			
-	newale = talloc_zero(this->argListContext, argListEntry_t);
+	newale = talloc_zero(ph->argListContext, argListEntry_t);
 	ASSERT_FAIL(newale)
 	newale->magic = AL_MAGIC;
 	newale->arg = talloc_strdup(newale, arg);
 	ASSERT_FAIL(newale->arg)
 	newale->type = type;
-	this->numFuncArgs++;	
+	ph->numFuncArgs++;	
 	
-	if(!head){
+	if(!ph->argListHead){
 		/* First entry */
-		this->argListHead = newale;
+		ph->argListHead = newale;
 	}
 	else{
 		/* Subsequent entries */
 		argListEntryPtr_t ale, endale;
 		/* Traverse list to end */
-		for(ale = head; ale; ale = ale->next){
+		for(ale = ph->argListHead; ale; ale = ale->next){
 			ASSERT_FAIL(AL_MAGIC == ale->magic)
 			endale = ale;
 		}
@@ -343,13 +353,18 @@ const String ParserFunctionArg(argListEntryPtr_t ale, int argNum)
  * Execute a built-in function
  */
  
-void ParserExecFunction(struct ParseCtrl_s *this, int tokenID)
+void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
 {
-
+	pcodeHeaderPtr_t ph;
 	
 	ASSERT_FAIL(this)
 	
-	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", tokenID, this->numFuncArgs);
+	ph = this->pcodeHeader;
+	
+	ASSERT_FAIL(ph);
+	
+	
+	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", tokenID, ph->numFuncArgs);
 	
 	
 	switch(tokenID){
@@ -366,15 +381,21 @@ void ParserExecFunction(struct ParseCtrl_s *this, int tokenID)
  * Parser Post Function Cleanup
  */
 
-void ParserPostFunctionCleanup(struct ParseCtrl_s *this)
+void ParserPostFunctionCleanup(ParseCtrlPtr_t this)
 {
+	pcodeHeaderPtr_t ph;
+	
 	debug(DEBUG_ACTION,"Entered post function cleanup");
 	
+	ASSERT_FAIL(this)
+	ph = this->pcodeHeader;
+	ASSERT_FAIL(ph);
+	
 	/* Free the argument list */
-	if(this->argListHead){
-		talloc_free(this->argListContext); /* Free the list context */
-		this->argListContext = this->argListHead = NULL;
-		this->numFuncArgs = 0;
+	if(ph->argListHead){
+		talloc_free(ph->argListContext); /* Free the list context */
+		ph->argListContext = ph->argListHead = NULL;
+		ph->numFuncArgs = 0;
 	}
 }
 
@@ -382,17 +403,16 @@ void ParserPostFunctionCleanup(struct ParseCtrl_s *this)
  * Get a value from the hash
  */
 
-const String ParserHashGetValue(void *pHead, const String key)
+const String ParserHashGetValue(ParseHashKVPtr_t pHead, const String key)
 {
 	unsigned kh;
 	ParseHashKVPtr_t ke;
-	ParseHashKVPtr_t ph = (ParseHashKVPtr_t) pHead;
 
-	ASSERT_FAIL(ph && (ph->magic == KE_MAGIC) && key)
+	ASSERT_FAIL(pHead && (pHead->magic == KE_MAGIC) && key)
 
 	/* Hash the section string passed in */
 	kh = hash(key);
-	for(ke = ph; (ke); ke = ke->next){ /* Traverse key list */
+	for(ke = pHead; (ke); ke = ke->next){ /* Traverse key list */
 		ASSERT_FAIL(KE_MAGIC == ke->magic)
 		/* Compare hashes, and if they match, compare strings */
 		if((kh == ke->hash) && (!strcmp(ke->key, key)))
@@ -406,7 +426,7 @@ const String ParserHashGetValue(void *pHead, const String key)
  * Replace any entry with a matching key which is already there
  */
  
-void ParserHashAddKeyValue(void **ppHead, void *tallocContext, const String key, const String value)
+void ParserHashAddKeyValue(ParseHashKVPtrPtr_t ppHead, void *tallocContext, const String key, const String value)
 {
 	ParseHashKVPtrPtr_t pph = (ParseHashKVPtrPtr_t) ppHead;
 	ParseHashKVPtr_t ke, keNew, kePrev;
@@ -463,15 +483,16 @@ void ParserHashAddKeyValue(void **ppHead, void *tallocContext, const String key,
  * Walk the list calling a callback function with each key/value
  */
  
-void ParserHashWalk(void *pHead, void (*parseHashWalkCallback)(const String key, const String value))
+void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const String key, const String value))
 {
-	ParseHashKVPtr_t ph = (ParseHashKVPtr_t) pHead;
 	ParseHashKVPtr_t ke;
+	
+	ASSERT_FAIL(pHead)
 	
 	/* NULL function pointer is fatal */
 	ASSERT_FAIL(parseHashWalkCallback)
 		
-	for(ke = ph; (ke); ke = ke->next){ /* Traverse key list */
+	for(ke = pHead; (ke); ke = ke->next){ /* Traverse key list */
 		ASSERT_FAIL(KE_MAGIC == ke->magic)
 		(*parseHashWalkCallback)(ke->key, ke->value);
 	}
@@ -485,16 +506,20 @@ void ParserHashWalk(void *pHead, void (*parseHashWalkCallback)(const String key,
 * Lex, parse and execute event code
 */
 
-int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
+int ParserHCLScan(ParseCtrlPtr_t this, int fileMode, const String str)
 {
 	int tokenID;
 	int res = FAIL;
 	tokenPtr_t pToken;
 	void *pParser;
 	FILE *file;
+	pcodeHeaderPtr_t ph;
 	
-	ASSERT_FAIL(parseCtrl);
+	ASSERT_FAIL(this);
 	
+	ph = this->pcodeHeader;
+	
+	ASSERT_FAIL(ph);
 	
 	
 	/* Initialize parser control variables */
@@ -503,8 +528,8 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 	/* Create an xplout context for the output variable */
 	/* This makes it easy to delete the hash and start over */
 	
-	parseCtrl->xplOutContext = talloc_new(parseCtrl);
-	ASSERT_FAIL(parseCtrl->xplOutContext)
+	ph->xplOutContext = talloc_new(ph);
+	ASSERT_FAIL(ph->xplOutContext)
 	
 	/* Allocate memory for parser */
 	pParser = ParseAlloc(parserMalloc);
@@ -513,7 +538,7 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 	ASSERT_FAIL(pParser)
 	
 	/* Give parse control context to lexer */	
-	yyInit(parseCtrl); 
+	yyInit(this); 
 	
 	/* Set up flex input mode */
 	if(!fileMode)
@@ -523,24 +548,24 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 		if(file)
 			yySetInputFile(file);
 		else{
-			parseCtrl->failReason = talloc_asprintf(parseCtrl, "Can't open file: \"%s\". %s", str, strerror(errno));
+			this->failReason = talloc_asprintf(this, "Can't open file: \"%s\". %s", str, strerror(errno));
 			return res;
 		}
 	}
 
 	/* Set lexer up for string input */
 	
-	while((!parseCtrl->failReason) && (tokenID = yyLex())){
-		pToken = yyTokenVal(parseCtrl);
-		parseCtrl->lineNo = pToken->lineNo;
+	while((!this->failReason) && (tokenID = yyLex())){
+		pToken = yyTokenVal(this);
+		this->lineNo = pToken->lineNo;
 		pToken->tokenID = tokenID;
-		Parse(pParser, tokenID, pToken, parseCtrl);
+		Parse(pParser, tokenID, pToken, this);
 	}
 
 	
 	/* Force parser to terminate */
-	if(!parseCtrl->failReason){
-		Parse(pParser, 0, NULL, parseCtrl);
+	if(!this->failReason){
+		Parse(pParser, 0, NULL, this);
 		res = PASS;
 	}
 	
@@ -557,3 +582,101 @@ int ParserHCLScan(ParseCtrlPtr_t parseCtrl, int fileMode, const String str)
 	
 	return res;
 }
+
+/*
+ * This is called by the parser when a pcode structure has to be added to the list
+ */
+
+void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2)
+{
+	pcodeHeaderPtr_t ph;
+	pcodePtr_t new;
+	
+	ASSERT_FAIL(pc)
+	
+	ph = pc->pcodeHeader;
+	
+	if(ph){
+		
+		new = talloc_zero(ph->pcodeCTX, pcode_t);
+		ASSERT_FAIL(new);
+		
+		/* Initialize new list entry */
+		new->magic = PC_MAGIC;
+		new->opcode = op;
+		new->operand = operand;
+		if(data1){
+			/* Make a copy of the string */
+			new->data1 = talloc_strdup(new, data1);
+			ASSERT_FAIL(new->data1);
+		}
+		if(data2){
+			/* Make a copy of the string */
+			new->data2 = talloc_strdup(new, data2);
+			ASSERT_FAIL(new->data2);
+		}
+		
+		if(!ph->head){
+			/* First entry */
+			ph->head = ph->tail = new;
+			return;
+		}
+		else{
+			/* Subsequent entry */
+			ph->tail->next = new;
+			new->prev = ph->tail;
+			ph->tail = new; 
+		}
+	}
+}
+
+/*
+ * Debug function.
+ * 
+ * Dump pcode list
+ */
+
+void ParserDumpPcodeList(pcodeHeaderPtr_t ph)
+{
+	String op,data1,data2;
+	pcodePtr_t p;
+	
+	if(!ph)
+		return;
+	debug(DEBUG_EXPECTED, "*** begin p-code dump ***");
+	for(p = ph->head; p; p = p->next){
+		switch(p->opcode){
+			case OP_NOP:
+				op = "Nop";
+				break;
+		
+			case OP_PUSH:
+				op = "Push";
+				break;
+			
+			case OP_POP:
+				op = "Pop";
+				break;
+		
+			case OP_ASSIGN:
+				op = "Assign";
+				break;
+			
+			case OP_FUNC:
+				op = "Func";
+				break;
+			
+			default:
+				op = "UNK";
+				break;
+		}	
+		data1 = (p->data1) ? p->data1 : "NULL";
+		data2 = (p->data2) ? p->data2 : "NULL";
+				
+		debug(DEBUG_EXPECTED,"Opcode: %s, Operand: %d, Data1: %s, Data2: %s", op, p->operand, data1, data2);	
+	}
+
+	debug(DEBUG_EXPECTED, "*** end p-code dump ***");
+	
+}
+

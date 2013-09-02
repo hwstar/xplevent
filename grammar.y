@@ -54,12 +54,13 @@ statementlist ::= statement .
 */
 
 statement ::= expression SEMI .
-
+statement ::= assignment SEMI .
 /*
 * Expression
 */
 
 expression ::= function .
+
 
 /*
 * Function
@@ -73,7 +74,8 @@ function ::= builtinFunction(A) OPAREN argumentlist CPAREN .
 	/* Call cleanup */
 	ParserPostFunctionCleanup(parseCtrl);
 	
-
+	ParserPcodeEmit(parseCtrl, OP_FUNC, 0, A->stringVal, NULL); 
+	
 }
 
 /*
@@ -124,25 +126,29 @@ argument ::= BACKSLASH PERCENT XPLOUT(A) .
 {
 	debug(DEBUG_ACTION, "Add hash: %s to argument list", A->stringVal);
 	ParserAddFunctionArg(parseCtrl, A->stringVal, ATYPE_HASH);
+	ParserPcodeEmit(parseCtrl, OP_PUSH, 3, A->stringVal, NULL); 
 }
 
 /*
-* rvalue to hash assignment
+* assignment
 */
 
-expression ::= lhash(A) EQUALS rvalue(B) .
+assignment ::= lhash(A) EQUALS rvalue(B) .
 {
-	debug(DEBUG_ACTION, "Lhash to rvalue assignment");
-	ParserHashAddKeyValue(&parseCtrl->xplOutHead, parseCtrl->xplOutContext, A->stringVal, B->stringVal);
+	debug(DEBUG_ACTION, "rvalue to Lhash assignment");
+	ParserHashAddKeyValue(&parseCtrl->pcodeHeader->xplOutHead, parseCtrl->pcodeHeader->xplOutContext, A->stringVal, B->stringVal);
+	
+	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, NULL, NULL);
 }
 
-/*
-* hash to hash assignment
-*/
 
-expression ::= lhash(A) EQUALS rhash(B) .
+assignment ::= lhash(A) EQUALS rhash(B) .
 {	
-	const String val = ParserHashGetValue(parseCtrl->argsHead, B->stringVal);
+	const String val = ParserHashGetValue(parseCtrl->pcodeHeader->argsHead, B->stringVal);
+	pcodeHeaderPtr_t ph;
+	
+	ph = parseCtrl->pcodeHeader;
+	ASSERT_FAIL(ph);
 	
 	if(!val){
 		debug(DEBUG_UNEXPECTED, "Cannot find key %s in args", B->stringVal);
@@ -152,7 +158,11 @@ expression ::= lhash(A) EQUALS rhash(B) .
 	}
 	else{
 		debug(DEBUG_ACTION,"Adding key %s to $xplout", val); 
-		ParserHashAddKeyValue(&parseCtrl->xplOutHead, parseCtrl->xplOutContext, A->stringVal, val); 
+		ParserHashAddKeyValue(&ph->xplOutHead, ph->xplOutContext, A->stringVal, val); 
+		
+
+		ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, NULL, NULL);
+		
 	}
 	
 }
@@ -165,6 +175,7 @@ rhash(A) ::= DOLLAR ARGS OBRACE BAREWORD(B) CBRACE .
 {
 	debug(DEBUG_ACTION, "$args found, BAREWORD = %s", B->stringVal);
 	A = B;
+	ParserPcodeEmit(parseCtrl, OP_PUSH, 2, "args", A->stringVal);
 }
 
 /*
@@ -175,6 +186,7 @@ lhash(A) ::= DOLLAR XPLOUT OBRACE BAREWORD(B) CBRACE .
 {
 	debug(DEBUG_ACTION, "$xplout found, BAREWORD = %s", B->stringVal);	
 	A = B;
+	ParserPcodeEmit(parseCtrl, OP_PUSH, 2, "xplout", A->stringVal);
 }
 
 /*
@@ -186,6 +198,7 @@ rvalue(A) ::= INTLIT(B) .
 	ASSERT_FAIL(B)
 	debug(DEBUG_ACTION, "rvalue is an intlit, value = %s", B->stringVal);
 	A = B;
+	ParserPcodeEmit(parseCtrl, OP_PUSH, 0, B->stringVal, NULL); 
 }
 
 /*
@@ -233,6 +246,7 @@ rvalue(A) ::= STRINGLIT(B) .
 	
 	/* Free original token */
 	talloc_free(B);
+	ParserPcodeEmit(parseCtrl, OP_PUSH, 0, A->stringVal, NULL); 
 }
 
 /*
