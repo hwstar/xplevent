@@ -32,6 +32,9 @@
 // Call to redirect the error and log output to a different file (i.e. /tmp/logfile)
 void notify_logpath(const String path);
 
+// Call to enable or disable time reporting in messages
+void notify_timen(Bool ena);
+
 // Fatal error handler with strerror(errno);
 void fatal_with_reason(int error, const String message, ...);
 

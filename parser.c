@@ -84,7 +84,7 @@ static void parserFree(void *ctx)
 /*
  * Send xPL command if everything looks good
  */
-
+#if(0)
 static void sendXPLCommand(ParseCtrlPtr_t this)
 {
 	String tag;
@@ -176,6 +176,139 @@ end:
 	talloc_free(ctx);
 	
 }
+#endif
+
+
+/*
+ * Add a function argument to the argument list
+ */
+#if(0)
+void ParserAddFunctionArg(ParseCtrlPtr_t this, void *arg, argType_t type)
+{
+	argListEntryPtr_t newale; 
+	pcodeHeaderPtr_t ph;
+	
+	debug(DEBUG_ACTION,"Adding function argument: %s, with type: %d ", arg, type);
+	
+	ASSERT_FAIL(this && arg)
+	
+	ph = this->pcodeHeader;
+	
+	ASSERT_FAIL(ph)
+	
+
+	
+	
+	
+	if(ph->argListHead){
+		/* List empty, create talloc context for this list */
+	    ph->argListContext = talloc_new(ph);
+		ASSERT_FAIL(ph->argListContext);
+	}
+	
+	/* Create the new list entry */
+			
+	newale = talloc_zero(ph->argListContext, argListEntry_t);
+	ASSERT_FAIL(newale)
+	newale->magic = AL_MAGIC;
+	newale->arg = talloc_strdup(newale, arg);
+	ASSERT_FAIL(newale->arg)
+	newale->type = type;
+	ph->numFuncArgs++;	
+	
+	if(!ph->argListHead){
+		/* First entry */
+		ph->argListHead = newale;
+	}
+	else{
+		/* Subsequent entries */
+		argListEntryPtr_t ale, endale;
+		/* Traverse list to end */
+		for(ale = ph->argListHead; ale; ale = ale->next){
+			ASSERT_FAIL(AL_MAGIC == ale->magic)
+			endale = ale;
+		}
+		/* Add it on to end */
+		endale->next = newale;
+	}
+	
+		
+		
+
+}
+#endif
+
+/*
+ * Return the nth function argument
+ */
+
+#if(0)
+const String ParserFunctionArg(argListEntryPtr_t ale, int argNum)
+{
+	int i;
+	
+	ASSERT_FAIL(ale)
+	
+	for(i = 0; ale && i < argNum; i++, ale = ale->next);
+	
+	if(ale)
+		return ale->arg;
+	else
+		return NULL;
+}
+#endif
+	
+/*
+ * Execute a built-in function
+ */
+#if(0)
+void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
+{
+	pcodeHeaderPtr_t ph;
+	
+	ASSERT_FAIL(this)
+	
+	ph = this->pcodeHeader;
+	
+	ASSERT_FAIL(ph);
+	
+	
+	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", tokenID, ph->numFuncArgs);
+	
+	
+	switch(tokenID){
+		case TOK_XPLCMD:
+			sendXPLCommand(this); 
+		break;
+		
+		default:
+			ASSERT_FAIL(FALSE);
+	}	
+}
+#endif
+
+/*
+ * Parser Post Function Cleanup
+ */
+#if(0)
+void ParserPostFunctionCleanup(ParseCtrlPtr_t this)
+{
+	pcodeHeaderPtr_t ph;
+	
+	debug(DEBUG_ACTION,"Entered post function cleanup");
+	
+	ASSERT_FAIL(this)
+	ph = this->pcodeHeader;
+	ASSERT_FAIL(ph);
+	
+	/* Free the argument list */
+	if(ph->argListHead){
+		talloc_free(ph->argListContext); /* Free the list context */
+		ph->argListContext = ph->argListHead = NULL;
+		ph->numFuncArgs = 0;
+	}
+}
+#endif
 
 
 
@@ -267,136 +400,6 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 		
 	}
 	return res;	
-}
-
-
-
-/*
- * Add a function argument to the argument list
- */
-
-void ParserAddFunctionArg(ParseCtrlPtr_t this, void *arg, argType_t type)
-{
-	argListEntryPtr_t newale; 
-	pcodeHeaderPtr_t ph;
-	
-	debug(DEBUG_ACTION,"Adding function argument: %s, with type: %d ", arg, type);
-	
-	ASSERT_FAIL(this && arg)
-	
-	ph = this->pcodeHeader;
-	
-	ASSERT_FAIL(ph)
-	
-
-	
-	
-	
-	if(ph->argListHead){
-		/* List empty, create talloc context for this list */
-	    ph->argListContext = talloc_new(ph);
-		ASSERT_FAIL(ph->argListContext);
-	}
-	
-	/* Create the new list entry */
-			
-	newale = talloc_zero(ph->argListContext, argListEntry_t);
-	ASSERT_FAIL(newale)
-	newale->magic = AL_MAGIC;
-	newale->arg = talloc_strdup(newale, arg);
-	ASSERT_FAIL(newale->arg)
-	newale->type = type;
-	ph->numFuncArgs++;	
-	
-	if(!ph->argListHead){
-		/* First entry */
-		ph->argListHead = newale;
-	}
-	else{
-		/* Subsequent entries */
-		argListEntryPtr_t ale, endale;
-		/* Traverse list to end */
-		for(ale = ph->argListHead; ale; ale = ale->next){
-			ASSERT_FAIL(AL_MAGIC == ale->magic)
-			endale = ale;
-		}
-		/* Add it on to end */
-		endale->next = newale;
-	}
-	
-		
-		
-
-}
-
-/*
- * Return the nth function argument
- */
-
-
-const String ParserFunctionArg(argListEntryPtr_t ale, int argNum)
-{
-	int i;
-	
-	ASSERT_FAIL(ale)
-	
-	for(i = 0; ale && i < argNum; i++, ale = ale->next);
-	
-	if(ale)
-		return ale->arg;
-	else
-		return NULL;
-}
-
-	
-/*
- * Execute a built-in function
- */
- 
-void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
-{
-	pcodeHeaderPtr_t ph;
-	
-	ASSERT_FAIL(this)
-	
-	ph = this->pcodeHeader;
-	
-	ASSERT_FAIL(ph);
-	
-	
-	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", tokenID, ph->numFuncArgs);
-	
-	
-	switch(tokenID){
-		case TOK_XPLCMD:
-			sendXPLCommand(this); 
-		break;
-		
-		default:
-			ASSERT_FAIL(FALSE);
-	}	
-}
-
-/*
- * Parser Post Function Cleanup
- */
-
-void ParserPostFunctionCleanup(ParseCtrlPtr_t this)
-{
-	pcodeHeaderPtr_t ph;
-	
-	debug(DEBUG_ACTION,"Entered post function cleanup");
-	
-	ASSERT_FAIL(this)
-	ph = this->pcodeHeader;
-	ASSERT_FAIL(ph);
-	
-	/* Free the argument list */
-	if(ph->argListHead){
-		talloc_free(ph->argListContext); /* Free the list context */
-		ph->argListContext = ph->argListHead = NULL;
-		ph->numFuncArgs = 0;
-	}
 }
 
 /*
@@ -598,13 +601,14 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
 	
 	if(ph){
 		
-		new = talloc_zero(ph->pcodeCTX, pcode_t);
+		new = talloc_zero(ph, pcode_t);
 		ASSERT_FAIL(new);
 		
 		/* Initialize new list entry */
 		new->magic = PC_MAGIC;
 		new->opcode = op;
 		new->operand = operand;
+		new->lineNo = pc->lineNo;
 		if(data1){
 			/* Make a copy of the string */
 			new->data1 = talloc_strdup(new, data1);
@@ -640,11 +644,12 @@ void ParserDumpPcodeList(pcodeHeaderPtr_t ph)
 {
 	String op,data1,data2;
 	pcodePtr_t p;
+	int count;
 	
 	if(!ph)
 		return;
 	debug(DEBUG_EXPECTED, "*** begin p-code dump ***");
-	for(p = ph->head; p; p = p->next){
+	for(count = 0, p = ph->head; p; p = p->next, count++){
 		switch(p->opcode){
 			case OP_NOP:
 				op = "Nop";
@@ -665,7 +670,15 @@ void ParserDumpPcodeList(pcodeHeaderPtr_t ph)
 			case OP_FUNC:
 				op = "Func";
 				break;
-			
+				
+			case OP_BLOCK:
+				op = "Block";
+				break;
+				
+			case OP_TEST:
+				op = "Test";
+				break;
+
 			default:
 				op = "UNK";
 				break;
@@ -673,7 +686,8 @@ void ParserDumpPcodeList(pcodeHeaderPtr_t ph)
 		data1 = (p->data1) ? p->data1 : "NULL";
 		data2 = (p->data2) ? p->data2 : "NULL";
 				
-		debug(DEBUG_EXPECTED,"Opcode: %s, Operand: %d, Data1: %s, Data2: %s", op, p->operand, data1, data2);	
+		debug(DEBUG_EXPECTED,"%d. Line %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s", 
+		count, p->lineNo, op, p->operand, data1, data2);	
 	}
 
 	debug(DEBUG_EXPECTED, "*** end p-code dump ***");

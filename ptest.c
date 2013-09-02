@@ -5,8 +5,10 @@
 #include "notify.h"
 #include "parser.h"
 
-
-
+/*
+ * Parser test harness
+ */
+ 
 /* Program name */
 char *progName;
 
@@ -29,11 +31,13 @@ int main(int argc, char *argv[])
 	progName = argv[0];
 	TALLOC_CTX *top;
 	ParseCtrlPtr_t parseCtrl;
+	pcodeHeaderPtr_t ph;
+	int res = 0;
 
 
 	if(argc != 3){
 		fatal("Missing input parameters\n");
-		exit(1);
+		exit(-1);
 	}
 	
 	/* Allocate top context */
@@ -41,38 +45,47 @@ int main(int argc, char *argv[])
 	top = talloc_new(NULL);
 	ASSERT_FAIL(top)
 	
+	/* Allocate pcode header */
+	ph = talloc_zero(top, pcodeHeader_t);
+	ASSERT_FAIL(ph)
+	
+	
 	/* Allocate parser control structure */
 		
 	parseCtrl = talloc_zero(top, ParseCtrl_t);
 	ASSERT_FAIL(top)
 	
+	/* Add pointer to pcode header in parse control block */
+	parseCtrl->pcodeHeader = ph;
 	
-	ParserHashAddKeyValue(&parseCtrl->pcodeHeader->argsHead, parseCtrl,"current","78.0");
-	ParserHashAddKeyValue(&parseCtrl->pcodeHeader->argsHead, parseCtrl,"units","Fahrenheit");
+	/* Initialize the args hash with some test data */
+	
+	ParserHashAddKeyValue(&ph->argsHead, parseCtrl,"current","78.0");
+	ParserHashAddKeyValue(&ph->argsHead, parseCtrl,"units","Fahrenheit");
 	
 	debug(DEBUG_EXPECTED,"***** Input hash contents *****");
-	ParserHashWalk(parseCtrl->pcodeHeader->argsHead, hashWalkPrint);
+	ParserHashWalk(ph->argsHead, hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** Input hash contents *****");
 			
 
 	
 	
-	if(ParserHCLScan(parseCtrl, (*argv[1] == 'f'), argv[2])){
-		debug(DEBUG_UNEXPECTED, "%s", parseCtrl->failReason);
-	}
-	if(parseCtrl->failReason)
+	ParserHCLScan(parseCtrl, (*argv[1] == 'f'), argv[2]);
+	
+	if(parseCtrl->failReason){
 		debug(DEBUG_UNEXPECTED,"Parse Error: %s", parseCtrl->failReason);	
-		
-	debug(DEBUG_EXPECTED,"***** Output hash contents *****");
-	ParserHashWalk(parseCtrl->pcodeHeader->xplOutHead, hashWalkPrint);
-	debug(DEBUG_EXPECTED,"***** Output hash contents *****");
+		res = -1;
+	}
+
 	
-	
+	debug(DEBUG_EXPECTED,"***** P-code dump *****");
+	ParserDumpPcodeList(ph);
+	debug(DEBUG_EXPECTED,"***** P-code dump *****");
 	
 	talloc_report(top, stdout);
 	
 	talloc_free(top);
 	
-	return 0;
+	exit(res);
 }
 

@@ -44,7 +44,19 @@ extern String progName;
 /* Debug level. */
 extern int debugLvl;
 
-FILE *output = NULL;
+static FILE *output = NULL;
+
+static Bool timeen = 0;
+
+
+/*
+ * Enable/disable time reporting
+ */
+ 
+void notify_timen(Bool ena)
+{
+	timeen = ena;
+}
 
 
 /*
@@ -139,15 +151,17 @@ void debug(int level, const String message, ...) {
  	
 	/* We only do this code if we are at or above the debug level. */
 	if(debugLvl >= level) {
-		t = time(NULL);
-		strncpy(timenow,ctime(&t), 31);
-		timenow[31] = 0;
-		l = strlen(timenow);
-		if(l)
+		if(timeen){
+			t = time(NULL);
+			strncpy(timenow,ctime(&t), 31);
+			timenow[31] = 0;
+			l = strlen(timenow);
+			if(l)
 			timenow[l-1] = '\0';
       
-		/* Print the error message. */
-		fprintf(LOGOUT,"%s [ %s ] (debug): ", progName, timenow);
+			/* Print the error message. */
+			fprintf(LOGOUT,"%s [ %s ] (debug): ", progName, timenow);
+		}
 		vfprintf(LOGOUT, message, ap);
 		fprintf(LOGOUT,"\n");
 		if(output != NULL)  /* If we are writing to a log file, flush the debug output. */

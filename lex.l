@@ -41,7 +41,7 @@ comment		#.*\n
 "xplcmd"				{return (TOK_XPLCMD);}
 "args"					{return (TOK_ARGS);}
 "xplout"				{return (TOK_XPLOUT);}
-
+"if"					{return (TOK_IF);}
 {bareword}				{return (TOK_BAREWORD);}
 {intlit}				{return (TOK_INTLIT);}
 {stringlit}				{return (TOK_STRINGLIT);}

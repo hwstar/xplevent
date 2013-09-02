@@ -1,7 +1,11 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-typedef enum {OP_NOP =0, OP_PUSH, OP_POP, OP_ASSIGN, OP_FUNC } opType_t;
+enum {OPRD_STRINGLIT=0, OPRD_INTLIT=1, OPRD_HASHKV=2, OPRD_HASHREF=3};
+enum {OPRT_EQUALITY=0};
+enum {OPRB_BEGIN=0, OPRB_END=1};
+
+typedef enum {OP_NOP =0, OP_PUSH, OP_POP, OP_ASSIGN, OP_FUNC, OP_BLOCK, OP_TEST } opType_t;
 
 
 typedef enum {ATYPE_STRING = 0, ATYPE_HASH = 1} argType_t;
@@ -49,6 +53,7 @@ typedef ParseHashKVPtr_t * ParseHashKVPtrPtr_t;
  
 typedef struct pcode_s {
 	unsigned magic;
+	int lineNo;
 	opType_t opcode;
 	int operand;
 	int datatype;
@@ -66,7 +71,6 @@ typedef pcode_t * pcodePtr_t;
 typedef struct pcheader_s {
 	pcodePtr_t head;
 	pcodePtr_t tail;
-	void *pcodeCTX;
 	ParseHashKVPtr_t argsHead;
 	ParseHashKVPtr_t xplOutHead;
 	void *xplOutContext;

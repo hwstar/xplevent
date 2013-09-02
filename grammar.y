@@ -30,12 +30,51 @@
 %nonassoc EQUALS .
 %left OPAREN CPAREN .
 
-
 /*
 * Top of parse tree
 */
 
 start ::= statementlist .
+start ::= BADCHAR .
+start ::= ifconst .
+
+/*
+* If construct
+*/
+
+
+ifconst ::= iftest block .
+
+/*
+* Block
+*/
+
+
+block ::= blockstart statementlist blockend .
+
+/*
+* Block start
+*/
+
+blockstart ::= OBRACE .
+{
+	ParserPcodeEmit(parseCtrl, OP_BLOCK, OPRB_BEGIN, "***BLOCK START***", NULL); 
+}
+
+/*
+* Block end
+*/
+
+blockend ::= CBRACE .
+{
+	ParserPcodeEmit(parseCtrl, OP_BLOCK, OPRB_END, "***BLOCK END***", NULL); 
+}
+
+/*
+* If test
+*/
+
+iftest	::= IF OPAREN test CPAREN .
 
 /*
 * Statement list (successive)
@@ -55,6 +94,8 @@ statementlist ::= statement .
 
 statement ::= expression SEMI .
 statement ::= assignment SEMI .
+
+
 /*
 * Expression
 */
@@ -68,14 +109,7 @@ expression ::= function .
 
 function ::= builtinFunction(A) OPAREN argumentlist CPAREN .
 {
-	debug(DEBUG_ACTION, "Builtin function exec Token ID: %d", A->tokenID);
-	/* Call builtin function handler callback if enabled */
-	ParserExecFunction(parseCtrl, A->tokenID);
-	/* Call cleanup */
-	ParserPostFunctionCleanup(parseCtrl);
-	
 	ParserPcodeEmit(parseCtrl, OP_FUNC, 0, A->stringVal, NULL); 
-	
 }
 
 /*
@@ -84,7 +118,6 @@ function ::= builtinFunction(A) OPAREN argumentlist CPAREN .
 
 builtinFunction(A) ::= XPLCMD(B) .
 {
-	debug(DEBUG_ACTION, "Builtin function xplcmd");
 	A = B;
 }
 
@@ -95,7 +128,6 @@ builtinFunction(A) ::= XPLCMD(B) .
 
 argumentlist ::= argumentlist COMMA argument .
 {
-	debug(DEBUG_ACTION, "Add to arg list");
 }
 
 /*
@@ -104,17 +136,14 @@ argumentlist ::= argumentlist COMMA argument .
 
 argumentlist ::= argument .
 {
-    debug(DEBUG_ACTION, "Start arg list");
 }
 
 /*
 * rvalue to argument
 */
 
-argument ::= rvalue(A) .
+argument ::= rvalue .
 {
-	debug(DEBUG_ACTION, "Add string to argument list: %s", A->stringVal);
-	ParserAddFunctionArg(parseCtrl, A->stringVal, ATYPE_STRING);
 }
 
 /*
@@ -124,57 +153,62 @@ argument ::= rvalue(A) .
 
 argument ::= BACKSLASH PERCENT XPLOUT(A) .
 {
-	debug(DEBUG_ACTION, "Add hash: %s to argument list", A->stringVal);
-	ParserAddFunctionArg(parseCtrl, A->stringVal, ATYPE_HASH);
-	ParserPcodeEmit(parseCtrl, OP_PUSH, 3, A->stringVal, NULL); 
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHREF, A->stringVal, NULL); 
 }
 
 /*
 * assignment
 */
 
-assignment ::= lhash(A) EQUALS rvalue(B) .
+assignment ::= lhash EQUALS rvalue .
 {
-	debug(DEBUG_ACTION, "rvalue to Lhash assignment");
-	ParserHashAddKeyValue(&parseCtrl->pcodeHeader->xplOutHead, parseCtrl->pcodeHeader->xplOutContext, A->stringVal, B->stringVal);
-	
-	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, NULL, NULL);
+
+	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, "lhash eq rvalue", NULL);
 }
 
 
-assignment ::= lhash(A) EQUALS rhash(B) .
+assignment ::= lhash EQUALS rhash .
 {	
-	const String val = ParserHashGetValue(parseCtrl->pcodeHeader->argsHead, B->stringVal);
-	pcodeHeaderPtr_t ph;
-	
-	ph = parseCtrl->pcodeHeader;
-	ASSERT_FAIL(ph);
-	
-	if(!val){
-		debug(DEBUG_UNEXPECTED, "Cannot find key %s in args", B->stringVal);
-		parseCtrl->failReason = talloc_asprintf(parseCtrl, "Key %s does not exist in hash %s on line %d",
-		B->stringVal, A->stringVal, parseCtrl->lineNo);
-		ASSERT_FAIL(parseCtrl->failReason);
-	}
-	else{
-		debug(DEBUG_ACTION,"Adding key %s to $xplout", val); 
-		ParserHashAddKeyValue(&ph->xplOutHead, ph->xplOutContext, A->stringVal, val); 
-		
 
-		ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, NULL, NULL);
+	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, "lhash eq rhash", NULL);
 		
-	}
-	
+}
+
+/*
+* Equality test
+*/
+
+test ::= rhash EQUALS EQUALS rvalue .
+{
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "rhash eq eq rvalue");
+}
+
+test ::= rvalue EQUALS EQUALS rhash .
+{
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "rvalue eq eq rhash");
+}
+
+test ::= lhash EQUALS EQUALS rhash .
+{
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "lhash eq eq rhash");
+}
+
+
+test ::= rhash EQUALS EQUALS lhash .
+{
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "rhash eq eq lhash");
 }
 
 /*
 * rvalue hash
 */
 
-rhash(A) ::= DOLLAR ARGS OBRACE BAREWORD(B) CBRACE .
+rhash ::= DOLLAR ARGS OBRACE BAREWORD(A) CBRACE .
 {
-	debug(DEBUG_ACTION, "$args found, BAREWORD = %s", B->stringVal);
-	A = B;
+	if(NULL == ParserHashGetValue(parseCtrl->pcodeHeader->argsHead, A->stringVal)){
+		parseCtrl->failReason = talloc_asprintf(parseCtrl,
+		"Hash $args contains no key named %s on line %d", A->stringVal, parseCtrl->lineNo);
+	}
 	ParserPcodeEmit(parseCtrl, OP_PUSH, 2, "args", A->stringVal);
 }
 
@@ -182,78 +216,65 @@ rhash(A) ::= DOLLAR ARGS OBRACE BAREWORD(B) CBRACE .
 * lvalue hash
 */
 
-lhash(A) ::= DOLLAR XPLOUT OBRACE BAREWORD(B) CBRACE .
+lhash ::= DOLLAR XPLOUT OBRACE BAREWORD(A) CBRACE .
 {
-	debug(DEBUG_ACTION, "$xplout found, BAREWORD = %s", B->stringVal);	
-	A = B;
-	ParserPcodeEmit(parseCtrl, OP_PUSH, 2, "xplout", A->stringVal);
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHKV, "xplout", A->stringVal);
 }
 
 /*
 * Integer literal to rvalue
 */
 
-rvalue(A) ::= INTLIT(B) .
+rvalue ::= INTLIT(A) .
 {
-	ASSERT_FAIL(B)
-	debug(DEBUG_ACTION, "rvalue is an intlit, value = %s", B->stringVal);
-	A = B;
-	ParserPcodeEmit(parseCtrl, OP_PUSH, 0, B->stringVal, NULL); 
+	ASSERT_FAIL(A)
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_INTLIT, A->stringVal, "integer literal"); 
+	talloc_free(A);
 }
 
 /*
 * String literal to rvalue
 */
 
-rvalue(A) ::= STRINGLIT(B) .
+rvalue ::= STRINGLIT(A) .
 {
-	tokenPtr_t token;
 	String s = NULL;
 	String p;
 	int i;
 	
-	ASSERT_FAIL(B)
+	ASSERT_FAIL(A)
 	
-	debug(DEBUG_ACTION, "rvalue is a stringlit, value = %s", B->stringVal);
-	
-	/* Allocate a token */
-	token = talloc_zero(parseCtrl, token_t);
-	ASSERT_FAIL(token)
-	if(token){
-		/* Allocate a string of the same size as the token value */
-		s = talloc_size(token, strlen(B->stringVal));
-		ASSERT_FAIL(s)
-	}
+	/* Allocate a string of the same size as the token value */
+	s = talloc_size(parseCtrl, strlen(A->stringVal));
+	ASSERT_FAIL(s)
+
 	
 	
 	/* Strip off double quotes */
 	/* FIXME: This should not strip escaped quotes */
-	for(i = 0, p = B->stringVal; *p; p++){ /* Strip quotes */
+	for(i = 0, p = A->stringVal; *p; p++){ /* Strip quotes */
 		if(*p == '"')
 			continue;
 		s[i++] = *p;
 	}
 	/* NUL terminate new string */
-	s[i] = 0;
-		
-	/* Initialize token */
-	token->stringVal = s;	
-
+	s[i] = 0;		
 	
-		
-	/* Assign token pointer */
-	A = token;
+	/* Emit pcode */
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_STRINGLIT, s, "string literal");
+
+	/* Free string */
+	talloc_free(s);
 	
 	/* Free original token */
-	talloc_free(B);
-	ParserPcodeEmit(parseCtrl, OP_PUSH, 0, A->stringVal, NULL); 
+	talloc_free(A);
+	
+	 
 }
 
-/*
-* Catch-all
-*/
 
-start ::= BADCHAR .
+
+
 
 	
 
