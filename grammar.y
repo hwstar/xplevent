@@ -199,28 +199,28 @@ assignment ::= lhash EQUALS rhash .
 }
 
 /*
-* Equality test
+* Numeric Equality test
 */
 
 test ::= rhash EQUALS EQUALS rvalue .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "rhash eq eq rvalue");
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "rhash eq eq rvalue");
 }
 
 test ::= rvalue EQUALS EQUALS rhash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "rvalue eq eq rhash");
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "rvalue eq eq rhash");
 }
 
 test ::= lhash EQUALS EQUALS rhash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "lhash eq eq rhash");
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "lhash eq eq rhash");
 }
 
 
 test ::= rhash EQUALS EQUALS lhash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_EQUALITY, "test equality", "rhash eq eq lhash");
+	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "rhash eq eq lhash");
 }
 
 /*

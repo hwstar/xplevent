@@ -70,17 +70,24 @@ int main(int argc, char *argv[])
 
 	
 	
-	ParserHCLScan(parseCtrl, (*argv[1] == 'f'), argv[2]);
+	ParserParseHCL(parseCtrl, (*argv[1] == 'f'), argv[2]);
 	
 	if(parseCtrl->failReason){
 		debug(DEBUG_UNEXPECTED,"Parse Error: %s", parseCtrl->failReason);	
 		res = -1;
 	}
-
 	
 	debug(DEBUG_EXPECTED,"***** P-code dump *****");
 	ParserPcodeDumpList(ph);
 	debug(DEBUG_EXPECTED,"***** P-code dump *****");
+	
+	if(!res){
+		if(ParserExecPcode(ph)){
+			ASSERT_FAIL(ph->failReason);
+			debug(DEBUG_UNEXPECTED,"Pcode error: %s", ph->failReason);
+		}
+	}
+
 	
 	talloc_report(top, stdout);
 	

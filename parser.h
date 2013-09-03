@@ -2,10 +2,11 @@
 #define PARSER_H
 
 enum {OPRD_STRINGLIT=0, OPRD_INTLIT=1, OPRD_HASHKV=2, OPRD_HASHREF=3};
-enum {OPRT_EQUALITY=0};
+enum {OPRT_NUMEQUALITY=0};
 enum {OPRB_BEGIN=0, OPRB_END=1};
+enum {EXS_NORMAL = 0, EXS_IF_BLOCK = 1, EXS_ELSE_BLOCK = 2, EXS_BLOCK_SKIP = 3};
 
-typedef enum {OP_NOP =0, OP_PUSH, OP_POP, OP_ASSIGN, OP_FUNC, OP_BLOCK, OP_IF, OP_ELSE, OP_TEST } opType_t;
+typedef enum {OP_NOP =0, OP_PUSH, OP_ASSIGN, OP_FUNC, OP_BLOCK, OP_IF, OP_TEST } opType_t;
 
 
 typedef enum {ATYPE_STRING = 0, ATYPE_HASH = 1} argType_t;
@@ -75,6 +76,11 @@ typedef struct pcheader_s {
 	ParseHashKVPtr_t xplOutHead;
 	void *xplOutContext;
 	argListEntryPtr_t argListHead;
+	pcodePtr_t firstPush;
+	String failReason;
+	short lastIfOperand;
+	short execState;
+	short pushCount;
 	short numFuncArgs;
 	void *argListContext;
 	void *xplServicePtr;
@@ -97,7 +103,7 @@ typedef ParseCtrl_t * ParseCtrlPtr_t;
 
 
 int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String *device, String *instance);
-int ParserHCLScan(ParseCtrlPtr_t this, int fileMode, const String str);
+
 void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const String key, const String value));
 void ParserHashAddKeyValue(ParseHashKVPtrPtr_t ppHead, void *tallocContext, const String key, const String value);
 const String ParserHashGetValue(ParseHashKVPtr_t pHead, const String key);
@@ -105,9 +111,11 @@ void ParserExecFunction(struct ParseCtrl_s *this, int tokenID);
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2);
 void ParserPcodeDumpList(pcodeHeaderPtr_t ph);
 void ParserUpdateIf(ParseCtrlPtr_t this, tokenPtr_t t);
-int ParserPcodePushCount(pcodePtr_t instr, pcodePtrPtr_t firstArg );
 Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue);
 Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value);
+int ParserExecPcode(pcodeHeaderPtr_t ph);
+int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str);
+
 
 
 

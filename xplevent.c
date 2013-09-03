@@ -359,7 +359,7 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	
 	ParserHashWalk(ph->argsHead, kvDump);
 	
-	res = ParserHCLScan(parseCtrl, FALSE, hcl);
+	res = ParserParseHCL(parseCtrl, FALSE, hcl);
 	
 	if(parseCtrl->failReason){
 		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
@@ -371,6 +371,9 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	
 	ParserPcodeDumpList(ph); // DEBUG
 	
+	if(res == PASS){
+		res = ParserExecPcode(ph);
+	}
 	talloc_free(ph);
 	
 	return res;
