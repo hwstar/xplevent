@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 
 	
 	debug(DEBUG_EXPECTED,"***** P-code dump *****");
-	ParserDumpPcodeList(ph);
+	ParserPcodeDumpList(ph);
 	debug(DEBUG_EXPECTED,"***** P-code dump *****");
 	
 	talloc_report(top, stdout);

@@ -71,246 +71,6 @@ static void *parserMalloc(size_t size)
 }
 
 
-/*
- * Free for parser
- */
-
-
-static void parserFree(void *ctx)
-{
-	talloc_free(ctx);
-}
-
-/*
- * Send xPL command if everything looks good
- */
-#if(0)
-static void sendXPLCommand(ParseCtrlPtr_t this)
-{
-	String tag;
-	String hash;
-	String class;
-	String schema;
-	TALLOC_CTX *ctx;
-	String vendor, device, instance;
-	ParseHashKVPtr_t kvp;
-	pcodeHeaderPtr_t ph;
-	xPL_MessagePtr msg;
-
-	ASSERT_FAIL(this)
-	ph = this->pcodeHeader;
-	ASSERT_FAIL(ph);
-	
-	ctx = talloc_new(ph);
-	ASSERT_FAIL(ctx)
-			
-	if(ph->numFuncArgs != 4){
-		this->failReason = talloc_asprintf(this, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
-		ph->numFuncArgs);
-		goto end;
-	}
-	tag = ParserFunctionArg(ph->argListHead, 0);
-	ASSERT_FAIL(tag)
-	class = ParserFunctionArg(ph->argListHead, 1);
-	ASSERT_FAIL(class)
-	schema = ParserFunctionArg(ph->argListHead, 2);
-	ASSERT_FAIL(schema)
-	hash = ParserFunctionArg(ph->argListHead, 3);
-	ASSERT_FAIL(hash)
-	
-	if(ParserSplitXPLTag(ctx, tag, &vendor, &device, &instance)){
-		this->failReason = talloc_asprintf(this, "Bad xPL Tag: %s", tag);
-		goto end;
-	}
-	if(strcmp("xplout", hash)){
-		this->failReason = talloc_asprintf(this, "Hash must be named xplout");
-		goto end;
-	}
-
-	if(ph->xplServicePtr){
-	
-			
-		/* Create xpl command message */
-		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
-		ASSERT_FAIL(msg)
-		
-		/* Set message schema */
-		xPL_setSchema(msg, class, schema); 
-		
-		/* Clear name/value pairs */
-		xPL_clearMessageNamedValues(msg);
-	}
-	else{
-		/* For dry run, just print the vendor, device and instance */
-		debug(DEBUG_EXPECTED, "Vendor: %s", vendor);
-		debug(DEBUG_EXPECTED, "Device: %s", device);
-		debug(DEBUG_EXPECTED, "Instance: %s", instance);
-	}		
-
-					
-	for(kvp = ph->xplOutHead; kvp; kvp = kvp->next){
-		
-		if(!ph->xplServicePtr){
-			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
-		}
-		else{
-			xPL_addMessageNamedValue(msg, kvp->key, kvp->value);
-		}		
-	}
-	
-	debug(DEBUG_ACTION, "***Sending xPL command***");
-	
-	if(ph->xplServicePtr){
-		xPL_sendMessage(msg);
-		xPL_releaseMessage(msg);
-	}
-
-end:
-	/* Free the xplout hash */
-	
-	talloc_free(ph->xplOutContext);
-	ph->xplOutContext = ph->xplOutHead = NULL;
-	
-	/* Free the context used here */
-	
-	talloc_free(ctx);
-	
-}
-#endif
-
-
-/*
- * Add a function argument to the argument list
- */
-#if(0)
-void ParserAddFunctionArg(ParseCtrlPtr_t this, void *arg, argType_t type)
-{
-	argListEntryPtr_t newale; 
-	pcodeHeaderPtr_t ph;
-	
-	debug(DEBUG_ACTION,"Adding function argument: %s, with type: %d ", arg, type);
-	
-	ASSERT_FAIL(this && arg)
-	
-	ph = this->pcodeHeader;
-	
-	ASSERT_FAIL(ph)
-	
-
-	
-	
-	
-	if(ph->argListHead){
-		/* List empty, create talloc context for this list */
-	    ph->argListContext = talloc_new(ph);
-		ASSERT_FAIL(ph->argListContext);
-	}
-	
-	/* Create the new list entry */
-			
-	newale = talloc_zero(ph->argListContext, argListEntry_t);
-	ASSERT_FAIL(newale)
-	newale->magic = AL_MAGIC;
-	newale->arg = talloc_strdup(newale, arg);
-	ASSERT_FAIL(newale->arg)
-	newale->type = type;
-	ph->numFuncArgs++;	
-	
-	if(!ph->argListHead){
-		/* First entry */
-		ph->argListHead = newale;
-	}
-	else{
-		/* Subsequent entries */
-		argListEntryPtr_t ale, endale;
-		/* Traverse list to end */
-		for(ale = ph->argListHead; ale; ale = ale->next){
-			ASSERT_FAIL(AL_MAGIC == ale->magic)
-			endale = ale;
-		}
-		/* Add it on to end */
-		endale->next = newale;
-	}
-	
-		
-		
-
-}
-#endif
-
-/*
- * Return the nth function argument
- */
-
-#if(0)
-const String ParserFunctionArg(argListEntryPtr_t ale, int argNum)
-{
-	int i;
-	
-	ASSERT_FAIL(ale)
-	
-	for(i = 0; ale && i < argNum; i++, ale = ale->next);
-	
-	if(ale)
-		return ale->arg;
-	else
-		return NULL;
-}
-#endif
-	
-/*
- * Execute a built-in function
- */
-#if(0)
-void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
-{
-	pcodeHeaderPtr_t ph;
-	
-	ASSERT_FAIL(this)
-	
-	ph = this->pcodeHeader;
-	
-	ASSERT_FAIL(ph);
-	
-	
-	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", tokenID, ph->numFuncArgs);
-	
-	
-	switch(tokenID){
-		case TOK_XPLCMD:
-			sendXPLCommand(this); 
-		break;
-		
-		default:
-			ASSERT_FAIL(FALSE);
-	}	
-}
-#endif
-
-/*
- * Parser Post Function Cleanup
- */
-#if(0)
-void ParserPostFunctionCleanup(ParseCtrlPtr_t this)
-{
-	pcodeHeaderPtr_t ph;
-	
-	debug(DEBUG_ACTION,"Entered post function cleanup");
-	
-	ASSERT_FAIL(this)
-	ph = this->pcodeHeader;
-	ASSERT_FAIL(ph);
-	
-	/* Free the argument list */
-	if(ph->argListHead){
-		talloc_free(ph->argListContext); /* Free the list context */
-		ph->argListContext = ph->argListHead = NULL;
-		ph->numFuncArgs = 0;
-	}
-}
-#endif
-
-
 
 /*
  * Split an xPL tag into its constituent parts.
@@ -401,6 +161,8 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 	}
 	return res;	
 }
+
+
 
 /*
  * Get a value from the hash
@@ -503,6 +265,390 @@ void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const 
 }
 
 
+/*
+ * Free for parser
+ */
+
+
+static void parserFree(void *ctx)
+{
+	talloc_free(ctx);
+}
+
+/*
+ * Return number of push instructions prior to current instruction.
+ * If a pointer to a pcodePtr_t is passed for the second argument,
+ * return the pointer to first push instruction after a non-push
+ * instruction in the pcode list
+ */
+
+
+int ParserPcodePushCount(pcodePtr_t instr, pcodePtrPtr_t firstArg )
+{
+	int count;
+	
+	ASSERT_FAIL(instr)
+	
+	for(count = 0; instr && instr->opcode == OP_PUSH; count++, instr = instr->prev);
+	
+	if(firstArg){
+		*firstArg = instr;
+	}
+	return count;
+}
+
+/*
+ * Return the value for the push instruction passed in
+ */
+ 
+
+Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
+{
+	String value = NULL;
+	
+	ASSERT_FAIL(ph);
+	ASSERT_FAIL(instr)
+	ASSERT_FAIL(pValue)
+	
+	/* Do something based on the operand */
+	switch(instr->operand){
+		
+		case OPRD_STRINGLIT: /* Literals */
+		case OPRD_INTLIT:
+			value = instr->data1;
+			break;
+			
+		case OPRD_HASHKV:  /* Assoc array key/value */
+			if(!strcmp("args", instr->data1)){
+				if(ph->argsHead){
+					value = ParserHashGetValue(ph->argsHead, instr->data2);
+				}
+			}
+			else if(!strcmp("xplout", instr->data1)){
+				if(ph->xplOutHead){
+					value = ParserHashGetValue(ph->xplOutHead, instr->data2);
+				}
+			}
+			break;
+			
+		case OPRD_HASHREF: /* Hash reference */
+			value = instr->data1;
+			break;
+			
+		default:
+			ASSERT_FAIL(0)
+	}
+	if(!value)
+		return FAIL;
+	else{
+		*pValue = value;
+		return PASS;
+	}
+}
+
+/*
+ * Put a value in a variable
+ */
+
+Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
+{
+	ASSERT_FAIL(ph)
+	ASSERT_FAIL(instr)
+	ASSERT_FAIL(value)
+	
+	if(instr->operand != OPRD_HASHKV){
+		return FAIL;
+	}
+	if(strcmp("xplout", instr->data1)){
+		return FAIL;
+	}
+	ASSERT_FAIL(ph->xplOutContext);
+	
+	ParserHashAddKeyValue(&ph->xplOutHead, ph->xplOutContext, instr->data2, value);
+	return PASS;
+}
+
+/*
+ * This is called by the parser when a pcode structure has to be added to the list
+ */
+
+void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2)
+{
+	pcodeHeaderPtr_t ph;
+	pcodePtr_t new;
+	
+	ASSERT_FAIL(pc)
+	
+	ph = pc->pcodeHeader;
+	
+	if(ph){
+		
+		new = talloc_zero(ph, pcode_t);
+		ASSERT_FAIL(new);
+		
+		/* Initialize new list entry */
+		new->magic = PC_MAGIC;
+		new->opcode = op;
+		new->operand = operand;
+		new->lineNo = pc->lineNo;
+		if(data1){
+			/* Make a copy of the string */
+			new->data1 = talloc_strdup(new, data1);
+			ASSERT_FAIL(new->data1);
+		}
+		if(data2){
+			/* Make a copy of the string */
+			new->data2 = talloc_strdup(new, data2);
+			ASSERT_FAIL(new->data2);
+		}
+		
+		if(!ph->head){
+			/* First entry */
+			ph->head = ph->tail = new;
+			return;
+		}
+		else{
+			/* Subsequent entry */
+			ph->tail->next = new;
+			new->prev = ph->tail;
+			ph->tail = new; 
+		}
+	}
+}
+
+/*
+ * Debug function.
+ * 
+ * Dump pcode list
+ */
+
+void ParserPcodeDumpList(pcodeHeaderPtr_t ph)
+{
+	String op,data1,data2;
+	pcodePtr_t p;
+	int count;
+	
+	if(!ph)
+		return;
+	debug(DEBUG_EXPECTED, "*** begin p-code dump ***");
+	for(count = 0, p = ph->head; p; p = p->next, count++){
+		switch(p->opcode){
+			case OP_NOP:
+				op = "Nop";
+				break;
+		
+			case OP_PUSH:
+				op = "Push";
+				break;
+			
+			case OP_POP:
+				op = "Pop";
+				break;
+		
+			case OP_ASSIGN:
+				op = "Assign";
+				break;
+			
+			case OP_FUNC:
+				op = "Func";
+				break;
+				
+			case OP_BLOCK:
+				op = "Block";
+				break;
+				
+			case OP_IF:
+				op = "If";
+				break;	
+		
+			case OP_ELSE:
+				op = "Else";
+				break;		
+				
+			case OP_TEST:
+				op = "Test";
+				break;
+			
+
+			default:
+				op = "UNK";
+				break;
+		}	
+		data1 = (p->data1) ? p->data1 : "NULL";
+		data2 = (p->data2) ? p->data2 : "NULL";
+				
+		debug(DEBUG_EXPECTED,"%d. Line %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s", 
+		count, p->lineNo, op, p->operand, data1, data2);	
+	}
+
+	debug(DEBUG_EXPECTED, "*** end p-code dump ***");
+	
+}
+
+	
+/*
+ * Execute a built-in function
+ */
+ 
+#if(0)
+void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
+{
+	pcodeHeaderPtr_t ph;
+	
+	ASSERT_FAIL(this)
+	
+	ph = this->pcodeHeader;
+	
+	ASSERT_FAIL(ph);
+	
+	
+	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", tokenID, ph->numFuncArgs);
+	
+	
+	switch(tokenID){
+		case TOK_XPLCMD:
+			sendXPLCommand(this); 
+		break;
+		
+		default:
+			ASSERT_FAIL(FALSE);
+	}	
+}
+#endif
+
+/*
+ * Unwind to IF statement when an Else is detected
+ */
+ 
+void ParserUpdateIf(ParseCtrlPtr_t this, tokenPtr_t t)
+{
+	int res = FAIL;
+	pcodePtr_t p;
+	pcodeHeaderPtr_t ph;
+	
+	ASSERT_FAIL(this)
+	
+	ASSERT_FAIL(ph = this->pcodeHeader)
+	
+	
+	/* Test to be sure an IF passed this way previously */
+	
+	/* Now, go back in the pcode and find the IF statement and change the operand to a 1 signifying if-else */
+	for(p = ph->tail; (p) ; p = p->prev){
+		if(p->opcode == OP_IF){
+			p->operand = 1;
+			p->data1 = "if-else statement";
+			res = PASS;
+		}
+	}
+	if(p){
+		res = PASS;
+	}
+			
+	if(res == FAIL){
+		debug(DEBUG_UNEXPECTED, "p = %p\n", p);
+		parseCtrl->failReason = talloc_asprintf(parseCtrl, "Else without matching if near line %d", t->lineNo);
+	}	
+	
+}
+
+/*
+ * Send xPL command if everything looks good
+ */
+#if(0)
+static void sendXPLCommand(ParseCtrlPtr_t this)
+{
+	String tag;
+	String hash;
+	String class;
+	String schema;
+	TALLOC_CTX *ctx;
+	String vendor, device, instance;
+	ParseHashKVPtr_t kvp;
+	pcodeHeaderPtr_t ph;
+	xPL_MessagePtr msg;
+
+	ASSERT_FAIL(this)
+	ph = this->pcodeHeader;
+	ASSERT_FAIL(ph);
+	
+	ctx = talloc_new(ph);
+	ASSERT_FAIL(ctx)
+			
+	if(ph->numFuncArgs != 4){
+		this->failReason = talloc_asprintf(this, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
+		ph->numFuncArgs);
+		goto end;
+	}
+	tag = ParserFunctionArg(ph->argListHead, 0);
+	ASSERT_FAIL(tag)
+	class = ParserFunctionArg(ph->argListHead, 1);
+	ASSERT_FAIL(class)
+	schema = ParserFunctionArg(ph->argListHead, 2);
+	ASSERT_FAIL(schema)
+	hash = ParserFunctionArg(ph->argListHead, 3);
+	ASSERT_FAIL(hash)
+	
+	if(ParserSplitXPLTag(ctx, tag, &vendor, &device, &instance)){
+		this->failReason = talloc_asprintf(this, "Bad xPL Tag: %s", tag);
+		goto end;
+	}
+	if(strcmp("xplout", hash)){
+		this->failReason = talloc_asprintf(this, "Hash must be named xplout");
+		goto end;
+	}
+
+	if(ph->xplServicePtr){
+	
+			
+		/* Create xpl command message */
+		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
+		ASSERT_FAIL(msg)
+		
+		/* Set message schema */
+		xPL_setSchema(msg, class, schema); 
+		
+		/* Clear name/value pairs */
+		xPL_clearMessageNamedValues(msg);
+	}
+	else{
+		/* For dry run, just print the vendor, device and instance */
+		debug(DEBUG_EXPECTED, "Vendor: %s", vendor);
+		debug(DEBUG_EXPECTED, "Device: %s", device);
+		debug(DEBUG_EXPECTED, "Instance: %s", instance);
+	}		
+
+					
+	for(kvp = ph->xplOutHead; kvp; kvp = kvp->next){
+		
+		if(!ph->xplServicePtr){
+			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
+		}
+		else{
+			xPL_addMessageNamedValue(msg, kvp->key, kvp->value);
+		}		
+	}
+	
+	debug(DEBUG_ACTION, "***Sending xPL command***");
+	
+	if(ph->xplServicePtr){
+		xPL_sendMessage(msg);
+		xPL_releaseMessage(msg);
+	}
+
+end:
+	/* Free the xplout hash */
+	
+	talloc_free(ph->xplOutContext);
+	ph->xplOutContext = ph->xplOutHead = NULL;
+	
+	/* Free the context used here */
+	
+	talloc_free(ctx);
+	
+}
+#endif
+
 
 
 /*
@@ -584,113 +730,5 @@ int ParserHCLScan(ParseCtrlPtr_t this, int fileMode, const String str)
 	ParseFree(pParser, parserFree);
 	
 	return res;
-}
-
-/*
- * This is called by the parser when a pcode structure has to be added to the list
- */
-
-void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2)
-{
-	pcodeHeaderPtr_t ph;
-	pcodePtr_t new;
-	
-	ASSERT_FAIL(pc)
-	
-	ph = pc->pcodeHeader;
-	
-	if(ph){
-		
-		new = talloc_zero(ph, pcode_t);
-		ASSERT_FAIL(new);
-		
-		/* Initialize new list entry */
-		new->magic = PC_MAGIC;
-		new->opcode = op;
-		new->operand = operand;
-		new->lineNo = pc->lineNo;
-		if(data1){
-			/* Make a copy of the string */
-			new->data1 = talloc_strdup(new, data1);
-			ASSERT_FAIL(new->data1);
-		}
-		if(data2){
-			/* Make a copy of the string */
-			new->data2 = talloc_strdup(new, data2);
-			ASSERT_FAIL(new->data2);
-		}
-		
-		if(!ph->head){
-			/* First entry */
-			ph->head = ph->tail = new;
-			return;
-		}
-		else{
-			/* Subsequent entry */
-			ph->tail->next = new;
-			new->prev = ph->tail;
-			ph->tail = new; 
-		}
-	}
-}
-
-/*
- * Debug function.
- * 
- * Dump pcode list
- */
-
-void ParserDumpPcodeList(pcodeHeaderPtr_t ph)
-{
-	String op,data1,data2;
-	pcodePtr_t p;
-	int count;
-	
-	if(!ph)
-		return;
-	debug(DEBUG_EXPECTED, "*** begin p-code dump ***");
-	for(count = 0, p = ph->head; p; p = p->next, count++){
-		switch(p->opcode){
-			case OP_NOP:
-				op = "Nop";
-				break;
-		
-			case OP_PUSH:
-				op = "Push";
-				break;
-			
-			case OP_POP:
-				op = "Pop";
-				break;
-		
-			case OP_ASSIGN:
-				op = "Assign";
-				break;
-			
-			case OP_FUNC:
-				op = "Func";
-				break;
-				
-			case OP_BLOCK:
-				op = "Block";
-				break;
-				
-			case OP_TEST:
-				op = "Test";
-				break;
-
-			default:
-				op = "UNK";
-				break;
-		}	
-		data1 = (p->data1) ? p->data1 : "NULL";
-		data2 = (p->data2) ? p->data2 : "NULL";
-				
-		debug(DEBUG_EXPECTED,"%d. Line %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s", 
-		count, p->lineNo, op, p->operand, data1, data2);	
-	}
-
-	debug(DEBUG_EXPECTED, "*** end p-code dump ***");
-	
 }
 

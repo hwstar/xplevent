@@ -369,7 +369,7 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 
 	debug(DEBUG_ACTION, "***Parsing complete***");
 	
-	ParserDumpPcodeList(ph); // DEBUG
+	ParserPcodeDumpList(ph); // DEBUG
 	
 	talloc_free(ph);
 	

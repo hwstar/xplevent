@@ -24,7 +24,7 @@
 
 %syntax_error
 { 
-	parseCtrl->failReason = talloc_asprintf(parseCtrl, "Syntax error on line: %d", parseCtrl->lineNo);
+	parseCtrl->failReason = talloc_asprintf(parseCtrl, "Syntax error on or near line: %d", parseCtrl->lineNo);
 }
 
 %nonassoc EQUALS .
@@ -36,6 +36,7 @@
 
 start ::= statementlist .
 start ::= BADCHAR .
+start ::= ifelseconst .
 start ::= ifconst .
 
 /*
@@ -44,6 +45,17 @@ start ::= ifconst .
 
 
 ifconst ::= iftest block .
+
+
+/*
+* Else construct
+*/
+
+ifelseconst ::= iftest block elsekw(A) block .
+{
+	ParserUpdateIf(parseCtrl, A);
+}
+
 
 /*
 * Block
@@ -71,10 +83,22 @@ blockend ::= CBRACE .
 }
 
 /*
-* If test
+* If keyword
 */
 
-iftest	::= IF OPAREN test CPAREN .
+iftest	::= ifkw OPAREN test CPAREN .
+
+ifkw(A)	::= IF(B) .
+{
+	ParserPcodeEmit(parseCtrl, OP_IF, 0, "if statement", NULL);
+	A = B;
+}
+
+elsekw(A)	::= ELSE(B) .
+{
+	A = B;
+}
+
 
 /*
 * Statement list (successive)
@@ -207,7 +231,7 @@ rhash ::= DOLLAR ARGS OBRACE BAREWORD(A) CBRACE .
 {
 	if(NULL == ParserHashGetValue(parseCtrl->pcodeHeader->argsHead, A->stringVal)){
 		parseCtrl->failReason = talloc_asprintf(parseCtrl,
-		"Hash $args contains no key named %s on line %d", A->stringVal, parseCtrl->lineNo);
+		"Hash $args contains no key named %s on or near line %d", A->stringVal, parseCtrl->lineNo);
 	}
 	ParserPcodeEmit(parseCtrl, OP_PUSH, 2, "args", A->stringVal);
 }

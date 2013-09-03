@@ -42,6 +42,7 @@ comment		#.*\n
 "args"					{return (TOK_ARGS);}
 "xplout"				{return (TOK_XPLOUT);}
 "if"					{return (TOK_IF);}
+"else"					{return (TOK_ELSE);}
 {bareword}				{return (TOK_BAREWORD);}
 {intlit}				{return (TOK_INTLIT);}
 {stringlit}				{return (TOK_STRINGLIT);}
