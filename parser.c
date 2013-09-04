@@ -96,6 +96,67 @@ static void *parserMalloc(size_t size)
 }
 
 /*
+ * Free for parser
+ */
+
+
+static void parserFree(void *ctx)
+{
+	talloc_free(ctx);
+}
+
+/*
+* Print P-code info
+*/
+
+static void printOpcode(pcodePtr_t p)
+{
+	String op ,data1, data2;
+	
+	
+	switch(p->opcode){
+		case OP_NOP:
+			op = "Nop";
+			break;
+		
+		case OP_PUSH:
+			op = "Push";
+			break;
+		
+		case OP_ASSIGN:
+			op = "Assign";
+			break;
+			
+		case OP_FUNC:
+			op = "Func";
+			break;
+				
+		case OP_BLOCK:
+			op = "Block";
+			break;
+				
+		case OP_IF:
+			op = "If";
+			break;	
+				
+		case OP_TEST:
+			op = "Test";
+			break;
+			
+
+		default:
+			op = "UNK";
+			break;
+	}	
+	data1 = (p->data1) ? p->data1 : "(nil)";
+	data2 = (p->data2) ? p->data2 : "(nil)";
+				
+	debug(DEBUG_EXPECTED,"Seq: %d CBRC: %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s, Skip: %p", 
+	p->seq, p->ctrlStructRefCount, op, p->operand, data1, data2, p->skip);	
+}
+
+
+/*
 * Move string from one context to another
 */
 String ParserMoveString(void *newCtx, String oldStr, int offset)
@@ -305,61 +366,6 @@ void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const 
 }
 
 
-/*
- * Free for parser
- */
-
-
-static void parserFree(void *ctx)
-{
-	talloc_free(ctx);
-}
-
-static void printOpcode(pcodePtr_t p)
-{
-	String op ,data1, data2;
-	
-	
-	switch(p->opcode){
-		case OP_NOP:
-			op = "Nop";
-			break;
-		
-		case OP_PUSH:
-			op = "Push";
-			break;
-		
-		case OP_ASSIGN:
-			op = "Assign";
-			break;
-			
-		case OP_FUNC:
-			op = "Func";
-			break;
-				
-		case OP_BLOCK:
-			op = "Block";
-			break;
-				
-		case OP_IF:
-			op = "If";
-			break;	
-				
-		case OP_TEST:
-			op = "Test";
-			break;
-			
-
-		default:
-			op = "UNK";
-			break;
-	}	
-	data1 = (p->data1) ? p->data1 : "(nil)";
-	data2 = (p->data2) ? p->data2 : "(nil)";
-				
-	debug(DEBUG_EXPECTED,"Seq: %d CBRC: %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s, Skip: %p", 
-	p->seq, p->ctrlStructRefCount, op, p->operand, data1, data2, p->skip);	
-}
 
 /*
  * Return the value for the push instruction passed in
