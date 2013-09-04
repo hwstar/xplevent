@@ -29,16 +29,15 @@ comment		#.*\n
 %%		/* Rules */
 "=="					{return (TOK_EQEQ);}
 "!="					{return (TOK_NEQ);}
-"("						{return (TOK_OPAREN);}
-")"						{return (TOK_CPAREN);}
-"{"						{return (TOK_OBRACE);}
-"}"						{return (TOK_CBRACE);}
-"="						{return (TOK_EQUALS);}
-";"						{return (TOK_SEMI);}
-","						{return (TOK_COMMA);}
-"$"						{return (TOK_DOLLAR);}
-"%"						{return (TOK_PERCENT);}
-"!"						{return (TOK_EXCLAMATION);}
+"("					{return (TOK_OPAREN);}
+")"					{return (TOK_CPAREN);}
+"{"					{return (TOK_OBRACE);}
+"}"					{return (TOK_CBRACE);}
+"="					{return (TOK_EQUALS);}
+";"					{return (TOK_SEMI);}
+","					{return (TOK_COMMA);}
+"$"					{return (TOK_DOLLAR);}
+"%"					{return (TOK_PERCENT);}
 "\\"					{return (TOK_BACKSLASH);}
 "xplcmd"				{return (TOK_XPLCMD);}
 "args"					{return (TOK_ARGS);}
@@ -49,8 +48,8 @@ comment		#.*\n
 {intlit}				{return (TOK_INTLIT);}
 {stringlit}				{return (TOK_STRINGLIT);}
 {comment}				/* skip comment */
-[ \t\n\r]       		/* skip whitespace */
-.						{return (TOK_BADCHAR);}
+[ \t\n\r]       			/* skip whitespace */
+.					{return (TOK_BADCHAR);}
 %%
 
 
