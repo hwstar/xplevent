@@ -1,7 +1,7 @@
 /*
  * ptest.c
  * 
- *  Copyright (C) 22013  Stephen Rodgers
+ *  Copyright (C) 2013  Stephen Rodgers
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
