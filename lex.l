@@ -27,7 +27,8 @@ stringlit	L?\"([^\"\\\n]|(\\['\"?\\abfnrtv])|(\\([0123456]{1,3}))|(\\x[[:xdigit:
 comment		#.*\n
 
 %%		/* Rules */
-
+"=="					{return (TOK_EQEQ);}
+"!="					{return (TOK_NEQ);}
 "("						{return (TOK_OPAREN);}
 ")"						{return (TOK_CPAREN);}
 "{"						{return (TOK_OBRACE);}
