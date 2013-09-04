@@ -121,6 +121,7 @@ Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue);
 Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value);
 int ParserExecPcode(pcodeHeaderPtr_t ph);
 int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str);
+String ParserReplaceString(void *ctx, const String source);
 
 
 
