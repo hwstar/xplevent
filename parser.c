@@ -372,7 +372,7 @@ void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const 
 * If the hash already exists, return FAIL, else return PASS
 */
 
-int ParserHashAdd(pcodeHeaderPtr_t ph, String name, Bool writable)
+int ParserHashAdd(pcodeHeaderPtr_t ph, String name)
 {
 	ParseHashSTEPtr_t hNew, se;
 	ASSERT_FAIL(ph)
@@ -386,7 +386,7 @@ int ParserHashAdd(pcodeHeaderPtr_t ph, String name, Bool writable)
 	hNew->name = talloc_strdup(hNew, name);
 	ASSERT_FAIL(hNew->name)
 	hNew->hash = hash(name);
-	hNew->writable = writable;
+	hNew->writable = TRUE;
 
 	if(!ph->steHead){
 		/* First entry */
