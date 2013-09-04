@@ -1,6 +1,6 @@
 /*
-*    xplrcs - an RCS RS-485 thermostat to xPL bridge
-*    Copyright (C) 2012  Stephen A. Rodgers
+*    xplevent - an xPL event handler
+*    Copyright (C) 2012,2013  Stephen A. Rodgers
 *
 *    This program is free software: you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
