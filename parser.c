@@ -95,7 +95,22 @@ static void *parserMalloc(size_t size)
 	return p;
 }
 
-
+/*
+* Move string from one context to another
+*/
+String ParserMoveString(void *newCtx, String oldStr, int offset)
+{
+	String newStr;
+	
+	ASSERT_FAIL(newCtx)
+	ASSERT_FAIL(oldStr)
+	
+	if((newStr = talloc_strdup(newCtx, OldStr + offset){
+		talloc_free(oldStr);
+	}
+	
+	return newStr;
+}
 
 /*
  * Split an xPL tag into its constituent parts.
