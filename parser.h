@@ -90,7 +90,7 @@ typedef pcodePtr_t * pcodePtrPtr_t;
 /* pcode header */
 
 typedef struct pcheader_s {
-	pcodePtr_t head;
+	pcodePtr_t steHead;
 	pcodePtr_t tail;
 	ParseHashSTEPtr_t head;
 	ParseHashKVPtr_t argsHead; // To be removed
