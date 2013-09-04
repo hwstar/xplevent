@@ -47,6 +47,7 @@
 #define KE_MAGIC	0x4F7B127A
 #define AL_MAGIC	0x689C9A2F
 #define PC_MAGIC	0x9A905437
+#define SE_MAGIC	0x59F593AC
 
 
 
@@ -361,6 +362,50 @@ void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const 
 	for(ke = pHead; (ke); ke = ke->next){ /* Traverse key list */
 		ASSERT_FAIL(KE_MAGIC == ke->magic)
 		(*parseHashWalkCallback)(ke->key, ke->value);
+	}
+	
+}
+
+/*
+* Add a hash to the symbol table
+*
+* If the hash already exists, return FAIL, else return PASS
+*/
+
+int ParserHashAdd(pcodeHeaderPtr_t ph, String name, Bool writable)
+{
+	ParseHashSTEPtr_t hNew, se;
+	ASSERT_FAIL(ph)
+	ASSERT_FAIL(name)
+		
+	/* Initialize a new list entry */
+	 
+	hNew = talloc_zero(ph, ParseHashSTE_t);
+	ASSERT_FAIL(hNew)
+	hNew->magic = SE_MAGIC;
+	hNew->name = talloc_strdup(hNew, name);
+	ASSERT_FAIL(hNew->name)
+	hNew->hash = hash(name);
+	hNew->writable = writable;
+
+	if(!ph->steHead){
+		/* First entry */
+		ph->steHead = hNew;
+	}
+	else{
+		for(se = ph->steHead, ; (se); se = se->next){ /* Traverse symbol list */
+			ASSERT_FAIL(SE_MAGIC == se->magic);
+			/* Compare hashes, and if they match, compare strings */
+			if((hNew->hash == se->hash) && (!strcmp(se->name, name))){
+				talloc_free(hNew);
+				return FAIL;
+			}
+			else if(!se->next){
+				/* At end of list, need to append it */
+				se->next = hNew;
+				return PASS;	
+			}
+		}
 	}
 	
 }
