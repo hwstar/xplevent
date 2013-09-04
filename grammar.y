@@ -1,6 +1,5 @@
 
 
-
 %include{
 #include <stdio.h>
 #include <stdlib.h>
@@ -226,14 +225,14 @@ test ::= rhash testop(A) lhash .
 	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);	
 }
 
-testop(A) ::= EQUALS EQUALS . /* Numeric Equality */
+testop(A) ::= EQEQ . /* Numeric Equality */
 {
 	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMEQUALITY;
 	A->anno = "Num eq.";
 }
 
-testop(A) ::= EXCLAMATION EQUALS . /* Numeric Not Equal */
+testop(A) ::= NEQ . /* Numeric Not Equal */
 {
 	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMINEQUALITY;
