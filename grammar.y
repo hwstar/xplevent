@@ -1,4 +1,3 @@
-
 /*
  * grammar.y 
  * 
@@ -309,31 +308,16 @@ rvalue ::= STRINGLIT(A) .
 	
 	ASSERT_FAIL(A)
 	
-	/* Allocate a string of the same size as the token value */
-	s = talloc_size(parseCtrl, strlen(A->stringVal));
-	ASSERT_FAIL(s)
-
-	
-	
 	/* Strip off double quotes */
-	/* FIXME: This should not strip escaped quotes */
-	for(i = 0, p = A->stringVal; *p; p++){ /* Strip quotes */
-		if(*p == '"')
-			continue;
-		s[i++] = *p;
-	}
-	/* NUL terminate new string */
-	s[i] = 0;		
+	
+	A->stringVal[strlen(A->stringVal) - ] = 0;
+	A->stringVal = ParserMoveString(A, A->stringVal, 1);
+	ASSERT_FAIL(A->stringVal);
+	
 	
 	/* Emit pcode */
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_STRINGLIT, s, "string literal");
 
-	/* Free string */
-	talloc_free(s);
-	
-	/* Free original token */
-	talloc_free(A);
-	
 	 
 }
 
