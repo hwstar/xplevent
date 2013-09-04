@@ -50,6 +50,21 @@ typedef ParseHashKV_t * ParseHashKVPtr_t;
 typedef ParseHashKVPtr_t * ParseHashKVPtrPtr_t;
 
 
+/* Hash symbol table entry */
+
+typedef struct ParseHashSTE_s {
+	unsigned magic;
+	unsigned hash;
+	Bool writable;
+	String name;
+	TALLOC_CTX *context;
+	ParseHashKVPtr_t head;
+	struct ParseHashSTE_s *next;
+} ParseHashSTE_t;
+
+typedef ParseHashSTE_t * ParseHashSTEPtr_t;
+typedef ParseHashSTEPtr_t * ParseHashSTEPtrPtr_t;
+
 /* 
  * Pcode control block
  */
@@ -77,10 +92,11 @@ typedef pcodePtr_t * pcodePtrPtr_t;
 typedef struct pcheader_s {
 	pcodePtr_t head;
 	pcodePtr_t tail;
-	ParseHashKVPtr_t argsHead;
-	ParseHashKVPtr_t xplOutHead;
-	void *xplOutContext;
-	argListEntryPtr_t argListHead;
+	ParseHashSTEPtr_t head;
+	ParseHashKVPtr_t argsHead; // To be removed
+	ParseHashKVPtr_t xplOutHead; // To be removed
+	void *xplOutContext; // To be removed
+	argListEntryPtr_t argListHead; // To be removed
 	pcodePtr_t firstPush;
 	String failReason;
 	int ctrlStructRefCount;
@@ -88,7 +104,7 @@ typedef struct pcheader_s {
 	short pushCount;
 	short numFuncArgs;
 	Bool dumpPcode;
-	void *argListContext;
+	void *argListContext; // To be removed
 	void *xplServicePtr;
 	
 } pcodeHeader_t;
