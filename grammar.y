@@ -67,7 +67,9 @@ statement ::= ifconst .
 
 ifconst ::= iftest block .
 {
+	
 	ParserSetJumps(parseCtrl, TOK_IF);
+	parseCtrl->pcodeHeader->ctrlStructRefCount--;
 }
 
 
@@ -79,6 +81,7 @@ ifconst ::= iftest block .
 ifelseconst ::= iftest block ELSE block .
 {
 	ParserSetJumps(parseCtrl, TOK_ELSE);
+	parseCtrl->pcodeHeader->ctrlStructRefCount--;
 }
 
 
@@ -111,7 +114,12 @@ blockend ::= CBRACE .
 * If test
 */
 
-iftest	::= IF OPAREN test CPAREN .
+iftest	::= ifkw OPAREN test CPAREN .
+
+ifkw ::= IF .
+{
+	parseCtrl->pcodeHeader->ctrlStructRefCount++;
+}
 
 
 
@@ -197,26 +205,42 @@ assignment ::= lhash EQUALS rhash .
 * Numeric Equality test
 */
 
-test ::= rhash EQUALS EQUALS rvalue .
+test ::= rhash testop(A) rvalue .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "rhash eq eq rvalue");
+	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
 }
 
-test ::= rvalue EQUALS EQUALS rhash .
+test ::= rvalue testop(A) rhash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "rvalue eq eq rhash");
+	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
 }
 
-test ::= lhash EQUALS EQUALS rhash .
+test ::= lhash testop(A) rhash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "lhash eq eq rhash");
+	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
 }
 
 
-test ::= rhash EQUALS EQUALS lhash .
+test ::= rhash testop(A) lhash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, OPRT_NUMEQUALITY, "test numeric equality", "rhash eq eq lhash");
+	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);	
 }
+
+testop(A) ::= EQUALS EQUALS . /* Numeric Equality */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_NUMEQUALITY;
+	A->anno = "Num eq.";
+}
+
+testop(A) ::= EXCLAMATION EQUALS . /* Numeric Not Equal */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_NUMINEQUALITY;
+	A->anno = "Num ineq.";
+}
+
+
 
 /*
 * rvalue hash

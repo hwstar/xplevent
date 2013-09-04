@@ -2,7 +2,7 @@
 #define PARSER_H
 
 enum {OPRD_STRINGLIT=0, OPRD_INTLIT=1, OPRD_HASHKV=2, OPRD_HASHREF=3};
-enum {OPRT_NUMEQUALITY=0};
+enum {OPRT_NUMEQUALITY=0, OPRT_NUMINEQUALITY};
 enum {OPRB_BEGIN=0, OPRB_END=1};
 enum {EXS_NORMAL = 0, EXS_IF_BLOCK = 1, EXS_ELSE_BLOCK = 2, EXS_BLOCK_SKIP = 3};
 
@@ -17,6 +17,8 @@ typedef enum {ATYPE_STRING = 0, ATYPE_HASH = 1} argType_t;
 typedef struct token {
 	int lineNo;
 	int tokenID;
+	int operand;
+	String anno;
 	String stringVal;
 } token_t;
 
@@ -58,6 +60,7 @@ typedef struct pcode_s {
 	int seq;
 	int operand;
 	int datatype;
+	int ctrlStructRefCount;
 	opType_t opcode;
 	void *data1;
 	void *data2;
@@ -80,6 +83,7 @@ typedef struct pcheader_s {
 	argListEntryPtr_t argListHead;
 	pcodePtr_t firstPush;
 	String failReason;
+	int ctrlStructRefCount;
 	int seq;
 	short pushCount;
 	short numFuncArgs;

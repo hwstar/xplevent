@@ -317,8 +317,8 @@ static void printOpcode(pcodePtr_t p)
 	data1 = (p->data1) ? p->data1 : "(nil)";
 	data2 = (p->data2) ? p->data2 : "(nil)";
 				
-	debug(DEBUG_EXPECTED,"Seq: %d Opcode: %s, Operand: %d, Data1: %s, Data2: %s, Skip: %p", 
-	p->seq, op, p->operand, data1, data2, p->skip);	
+	debug(DEBUG_EXPECTED,"Seq: %d CBRC: %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s, Skip: %p", 
+	p->seq, p->ctrlStructRefCount, op, p->operand, data1, data2, p->skip);	
 }
 
 /*
@@ -416,6 +416,8 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
 		new->operand = operand;
 		new->lineNo = pc->lineNo;
 		new->seq = ph->seq++;
+		new->ctrlStructRefCount = ph->ctrlStructRefCount;
+		
 		if(data1){
 			/* Make a copy of the string */
 			new->data1 = talloc_strdup(new, data1);
@@ -500,7 +502,7 @@ void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
  
 void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 {
-
+	int myCBRC;
 	pcodeHeaderPtr_t ph;
 	pcodePtr_t tail, p, elseblock = NULL;
 	
@@ -519,12 +521,14 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	
 	ASSERT_FAIL(p) /* Previous instruction must exist */
 
+	myCBRC = p->ctrlStructRefCount;
 	
 	if(tokenID == TOK_ELSE){
 		debug(DEBUG_ACTION,"Set Jumps TOK_ELSE");
 		/* Now, go back in the pcode and find the prior close block instr */
 		for(; (p) ; p = p->prev){
-			if((p->opcode == OP_BLOCK) && (p->operand == OPRB_END)){
+			ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC);
+			if((p->ctrlStructRefCount == myCBRC) && (p->opcode == OP_BLOCK) && (p->operand == OPRB_END)){
 				p->skip = tail; /* Install jump over second block */
 				elseblock = p->next; /* Note the beginning of the else block */
 				debug(DEBUG_ACTION, "tail seq = %d, elseblock seq = %d", tail->seq, elseblock->seq);
@@ -537,7 +541,8 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	}
 	/* Look for test instruction */		
 	for(; (p); p = p->prev){
-		if(p->opcode == OP_TEST){
+		ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC);
+		if((p->ctrlStructRefCount == myCBRC) && (p->opcode == OP_TEST)){
 			if(tokenID == TOK_IF){
 				debug(DEBUG_ACTION,"Set Jumps TOK_IF");
 				p->skip = tail; /* Note end of block for if test */	
@@ -732,10 +737,13 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 					case OPRT_NUMEQUALITY:
 						testRes = (leftNum == rightNum);
 						break;
+						
+					case OPRT_NUMINEQUALITY:
+						testRes = (leftNum != rightNum);
+						break;
 					
 					default:
-						ph->failReason = talloc_asprintf(ph, "Unrecognized test %d on line %d",pe->operand, pe->lineNo);
-						break; 
+						ASSERT_FAIL(0);
 				}
 				debug(DEBUG_ACTION, "Test result: %d", testRes);
 				if(!testRes){

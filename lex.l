@@ -37,6 +37,7 @@ comment		#.*\n
 ","						{return (TOK_COMMA);}
 "$"						{return (TOK_DOLLAR);}
 "%"						{return (TOK_PERCENT);}
+"!"						{return (TOK_EXCLAMATION);}
 "\\"					{return (TOK_BACKSLASH);}
 "xplcmd"				{return (TOK_XPLCMD);}
 "args"					{return (TOK_ARGS);}
