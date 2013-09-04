@@ -55,11 +55,13 @@ typedef ParseHashKVPtr_t * ParseHashKVPtrPtr_t;
 typedef struct pcode_s {
 	unsigned magic;
 	int lineNo;
-	opType_t opcode;
+	int seq;
 	int operand;
 	int datatype;
+	opType_t opcode;
 	void *data1;
 	void *data2;
+	struct pcode_s *skip;
 	struct pcode_s *prev;
 	struct pcode_s *next;
 } pcode_t;
@@ -78,10 +80,10 @@ typedef struct pcheader_s {
 	argListEntryPtr_t argListHead;
 	pcodePtr_t firstPush;
 	String failReason;
-	short lastIfOperand;
-	short execState;
+	int seq;
 	short pushCount;
 	short numFuncArgs;
+	Bool dumpPcode;
 	void *argListContext;
 	void *xplServicePtr;
 	
@@ -110,7 +112,7 @@ const String ParserHashGetValue(ParseHashKVPtr_t pHead, const String key);
 void ParserExecFunction(struct ParseCtrl_s *this, int tokenID);
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2);
 void ParserPcodeDumpList(pcodeHeaderPtr_t ph);
-void ParserUpdateIf(ParseCtrlPtr_t this, tokenPtr_t t);
+void ParserSetJumps(ParseCtrlPtr_t this, int tokenID);
 Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue);
 Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value);
 int ParserExecPcode(pcodeHeaderPtr_t ph);

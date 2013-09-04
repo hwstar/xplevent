@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
 	ph = talloc_zero(top, pcodeHeader_t);
 	ASSERT_FAIL(ph)
 	
+	ph->dumpPcode = TRUE; /* Turn on P-code dump */
 	
 	/* Allocate parser control structure */
 		
@@ -63,9 +64,9 @@ int main(int argc, char *argv[])
 	ParserHashAddKeyValue(&ph->argsHead, parseCtrl,"current","78.0");
 	ParserHashAddKeyValue(&ph->argsHead, parseCtrl,"units","Fahrenheit");
 	
-	debug(DEBUG_EXPECTED,"***** Input hash contents *****");
+	debug(DEBUG_EXPECTED,"***** Start Input hash contents *****");
 	ParserHashWalk(ph->argsHead, hashWalkPrint);
-	debug(DEBUG_EXPECTED,"***** Input hash contents *****");
+	debug(DEBUG_EXPECTED,"***** End Input hash contents *****");
 			
 
 	
@@ -77,9 +78,11 @@ int main(int argc, char *argv[])
 		res = -1;
 	}
 	
-	debug(DEBUG_EXPECTED,"***** P-code dump *****");
+
+	debug(DEBUG_EXPECTED,"***** Start P-code dump before execution *****");
 	ParserPcodeDumpList(ph);
-	debug(DEBUG_EXPECTED,"***** P-code dump *****");
+	debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");
+
 	
 	if(!res){
 		if(ParserExecPcode(ph)){

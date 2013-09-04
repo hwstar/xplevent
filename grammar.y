@@ -36,8 +36,29 @@
 
 start ::= statementlist .
 start ::= BADCHAR .
-start ::= ifelseconst .
-start ::= ifconst .
+
+
+/*
+* Statement list (successive)
+*/
+
+statementlist ::= statementlist statement .
+
+/*
+* Statement list (initial)
+*/
+
+statementlist ::= statement .
+
+/*
+* Statement
+*/
+
+statement ::= expression SEMI .
+statement ::= assignment SEMI .
+statement ::= ifelseconst .
+statement ::= ifconst .
+
 
 /*
 * If construct
@@ -45,15 +66,19 @@ start ::= ifconst .
 
 
 ifconst ::= iftest block .
+{
+	ParserSetJumps(parseCtrl, TOK_IF);
+}
+
 
 
 /*
 * Else construct
 */
 
-ifelseconst ::= iftest block elsekw(A) block .
+ifelseconst ::= iftest block ELSE block .
 {
-	ParserUpdateIf(parseCtrl, A);
+	ParserSetJumps(parseCtrl, TOK_ELSE);
 }
 
 
@@ -83,41 +108,11 @@ blockend ::= CBRACE .
 }
 
 /*
-* If keyword
+* If test
 */
 
-iftest	::= ifkw OPAREN test CPAREN .
+iftest	::= IF OPAREN test CPAREN .
 
-ifkw(A)	::= IF(B) .
-{
-	ParserPcodeEmit(parseCtrl, OP_IF, 0, "if statement", NULL);
-	A = B;
-}
-
-elsekw(A)	::= ELSE(B) .
-{
-	A = B;
-}
-
-
-/*
-* Statement list (successive)
-*/
-
-statementlist ::= statementlist statement .
-
-/*
-* Statement list (initial)
-*/
-
-statementlist ::= statement .
-
-/*
-* Statement
-*/
-
-statement ::= expression SEMI .
-statement ::= assignment SEMI .
 
 
 /*

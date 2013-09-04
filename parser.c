@@ -275,6 +275,52 @@ static void parserFree(void *ctx)
 	talloc_free(ctx);
 }
 
+static void printOpcode(pcodePtr_t p)
+{
+	String op ,data1, data2;
+	
+	
+	switch(p->opcode){
+		case OP_NOP:
+			op = "Nop";
+			break;
+		
+		case OP_PUSH:
+			op = "Push";
+			break;
+		
+		case OP_ASSIGN:
+			op = "Assign";
+			break;
+			
+		case OP_FUNC:
+			op = "Func";
+			break;
+				
+		case OP_BLOCK:
+			op = "Block";
+			break;
+				
+		case OP_IF:
+			op = "If";
+			break;	
+				
+		case OP_TEST:
+			op = "Test";
+			break;
+			
+
+		default:
+			op = "UNK";
+			break;
+	}	
+	data1 = (p->data1) ? p->data1 : "(nil)";
+	data2 = (p->data2) ? p->data2 : "(nil)";
+				
+	debug(DEBUG_EXPECTED,"Seq: %d Opcode: %s, Operand: %d, Data1: %s, Data2: %s, Skip: %p", 
+	p->seq, op, p->operand, data1, data2, p->skip);	
+}
+
 /*
  * Return the value for the push instruction passed in
  */
@@ -369,6 +415,7 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
 		new->opcode = op;
 		new->operand = operand;
 		new->lineNo = pc->lineNo;
+		new->seq = ph->seq++;
 		if(data1){
 			/* Make a copy of the string */
 			new->data1 = talloc_strdup(new, data1);
@@ -402,7 +449,7 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
 
 void ParserPcodeDumpList(pcodeHeaderPtr_t ph)
 {
-	String op,data1,data2;
+
 	pcodePtr_t p;
 	int count;
 	
@@ -410,47 +457,8 @@ void ParserPcodeDumpList(pcodeHeaderPtr_t ph)
 		return;
 	debug(DEBUG_EXPECTED, "*** begin p-code dump ***");
 	for(count = 0, p = ph->head; p; p = p->next, count++){
-		switch(p->opcode){
-			case OP_NOP:
-				op = "Nop";
-				break;
-		
-			case OP_PUSH:
-				op = "Push";
-				break;
-		
-			case OP_ASSIGN:
-				op = "Assign";
-				break;
-			
-			case OP_FUNC:
-				op = "Func";
-				break;
-				
-			case OP_BLOCK:
-				op = "Block";
-				break;
-				
-			case OP_IF:
-				op = "If";
-				break;	
-				
-			case OP_TEST:
-				op = "Test";
-				break;
-			
-
-			default:
-				op = "UNK";
-				break;
-		}	
-		data1 = (p->data1) ? p->data1 : "NULL";
-		data2 = (p->data2) ? p->data2 : "NULL";
-				
-		debug(DEBUG_EXPECTED,"%d. Line %d, Opcode: %s, Operand: %d, Data1: %s, Data2: %s", 
-		count, p->lineNo, op, p->operand, data1, data2);	
+		printOpcode(p);
 	}
-
 	debug(DEBUG_EXPECTED, "*** end p-code dump ***");
 	
 }
@@ -487,39 +495,60 @@ void ParserExecFunction(ParseCtrlPtr_t this, int tokenID)
 #endif
 
 /*
- * Unwind to IF statement when an Else is detected
+ * Set Jumps for control statements
  */
  
-void ParserUpdateIf(ParseCtrlPtr_t this, tokenPtr_t t)
+void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 {
-	int res = FAIL;
-	pcodePtr_t p;
+
 	pcodeHeaderPtr_t ph;
+	pcodePtr_t tail, p, elseblock = NULL;
+	
+	ASSERT_FAIL((tokenID == TOK_ELSE) || (tokenID == TOK_IF))
 	
 	ASSERT_FAIL(this)
 	
 	ASSERT_FAIL(ph = this->pcodeHeader)
 	
+	ASSERT_FAIL(tail = ph->tail)
 	
-	/* Test to be sure an IF passed this way previously */
+	/* Must be currently on a close block instr */
+	ASSERT_FAIL((tail->opcode == OP_BLOCK) && (tail->operand == OPRB_END))
 	
-	/* Now, go back in the pcode and find the IF statement and change the operand to a 1 signifying if-else */
-	for(p = ph->tail; (p) ; p = p->prev){
-		if(p->opcode == OP_IF){
-			p->operand = 1;
-			p->data1 = "if-else statement";
-			res = PASS;
+	p = tail->prev;
+	
+	ASSERT_FAIL(p) /* Previous instruction must exist */
+
+	
+	if(tokenID == TOK_ELSE){
+		debug(DEBUG_ACTION,"Set Jumps TOK_ELSE");
+		/* Now, go back in the pcode and find the prior close block instr */
+		for(; (p) ; p = p->prev){
+			if((p->opcode == OP_BLOCK) && (p->operand == OPRB_END)){
+				p->skip = tail; /* Install jump over second block */
+				elseblock = p->next; /* Note the beginning of the else block */
+				debug(DEBUG_ACTION, "tail seq = %d, elseblock seq = %d", tail->seq, elseblock->seq);
+				break;
+			}
+		}
+		ASSERT_FAIL(p)
+		ASSERT_FAIL(elseblock)
+		
+	}
+	/* Look for test instruction */		
+	for(; (p); p = p->prev){
+		if(p->opcode == OP_TEST){
+			if(tokenID == TOK_IF){
+				debug(DEBUG_ACTION,"Set Jumps TOK_IF");
+				p->skip = tail; /* Note end of block for if test */	
+			}
+			else{
+				p->skip = elseblock; /* Note start of else block for if-else */
+			}
+			break;	
 		}
 	}
-	if(p){
-		res = PASS;
-	}
-			
-	if(res == FAIL){
-		debug(DEBUG_UNEXPECTED, "p = %p\n", p);
-		parseCtrl->failReason = talloc_asprintf(parseCtrl, "Else without matching if near line %d", t->lineNo);
-	}	
-	
+	ASSERT_FAIL(p);	
 }
 
 /*
@@ -628,6 +657,8 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 	int res = PASS;
 	pcodePtr_t pe;
 	String value;
+	int leftNum, rightNum;
+	Bool testRes;
 	
 	ASSERT_FAIL(ph)
 	
@@ -636,6 +667,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 
 	/* Execution loop */
 	for(pe = ph->head;(pe) && (!ph->failReason); pe = pe->next){
+		printOpcode(pe); // DEBUG
 
 		/* If not a push opcode reset first push location */
 		if(pe->opcode != OP_PUSH){
@@ -648,6 +680,10 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_BLOCK:
+				if((pe->operand == OPRB_END) && pe->skip){
+					debug(DEBUG_ACTION, "Else Block skip");
+					pe = pe->skip; /* Skip over next block */
+				}
 				break;
 				
 			case OP_PUSH:
@@ -675,35 +711,37 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_TEST: /* Variable test */
-				if(ph->pushCount != 2){
-					ph->failReason = talloc_asprintf(ph, "Test requires 2 operands on line %d",pe->lineNo);
+				ASSERT_FAIL(ph->pushCount == 2)
+				
+				if(ParserPcodeGetValue(ph, pe->prev->prev, &value)){ /* Left */
+					ph->failReason = talloc_asprintf(ph, "Can't read left variable on line number %d", pe->lineNo);
 					break;
 				}
-				else{
-					int leftNum, rightNum;
-					Bool testRes;
-					
-					if(ParserPcodeGetValue(ph, pe->prev->prev, &value)){ /* Left */
-						ph->failReason = talloc_asprintf(ph, "Can't read left variable on line number %d", pe->lineNo);
+				debug(DEBUG_ACTION,"Left string: %s", value);				
+				leftNum = atoi(value);
+				
+				if(ParserPcodeGetValue(ph, pe->prev, &value)){ /* Right */
+					ph->failReason = talloc_asprintf(ph, "Can't read right variable on line number %d", pe->lineNo);
+					break;
+				}	
+				debug(DEBUG_ACTION,"Right string: %s", value);					
+				rightNum = atoi(value);
+				debug(DEBUG_ACTION,"leftNum = %d, rightNum = %d", leftNum, rightNum);
+				
+				switch(pe->operand){
+					case OPRT_NUMEQUALITY:
+						testRes = (leftNum == rightNum);
 						break;
-					}				
-					leftNum = atoi(value);
 					
-					if(ParserPcodeGetValue(ph, pe->prev->prev, &value)){ /* Left */
-						ph->failReason = talloc_asprintf(ph, "Can't read right variable on line number %d", pe->lineNo);
-						break;
-					}				
-					rightNum = atoi(value);
-					
-					switch(pe->operand){
-						case OPRT_NUMEQUALITY:
-							testRes = (leftNum == rightNum);
-							break;
-						
-						default:
-							ph->failReason = talloc_asprintf(ph, "Unrecognized test %d on line %d",pe->operand, pe->lineNo);
-							break; 
-					}
+					default:
+						ph->failReason = talloc_asprintf(ph, "Unrecognized test %d on line %d",pe->operand, pe->lineNo);
+						break; 
+				}
+				debug(DEBUG_ACTION, "Test result: %d", testRes);
+				if(!testRes){
+					debug(DEBUG_ACTION,"Test Skip");
+					pe = pe->skip;
+
 				}
 				break;
 				
@@ -711,7 +749,6 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_IF:
-				ph->lastIfOperand = pe->operand; /* Note this for later */
 				break;
 			
 			default:
