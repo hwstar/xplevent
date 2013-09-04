@@ -393,7 +393,7 @@ int ParserHashAdd(pcodeHeaderPtr_t ph, String name, Bool writable)
 		ph->steHead = hNew;
 	}
 	else{
-		for(se = ph->steHead, ; (se); se = se->next){ /* Traverse symbol list */
+		for(se = ph->steHead; (se); se = se->next){ /* Traverse symbol list */
 			ASSERT_FAIL(SE_MAGIC == se->magic);
 			/* Compare hashes, and if they match, compare strings */
 			if((hNew->hash == se->hash) && (!strcmp(se->name, name))){
