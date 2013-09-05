@@ -156,6 +156,30 @@ static void printOpcode(pcodePtr_t p)
 	p->seq, p->ctrlStructRefCount, op, p->operand, data1, data2, p->skip);	
 }
 
+
+/*
+ * Set undefined variable error message
+ */
+
+static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
+{
+	String res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
+	ASSERT_FAIL(res);
+	ph->failReason = res;
+}
+
+/*
+* Remove ALL the keys from a hash
+*/
+
+static void deleteHashContents(ParseHashSTEPtr_t se)
+{
+	ASSERT_FAIL(se)
+	talloc_free(se->context);
+	se->context = se->head = NULL;
+}
+
+
 /*
  * Find a hash in the symbol table
  * 
@@ -182,18 +206,6 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName)
 	}
 	return se;
 }
-
-/*
- * Set undefined variable error message and exit
- */
-
-static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
-{
-	String res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
-	ASSERT_FAIL(res);
-	ph->failReason = res;
-}
-
 
 /*
 * Move string from one context to another
@@ -679,6 +691,7 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 	String hash;
 	TALLOC_CTX *ctx;
 	String vendor, device, instance;
+	ParseHashSTEPtr_t se = NULL;
 	ParseHashKVPtr_t kvp;
 	xPL_MessagePtr msg;
 	pcodePtr_t pa;
@@ -690,7 +703,7 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 	ASSERT_FAIL(ctx)
 			
 	if(ph->numFuncArgs != 4){
-		this->failReason = talloc_asprintf(this, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
+		ph->failReason = talloc_asprintf(ph, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
 		ph->numFuncArgs);
 		goto end;
 	}
@@ -736,8 +749,9 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 		debug(DEBUG_EXPECTED, "Instance: %s", instance);
 	}		
 
-					
-	for(kvp = ph->xplOutHead; kvp; kvp = kvp->next){
+	se = findHash(ph, hash)	
+	ASSERT_FAIL(se)
+	for(kvp = se->head; kvp; kvp = kvp->next){
 		
 		if(!ph->xplServicePtr){
 			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
@@ -755,10 +769,11 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 	}
 
 end:
-	/* Free the xplout hash */
+	/* Clear out the xplout hash */
 	
-	talloc_free(ph->xplOutContext);
-	ph->xplOutContext = ph->xplOutHead = NULL;
+	if(se){
+		deleteHashContents(se);
+	}
 	
 	/* Free the context used here */
 	
