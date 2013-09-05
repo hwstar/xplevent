@@ -208,6 +208,109 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName)
 }
 
 /*
+ * Send xPL command if everything looks good
+ */
+
+static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
+{
+	String tag;
+	String class;
+	String schema;
+	String hash;
+	TALLOC_CTX *ctx;
+	String vendor, device, instance;
+	ParseHashSTEPtr_t se = NULL;
+	ParseHashKVPtr_t kvp;
+	xPL_MessagePtr msg;
+	pcodePtr_t pa;
+
+
+	ASSERT_FAIL(ph);
+	
+	ctx = talloc_new(ph);
+	ASSERT_FAIL(ctx)
+			
+	if(ph->numFuncArgs != 4){
+		ph->failReason = talloc_asprintf(ph, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
+		ph->numFuncArgs);
+		goto end;
+	}
+
+
+	pa = pi->prev;
+	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &hash) == PASS)
+	pa = pa->prev;
+	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &schema) == PASS)
+	pa = pa->prev;
+	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &class) == PASS)
+	pa = pa->prev;
+	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &tag) == PASS)
+
+	
+	
+	if(ParserSplitXPLTag(ctx, tag, &vendor, &device, &instance)){
+		ph->failReason = talloc_asprintf(ph, "Bad xPL Tag: %s", tag);
+		goto end;
+	}
+	if(strcmp("xplout", hash)){
+		ph->failReason = talloc_asprintf(ph, "Hash must be named xplout");
+		goto end;
+	}
+
+	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
+	
+			
+		/* Create xpl command message */
+		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
+		ASSERT_FAIL(msg)
+		
+		/* Set message schema */
+		xPL_setSchema(msg, class, schema); 
+		
+		/* Clear name/value pairs */
+		xPL_clearMessageNamedValues(msg);
+	}
+	else{
+		/* For dry run, just print the vendor, device and instance */
+		debug(DEBUG_EXPECTED, "Vendor: %s", vendor);
+		debug(DEBUG_EXPECTED, "Device: %s", device);
+		debug(DEBUG_EXPECTED, "Instance: %s", instance);
+	}		
+
+	se = findHash(ph, hash)	
+	ASSERT_FAIL(se)
+	for(kvp = se->head; kvp; kvp = kvp->next){
+		
+		if(!ph->xplServicePtr){
+			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
+		}
+		else{
+			xPL_addMessageNamedValue(msg, kvp->key, kvp->value);
+		}		
+	}
+	
+	debug(DEBUG_ACTION, "***Sending xPL command***");
+	
+	if(ph->xplServicePtr){
+		xPL_sendMessage(msg);
+		xPL_releaseMessage(msg);
+	}
+
+end:
+	/* Clear out the xplout hash */
+	
+	if(se){
+		deleteHashContents(se);
+	}
+	
+	/* Free the context used here */
+	
+	talloc_free(ctx);
+	
+}
+
+
+/*
 * Move string from one context to another
 */
 String ParserMoveString(void *newCtx, String oldStr, int offset)
@@ -679,109 +782,6 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	ASSERT_FAIL(p);	
 }
 
-/*
- * Send xPL command if everything looks good
- */
-
-static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
-{
-	String tag;
-	String class;
-	String schema;
-	String hash;
-	TALLOC_CTX *ctx;
-	String vendor, device, instance;
-	ParseHashSTEPtr_t se = NULL;
-	ParseHashKVPtr_t kvp;
-	xPL_MessagePtr msg;
-	pcodePtr_t pa;
-
-
-	ASSERT_FAIL(ph);
-	
-	ctx = talloc_new(ph);
-	ASSERT_FAIL(ctx)
-			
-	if(ph->numFuncArgs != 4){
-		ph->failReason = talloc_asprintf(ph, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
-		ph->numFuncArgs);
-		goto end;
-	}
-
-
-	pa = pi->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &hash) == PASS)
-	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &schema) == PASS)
-	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &class) == PASS)
-	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &tag) == PASS)
-
-	
-	
-	if(ParserSplitXPLTag(ctx, tag, &vendor, &device, &instance)){
-		ph->failReason = talloc_asprintf(ph, "Bad xPL Tag: %s", tag);
-		goto end;
-	}
-	if(strcmp("xplout", hash)){
-		ph->failReason = talloc_asprintf(ph, "Hash must be named xplout");
-		goto end;
-	}
-
-	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
-	
-			
-		/* Create xpl command message */
-		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
-		ASSERT_FAIL(msg)
-		
-		/* Set message schema */
-		xPL_setSchema(msg, class, schema); 
-		
-		/* Clear name/value pairs */
-		xPL_clearMessageNamedValues(msg);
-	}
-	else{
-		/* For dry run, just print the vendor, device and instance */
-		debug(DEBUG_EXPECTED, "Vendor: %s", vendor);
-		debug(DEBUG_EXPECTED, "Device: %s", device);
-		debug(DEBUG_EXPECTED, "Instance: %s", instance);
-	}		
-
-	se = findHash(ph, hash)	
-	ASSERT_FAIL(se)
-	for(kvp = se->head; kvp; kvp = kvp->next){
-		
-		if(!ph->xplServicePtr){
-			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
-		}
-		else{
-			xPL_addMessageNamedValue(msg, kvp->key, kvp->value);
-		}		
-	}
-	
-	debug(DEBUG_ACTION, "***Sending xPL command***");
-	
-	if(ph->xplServicePtr){
-		xPL_sendMessage(msg);
-		xPL_releaseMessage(msg);
-	}
-
-end:
-	/* Clear out the xplout hash */
-	
-	if(se){
-		deleteHashContents(se);
-	}
-	
-	/* Free the context used here */
-	
-	talloc_free(ctx);
-	
-}
-
-
  
 void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 {
@@ -908,10 +908,9 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_FUNC:
+				ParserExecFunction(ph, pe)
 				break;
 				
-			case OP_IF:
-				break;
 			
 			default:
 				debug(DEBUG_UNEXPECTED,"Unrecognized op-code: %d", pe->opcode);
