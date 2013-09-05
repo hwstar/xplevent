@@ -215,7 +215,7 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, Pa
 
 
 /*
-* Add a hash to the symbol table
+* Add a hash to the end of the symbol table
 *
 * 
 */
@@ -224,6 +224,7 @@ void hashAppend(ParseSTRPtrPte_t ptail, String name)
 {
 	ParseHashSTEPtr_t hNew;
 
+	ASSERT_FAIL(ptail)
 	ASSERT_FAIL(name)
 		
 	/* Initialize a new list entry */
@@ -236,27 +237,7 @@ void hashAppend(ParseSTRPtrPte_t ptail, String name)
 	hNew->hash = hash(name);
 	hNew->writable = TRUE;
 
-	if(!ph->steHead){
-		/* First entry */
-		ph->steHead = hNew;
-	}
-	else{
-		for(se = ph->steHead; (se); se = se->next){ /* Traverse symbol list */
-			ASSERT_FAIL(SE_MAGIC == se->magic);
-			/* Compare hashes, and if they match, compare strings */
-			if((hNew->hash == se->hash) && (!strcmp(se->name, name))){
-				talloc_free(hNew);
-				return FAIL;
-			}
-			else if(!se->next){
-				/* At end of list, need to append it */
-				se->next = hNew;
-				break;	
-			}
-		}
-	}
-	return PASS;
-	
+	*ptail = hNew;
 }
 
 
@@ -517,8 +498,8 @@ Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const Str
 	/* Attempt to find the hash in the symbol table */
 	
 	if(!findHash(ph, hashName, &h);){
-		debug(DEBUG_ACTION, "Creating hash: %s", h->name);
-		ParserHashNew(ph, hashName) /* Was not found, add it to the symbol table */
+		debug(DEBUG_ACTION, "Creating hash: %s", hashName);
+		hashAppend(&h->next, hashName); /* Was not found, add it to the symbol table */
 		h = h->next;
 		ASSERT_FAIL(h)
 	}
