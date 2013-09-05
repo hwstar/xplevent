@@ -89,7 +89,6 @@ int main(int argc, char *argv[])
 	
 	/* Initialize the args hash with some test data */
 
-	ParserHashNew(ph, "args");
 	ParserHashAddKeyValue(ph,"args", "current", "78.0");
 	ParserHashAddKeyValue(ph, "args", "units", "Fahrenheit");
 
