@@ -40,6 +40,9 @@ char *progName;
 /* Debug level. */
 int debugLvl = 4;
 
+Bool fullPcodeDump = FALSE;
+Bool execPcodeTrace = TRUE;
+
 /*
  * Print the contents of a hash entry
  */
@@ -74,7 +77,7 @@ int main(int argc, char *argv[])
 	ph = talloc_zero(top, pcodeHeader_t);
 	ASSERT_FAIL(ph)
 	
-	ph->dumpPcode = TRUE; /* Turn on P-code dump */
+	ph->dumpPcode = execPcodeTrace; /* Turn on exec P-code trace if enabled */
 	
 	/* Allocate parser control structure */
 		
@@ -103,7 +106,7 @@ int main(int argc, char *argv[])
 		res = -1;
 	}
 	
-	if(!res){
+	if(!res & fullPcodeDump){
 		debug(DEBUG_EXPECTED,"***** Start P-code dump before execution *****");
 		ParserPcodeDumpList(ph);
 		debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");
