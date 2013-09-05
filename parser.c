@@ -674,9 +674,9 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 {
 	String tag;
-	String hash;
 	String class;
 	String schema;
+	String hash;
 	TALLOC_CTX *ctx;
 	String vendor, device, instance;
 	ParseHashKVPtr_t kvp;
@@ -697,8 +697,8 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 
 
 	pa = pi->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &schema) == PASS)
-	ps = pa->prev;
+	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &hash) == PASS)
+	pa = pa->prev;
 	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &schema) == PASS)
 	pa = pa->prev;
 	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &class) == PASS)
@@ -716,7 +716,7 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 		goto end;
 	}
 
-	if(ph->xplServicePtr){
+	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
 	
 			
 		/* Create xpl command message */
