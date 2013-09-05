@@ -347,8 +347,6 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	/* Set the pointer to the service */
 	ph->xplServicePtr = xpleventService;
 	
-	/* Initialize pre-defined hash xplout */
-	ParserHashNew(ph, "xplout");
 	
 	/* Initialize and fill %args */
 	ParserHashNew(ph, "args");
