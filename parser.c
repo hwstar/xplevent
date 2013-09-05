@@ -186,10 +186,10 @@ static void deleteHashContents(ParseHashSTEPtr_t se)
  * Return NULL if not found
  */
 
-static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName)
+static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, ParseHashSTEPtrPtr_t tail)
 {
 	unsigned hashVal;
-	ParseHashSTEPtr_t se;
+	ParseHashSTEPtr_t se,p;
 	
 	ASSERT_FAIL(ph)
 	
@@ -199,13 +199,67 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName)
 	hashVal = hash(hashName);
 	
 	for(se = ph->steHead; (se); se = se->next){
+		p = se;
 		ASSERT_FAIL(se->magic == SE_MAGIC)
 		if((se->hash == hashVal) && (!strcmp(hashName, se->name))){
 			break;
 		}
 	}
+	
+	if(tail){
+		*tail = p; /* Return pointer to end of list or current entry if set */
+	}
+	
 	return se;
 }
+
+
+/*
+* Add a hash to the symbol table
+*
+* 
+*/
+
+void hashAppend(ParseSTRPtrPte_t ptail, String name)
+{
+	ParseHashSTEPtr_t hNew;
+
+	ASSERT_FAIL(name)
+		
+	/* Initialize a new list entry */
+	 
+	hNew = talloc_zero(ph, ParseHashSTE_t);
+	ASSERT_FAIL(hNew)
+	hNew->magic = SE_MAGIC;
+	hNew->name = talloc_strdup(hNew, name);
+	ASSERT_FAIL(hNew->name)
+	hNew->hash = hash(name);
+	hNew->writable = TRUE;
+
+	if(!ph->steHead){
+		/* First entry */
+		ph->steHead = hNew;
+	}
+	else{
+		for(se = ph->steHead; (se); se = se->next){ /* Traverse symbol list */
+			ASSERT_FAIL(SE_MAGIC == se->magic);
+			/* Compare hashes, and if they match, compare strings */
+			if((hNew->hash == se->hash) && (!strcmp(se->name, name))){
+				talloc_free(hNew);
+				return FAIL;
+			}
+			else if(!se->next){
+				/* At end of list, need to append it */
+				se->next = hNew;
+				break;	
+			}
+		}
+	}
+	return PASS;
+	
+}
+
+
 
 /*
  * Send xPL command if everything looks good
@@ -431,7 +485,7 @@ const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, cons
 
 	ASSERT_FAIL(ph && hashName && key)
 	
-	h = findHash(ph, hashName);
+	h = findHash(ph, hashName, NULL);
 	if(!h)
 		return NULL;
 		
@@ -449,6 +503,7 @@ const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, cons
 /*
  * Add a value to the hash
  * Replace any entry with a matching key which is already there
+ * Add hash to the symbol table if it does not already exist.
  */
  
 Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
@@ -459,10 +514,13 @@ Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const Str
 
 	ASSERT_FAIL(ph && hashName && key && value)
 	
-	/* Find hash in symbol table */
-	h = findHash(ph, hashName);
-	if(!h){
-		return FAIL;
+	/* Attempt to find the hash in the symbol table */
+	
+	if(!findHash(ph, hashName, &h);){
+		debug(DEBUG_ACTION, "Creating hash: %s", h->name);
+		ParserHashNew(ph, hashName) /* Was not found, add it to the symbol table */
+		h = h->next;
+		ASSERT_FAIL(h)
 	}
 	if(!h->context){
 		h->context = talloc_new(h);
@@ -470,7 +528,7 @@ Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const Str
 	ASSERT_FAIL(h->context);
 	
 		
-	/* Initialize a new list entry */
+	/* Initialize a new key list entry */
 	 
 	keNew = talloc_zero(h->context, ParseHashKV_t);
 	ASSERT_FAIL(keNew)
@@ -527,7 +585,7 @@ void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
 	
 	ASSERT_FAIL(ph)
 
-	h = findHash(ph, name);
+	h = findHash(ph, name, NULL);
 	
 
 	/* NULL function pointer is fatal */
@@ -539,52 +597,6 @@ void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
 	}
 	
 }
-
-/*
-* Add a hash to the symbol table
-*
-* If the hash already exists, return FAIL, else return PASS
-*/
-
-int ParserHashNew(pcodeHeaderPtr_t ph, String name)
-{
-	ParseHashSTEPtr_t hNew, se;
-	ASSERT_FAIL(ph)
-	ASSERT_FAIL(name)
-		
-	/* Initialize a new list entry */
-	 
-	hNew = talloc_zero(ph, ParseHashSTE_t);
-	ASSERT_FAIL(hNew)
-	hNew->magic = SE_MAGIC;
-	hNew->name = talloc_strdup(hNew, name);
-	ASSERT_FAIL(hNew->name)
-	hNew->hash = hash(name);
-	hNew->writable = TRUE;
-
-	if(!ph->steHead){
-		/* First entry */
-		ph->steHead = hNew;
-	}
-	else{
-		for(se = ph->steHead; (se); se = se->next){ /* Traverse symbol list */
-			ASSERT_FAIL(SE_MAGIC == se->magic);
-			/* Compare hashes, and if they match, compare strings */
-			if((hNew->hash == se->hash) && (!strcmp(se->name, name))){
-				talloc_free(hNew);
-				return FAIL;
-			}
-			else if(!se->next){
-				/* At end of list, need to append it */
-				se->next = hNew;
-				break;	
-			}
-		}
-	}
-	return PASS;
-	
-}
-
 
 
 /*
@@ -641,9 +653,6 @@ Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
 		return FAIL;
 	}
 	
-	/* If the hash doesn't exist, create it */
-	
-	ParserHashNew(ph, instr->data1);
 
 	return ParserHashAddKeyValue(ph, instr->data1, instr->data2, value);
 }
