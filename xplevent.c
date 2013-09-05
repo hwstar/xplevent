@@ -369,13 +369,17 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	}
 	
 	talloc_free(parseCtrl);
+	
 
 	debug(DEBUG_ACTION, "***Parsing complete***");
 	
-	// FIXME: Pcode exec missing 
 	
 	if(res == PASS){
 		res = ParserExecPcode(ph);
+		if(res == FAIL){
+			debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
+		}
+		
 	}
 	talloc_free(ph);
 	
@@ -493,6 +497,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	if(!errs){
 		sqlite3_exec(myDB, buffer, trigactionSelect, (void *) &action , &errorMessage);
 		if(errorMessage){
+			errs++;
 			debug(DEBUG_UNEXPECTED,"Sqlite select error on trigaction: %s", errorMessage);
 			sqlite3_free(errorMessage);
 		}
@@ -504,22 +509,25 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 		// Transaction commit	
 		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
+			errs++;
 			debug(DEBUG_UNEXPECTED,"Sqlite commit error on trigaction: %s", errorMessage);
 			sqlite3_free(errorMessage);
 		}
 	}	
 			
-	errs = 0;
-	
 	 
-	if(action){
+	if((!errs) && action){
 		parseHCL(theMessage, action);
 		talloc_free(action);
 	}
 	
+
+	
 	/*
 	 * Update trigger log
 	 */
+	 
+	errs = 0;
 	 
 	// Build name/value pair list
 	if(msgBody){
