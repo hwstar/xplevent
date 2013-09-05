@@ -349,7 +349,6 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	
 	
 	/* Initialize and fill %args */
-	ParserHashNew(ph, "args");
 	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
 		if(!msgBody->namedValues[i]->isBinary){
 			ParserHashAddKeyValue(ph, "args", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
