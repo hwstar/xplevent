@@ -95,10 +95,6 @@ int main(int argc, char *argv[])
 	ParserHashWalk(ph, "args", hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** End Input hash contents *****");
 			
-
-	/* Pre-define the output hash */
-	
-	ParserHashNew(ph, "xplout");
 	
 	ParserParseHCL(parseCtrl, (*argv[1] == 'f'), argv[2]);
 	
