@@ -640,6 +640,10 @@ Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
 	if(instr->operand != OPRD_HASHKV){
 		return FAIL;
 	}
+	
+	/* If the hash doesn't exist, create it */
+	
+	ParserHashNew(ph, instr->data1);
 
 	return ParserHashAddKeyValue(ph, instr->data1, instr->data2, value);
 }
