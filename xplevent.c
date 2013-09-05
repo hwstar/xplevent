@@ -347,17 +347,20 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 	/* Set the pointer to the service */
 	ph->xplServicePtr = xpleventService;
 	
+	/* Initialize pre-defined hash xplout */
+	ParserHashNew(ph, "xplout");
+	
 	/* Initialize and fill %args */
-
+	ParserHashNew(ph, "args");
 	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
 		if(!msgBody->namedValues[i]->isBinary){
-			ParserHashAddKeyValue(&ph->argsHead, parseCtrl,
-			msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
+			ParserHashAddKeyValue(ph, "args", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
 		}
 	}
+
 	debug(DEBUG_ACTION, "Args:");
 	
-	ParserHashWalk(ph->argsHead, kvDump);
+	ParserHashWalk(ph, "args", kvDump);
 	
 	res = ParserParseHCL(parseCtrl, FALSE, hcl);
 	
@@ -369,7 +372,7 @@ static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
 
 	debug(DEBUG_ACTION, "***Parsing complete***");
 	
-	ParserPcodeDumpList(ph); // DEBUG
+	// FIXME: Pcode exec missing 
 	
 	if(res == PASS){
 		res = ParserExecPcode(ph);

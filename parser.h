@@ -125,10 +125,9 @@ typedef ParseCtrl_t * ParseCtrlPtr_t;
 
 
 int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String *device, String *instance);
-
-void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const String key, const String value));
-void ParserHashAddKeyValue(ParseHashKVPtrPtr_t ppHead, void *tallocContext, const String key, const String value);
-const String ParserHashGetValue(ParseHashKVPtr_t pHead, const String key);
+void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value));
+Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const String key, const String value);
+const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, const String key);
 void ParserExecFunction(struct ParseCtrl_s *this, int tokenID);
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2);
 void ParserPcodeDumpList(pcodeHeaderPtr_t ph);
@@ -138,7 +137,7 @@ Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value);
 int ParserExecPcode(pcodeHeaderPtr_t ph);
 int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str);
 String ParserMoveString(TALLOC_CTX *newCtx, String oldStr, int offset);
-int ParserHashAdd(pcodeHeaderPtr_t ph, String name);
+int ParserHashNew(pcodeHeaderPtr_t ph, String name);
 
 
 #endif

@@ -47,27 +47,28 @@ letter      [a-zA-Z]
 intlit		{digit}{digit}*
 ucn			((\\u([[:xdigit:]]{4}))|(\\U([[:xdigit:]]{8})))
 bareword	([_[:alpha:]]|{ucn})([_[:alnum:]]|{ucn})*
+scalar		[\$]{bareword}
+hash		%{bareword}
 stringlit	L?\"([^\"\\\n]|(\\['\"?\\abfnrtv])|(\\([0123456]{1,3}))|(\\x[[:xdigit:]]+)|(\\u([[:xdigit:]]{4}))|(\\U([[:xdigit:]]{8})))*\"
 comment		#.*\n
 
 %%		/* Rules */
 "=="					{return (TOK_EQEQ);}
 "!="					{return (TOK_NEQ);}
-"("					{return (TOK_OPAREN);}
-")"					{return (TOK_CPAREN);}
-"{"					{return (TOK_OBRACE);}
-"}"					{return (TOK_CBRACE);}
-"="					{return (TOK_EQUALS);}
-";"					{return (TOK_SEMI);}
-","					{return (TOK_COMMA);}
-"$"					{return (TOK_DOLLAR);}
-"%"					{return (TOK_PERCENT);}
+"("						{return (TOK_OPAREN);}
+")"						{return (TOK_CPAREN);}
+"{"						{return (TOK_OBRACE);}
+"}"						{return (TOK_CBRACE);}
+"="						{return (TOK_EQUALS);}
+";"						{return (TOK_SEMI);}
+","						{return (TOK_COMMA);}
 "\\"					{return (TOK_BACKSLASH);}
 "xplcmd"				{return (TOK_XPLCMD);}
-"args"					{return (TOK_ARGS);}
-"xplout"				{return (TOK_XPLOUT);}
 "if"					{return (TOK_IF);}
 "else"					{return (TOK_ELSE);}
+
+{scalar}				{return (TOK_SCALAR);}
+{hash}					{return (TOK_HASH);}
 {bareword}				{return (TOK_BAREWORD);}
 {intlit}				{return (TOK_INTLIT);}
 {stringlit}				{return (TOK_STRINGLIT);}

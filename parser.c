@@ -156,6 +156,44 @@ static void printOpcode(pcodePtr_t p)
 	p->seq, p->ctrlStructRefCount, op, p->operand, data1, data2, p->skip);	
 }
 
+/*
+ * Find a hash in the symbol table
+ * 
+ * Return NULL if not found
+ */
+
+static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName)
+{
+	unsigned hashVal;
+	ParseHashSTEPtr_t se;
+	
+	ASSERT_FAIL(ph)
+	
+	if(!ph->steHead)
+		return NULL; /* Empty symbol table */
+		
+	hashVal = hash(hashName);
+	
+	for(se = ph->steHead; (se); se = se->next){
+		ASSERT_FAIL(se->magic == SE_MAGIC)
+		if((se->hash == hashVal) && (!strcmp(hashName, se->name))){
+			break;
+		}
+	}
+	return se;
+}
+
+/*
+ * Set undefined variable error message and exit
+ */
+
+static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
+{
+	String res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
+	ASSERT_FAIL(res);
+	ph->failReason = res;
+}
+
 
 /*
 * Move string from one context to another
@@ -167,7 +205,7 @@ String ParserMoveString(void *newCtx, String oldStr, int offset)
 	ASSERT_FAIL(newCtx)
 	ASSERT_FAIL(oldStr)
 	
-	if((newStr = talloc_strdup(newCtx, OldStr + offset){
+	if((newStr = talloc_strdup(newCtx, oldStr + offset))){
 		talloc_free(oldStr);
 	}
 	
@@ -270,16 +308,21 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
  * Get a value from the hash
  */
 
-const String ParserHashGetValue(ParseHashKVPtr_t pHead, const String key)
+const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, const String key)
 {
 	unsigned kh;
+	ParseHashSTEPtr_t h;
 	ParseHashKVPtr_t ke;
 
-	ASSERT_FAIL(pHead && (pHead->magic == KE_MAGIC) && key)
-
+	ASSERT_FAIL(ph && hashName && key)
+	
+	h = findHash(ph, hashName);
+	if(!h)
+		return NULL;
+		
 	/* Hash the section string passed in */
 	kh = hash(key);
-	for(ke = pHead; (ke); ke = ke->next){ /* Traverse key list */
+	for(ke = h->head; (ke); ke = ke->next){ /* Traverse key list */
 		ASSERT_FAIL(KE_MAGIC == ke->magic)
 		/* Compare hashes, and if they match, compare strings */
 		if((kh == ke->hash) && (!strcmp(ke->key, key)))
@@ -293,17 +336,28 @@ const String ParserHashGetValue(ParseHashKVPtr_t pHead, const String key)
  * Replace any entry with a matching key which is already there
  */
  
-void ParserHashAddKeyValue(ParseHashKVPtrPtr_t ppHead, void *tallocContext, const String key, const String value)
+Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
 {
-	ParseHashKVPtrPtr_t pph = (ParseHashKVPtrPtr_t) ppHead;
+	ParseHashSTEPtr_t h;
 	ParseHashKVPtr_t ke, keNew, kePrev;
 	
 
-	ASSERT_FAIL(ppHead && key && value)
+	ASSERT_FAIL(ph && hashName && key && value)
+	
+	/* Find hash in symbol table */
+	h = findHash(ph, hashName);
+	if(!h){
+		return FAIL;
+	}
+	if(!h->context){
+		h->context = talloc_new(h);
+	}
+	ASSERT_FAIL(h->context);
+	
 		
 	/* Initialize a new list entry */
 	 
-	keNew = talloc_zero(tallocContext, ParseHashKV_t);
+	keNew = talloc_zero(h->context, ParseHashKV_t);
 	ASSERT_FAIL(keNew)
 	keNew->magic = KE_MAGIC;
 	keNew->key = talloc_strdup(keNew, key);
@@ -312,54 +366,59 @@ void ParserHashAddKeyValue(ParseHashKVPtrPtr_t ppHead, void *tallocContext, cons
 	ASSERT_FAIL(keNew->value);
 	keNew->hash = hash(key);
 
-	if(!*pph){
+	if(!h->head){
 		/* First entry */
-		debug(DEBUG_ACTION, "First entry in hash: %s", key);
-		*pph = keNew;
+		debug(DEBUG_ACTION, "First entry in hash %s is: %s", h->name, key);
+		h->head = keNew;
 	}
 	else{
-		for(ke = *pph, kePrev = NULL; (ke); ke = ke->next){ /* Traverse key list */
+		for(ke = h->head, kePrev = NULL; (ke); ke = ke->next){ /* Traverse key list */
 			ASSERT_FAIL(KE_MAGIC == ke->magic);
 			/* Compare hashes, and if they match, compare strings */
 			if((keNew->hash == ke->hash) && (!strcmp(ke->key, key))){
 				/* Key already exists, need to replace it */
 				keNew->next = ke->next;
 				if(!kePrev){
-					debug(DEBUG_ACTION, "Replacing first entry in hash: %s", key);
-					*pph = keNew; /* Change first entry */
+					debug(DEBUG_ACTION, "Replacing first entry in hash %s: %s", h->name, key);
+					h->head = keNew; /* Change first entry */
 				}
 				else{
-					debug(DEBUG_ACTION, "Replacing other than the first entry in hash: %s", key);
+					debug(DEBUG_ACTION, "Replacing other than the first entry in hash %s: %s", h->name, key);
 					kePrev->next = keNew; /* Change subsequent entry */
 				}	
 				talloc_free(ke); /* Free the old entry and its strings */
 				break;
 			}
 			else if(!ke->next){
-				debug(DEBUG_ACTION, "Appending entry to end of hash: %s", key);
+				debug(DEBUG_ACTION, "Appending entry to end of hash %s: %s", h->name, key);
 				/* At end of list, need to append it */
 				ke->next = keNew;
 				break;	
 			}
 			kePrev = ke;	
 		}
-	}	
+	}
+	return PASS;	
 }
 
 /*
  * Walk the list calling a callback function with each key/value
  */
  
-void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const String key, const String value))
+void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value))
 {
 	ParseHashKVPtr_t ke;
+	ParseHashSTEPtr_t h;
 	
-	ASSERT_FAIL(pHead)
+	ASSERT_FAIL(ph)
+
+	h = findHash(ph, name);
 	
+
 	/* NULL function pointer is fatal */
 	ASSERT_FAIL(parseHashWalkCallback)
 		
-	for(ke = pHead; (ke); ke = ke->next){ /* Traverse key list */
+	for(ke = h->head; (ke); ke = ke->next){ /* Traverse key list */
 		ASSERT_FAIL(KE_MAGIC == ke->magic)
 		(*parseHashWalkCallback)(ke->key, ke->value);
 	}
@@ -372,7 +431,7 @@ void ParserHashWalk(ParseHashKVPtr_t pHead, void (*parseHashWalkCallback)(const 
 * If the hash already exists, return FAIL, else return PASS
 */
 
-int ParserHashAdd(pcodeHeaderPtr_t ph, String name)
+int ParserHashNew(pcodeHeaderPtr_t ph, String name)
 {
 	ParseHashSTEPtr_t hNew, se;
 	ASSERT_FAIL(ph)
@@ -403,10 +462,11 @@ int ParserHashAdd(pcodeHeaderPtr_t ph, String name)
 			else if(!se->next){
 				/* At end of list, need to append it */
 				se->next = hNew;
-				return PASS;	
+				break;	
 			}
 		}
 	}
+	return PASS;
 	
 }
 
@@ -434,16 +494,7 @@ Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
 			break;
 			
 		case OPRD_HASHKV:  /* Assoc array key/value */
-			if(!strcmp("args", instr->data1)){
-				if(ph->argsHead){
-					value = ParserHashGetValue(ph->argsHead, instr->data2);
-				}
-			}
-			else if(!strcmp("xplout", instr->data1)){
-				if(ph->xplOutHead){
-					value = ParserHashGetValue(ph->xplOutHead, instr->data2);
-				}
-			}
+			value = ParserHashGetValue(ph, instr->data1, instr->data2);
 			break;
 			
 		case OPRD_HASHREF: /* Hash reference */
@@ -474,13 +525,8 @@ Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
 	if(instr->operand != OPRD_HASHKV){
 		return FAIL;
 	}
-	if(strcmp("xplout", instr->data1)){
-		return FAIL;
-	}
-	ASSERT_FAIL(ph->xplOutContext);
-	
-	ParserHashAddKeyValue(&ph->xplOutHead, ph->xplOutContext, instr->data2, value);
-	return PASS;
+
+	return ParserHashAddKeyValue(ph, instr->data1, instr->data2, value);
 }
 
 /*
@@ -751,7 +797,7 @@ end:
 int ParserExecPcode(pcodeHeaderPtr_t ph)
 {
 	int res = PASS;
-	pcodePtr_t pe;
+	pcodePtr_t pe,p;
 	String value;
 	int leftNum, rightNum;
 	Bool testRes;
@@ -791,16 +837,16 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_ASSIGN: /* Assignment */
-				if(ph->pushCount != 2){
-					ph->failReason = talloc_asprintf(ph, "Assignment requires 2 operands on line %d",pe->lineNo);
+				ASSERT_FAIL(ph->pushCount == 2)
+				p = pe->prev;
+				if(ParserPcodeGetValue(ph, p, &value)){
+					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}
-				
-				if(ParserPcodeGetValue(ph, pe->prev, &value)){
-					ph->failReason = talloc_asprintf(ph, "Can't read variable on line number %d", pe->lineNo);
-				}
-			    if(ParserPcodePutValue(ph, pe->prev->prev, value)){
-					ph->failReason = talloc_asprintf(ph, "Can't change destination variable on line %d", pe->lineNo);
+				ASSERT_FAIL(value)
+				p = pe->prev->prev;
+			    if(ParserPcodePutValue(ph, p, value)){
+					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}	
 				debug(DEBUG_ACTION,"Assign successful on line %d", pe->lineNo);
@@ -808,16 +854,16 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				
 			case OP_TEST: /* Variable test */
 				ASSERT_FAIL(ph->pushCount == 2)
-				
-				if(ParserPcodeGetValue(ph, pe->prev->prev, &value)){ /* Left */
-					ph->failReason = talloc_asprintf(ph, "Can't read left variable on line number %d", pe->lineNo);
+				p = pe->prev->prev;
+				if(ParserPcodeGetValue(ph, p, &value)){ /* Left */
+					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}
 				debug(DEBUG_ACTION,"Left string: %s", value);				
 				leftNum = atoi(value);
-				
-				if(ParserPcodeGetValue(ph, pe->prev, &value)){ /* Right */
-					ph->failReason = talloc_asprintf(ph, "Can't read right variable on line number %d", pe->lineNo);
+				p = pe->prev;
+				if(ParserPcodeGetValue(ph, p, &value)){ /* Right */
+					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}	
 				debug(DEBUG_ACTION,"Right string: %s", value);					
@@ -857,7 +903,9 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 		}	
 	}
 	
-	
+	if(ph->failReason){
+		res = FAIL;
+	}
 	return res;	
 }
 

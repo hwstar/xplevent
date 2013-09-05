@@ -48,8 +48,9 @@
 	parseCtrl->failReason = talloc_asprintf(parseCtrl, "Syntax error on or near line: %d", parseCtrl->lineNo);
 }
 
+%nonassoc EQEQ NEQ .
 %nonassoc EQUALS .
-%left OPAREN CPAREN .
+%nonassoc OPAREN CPAREN .
 
 /*
 * Top of parse tree
@@ -195,12 +196,14 @@ argument ::= rvalue .
 }
 
 /*
-* xplout hash
+* hash reference
 */
 
 
-argument ::= BACKSLASH PERCENT XPLOUT(A) .
+argument ::= BACKSLASH HASH(A) .
 {
+	A->stringVal = ParserMoveString(A, A->stringVal, 1); /* Chop off percent */
+	ASSERT_FAIL(A->stringVal);
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHREF, A->stringVal, NULL); 
 }
 
@@ -208,17 +211,17 @@ argument ::= BACKSLASH PERCENT XPLOUT(A) .
 * assignment
 */
 
-assignment ::= lhash EQUALS rvalue .
+assignment ::= hash EQUALS rvalue .
 {
 
-	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, "lhash eq rvalue", NULL);
+	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, "hash eq rvalue", NULL);
 }
 
 
-assignment ::= lhash EQUALS rhash .
+assignment ::= hash EQUALS hash .
 {	
 
-	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, "lhash eq rhash", NULL);
+	ParserPcodeEmit(parseCtrl, OP_ASSIGN, 0, "hash eq rhash", NULL);
 		
 }
 
@@ -226,26 +229,16 @@ assignment ::= lhash EQUALS rhash .
 * Numeric Equality test
 */
 
-test ::= rhash testop(A) rvalue .
+test ::= hash testop(A) rvalue .
 {
 	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
 }
 
-test ::= rvalue testop(A) rhash .
+test ::= rvalue testop(A) hash .
 {
 	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
 }
 
-test ::= lhash testop(A) rhash .
-{
-	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
-}
-
-
-test ::= rhash testop(A) lhash .
-{
-	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);	
-}
 
 testop(A) ::= EQEQ . /* Numeric Equality */
 {
@@ -262,27 +255,16 @@ testop(A) ::= NEQ . /* Numeric Not Equal */
 }
 
 
-
 /*
-* rvalue hash
+*  hash
 */
 
-rhash ::= DOLLAR ARGS OBRACE BAREWORD(A) CBRACE .
+hash ::= SCALAR(B) OBRACE BAREWORD(A) CBRACE .
 {
-	if(NULL == ParserHashGetValue(parseCtrl->pcodeHeader->argsHead, A->stringVal)){
-		parseCtrl->failReason = talloc_asprintf(parseCtrl,
-		"Hash $args contains no key named %s on or near line %d", A->stringVal, parseCtrl->lineNo);
-	}
-	ParserPcodeEmit(parseCtrl, OP_PUSH, 2, "args", A->stringVal);
-}
-
-/*
-* lvalue hash
-*/
-
-lhash ::= DOLLAR XPLOUT OBRACE BAREWORD(A) CBRACE .
-{
-	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHKV, "xplout", A->stringVal);
+	B->stringVal = ParserMoveString(B, B->stringVal, 1); /* Chop off dollar sign */
+	ASSERT_FAIL(B->stringVal);
+	
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHKV, B->stringVal, A->stringVal);
 }
 
 /*
@@ -302,21 +284,18 @@ rvalue ::= INTLIT(A) .
 
 rvalue ::= STRINGLIT(A) .
 {
-	String s = NULL;
-	String p;
-	int i;
-	
+
 	ASSERT_FAIL(A)
 	
 	/* Strip off double quotes */
 	
-	A->stringVal[strlen(A->stringVal) - ] = 0;
+	A->stringVal[strlen(A->stringVal) - 1] = 0;
 	A->stringVal = ParserMoveString(A, A->stringVal, 1);
 	ASSERT_FAIL(A->stringVal);
 	
 	
 	/* Emit pcode */
-	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_STRINGLIT, s, "string literal");
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_STRINGLIT, A->stringVal, "string literal");
 
 	 
 }

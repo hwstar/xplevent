@@ -85,16 +85,20 @@ int main(int argc, char *argv[])
 	parseCtrl->pcodeHeader = ph;
 	
 	/* Initialize the args hash with some test data */
-	
-	ParserHashAddKeyValue(&ph->argsHead, parseCtrl,"current","78.0");
-	ParserHashAddKeyValue(&ph->argsHead, parseCtrl,"units","Fahrenheit");
+
+	ParserHashNew(ph, "args");
+	ParserHashAddKeyValue(ph,"args", "current", "78.0");
+	ParserHashAddKeyValue(ph, "args", "units", "Fahrenheit");
+
 	
 	debug(DEBUG_EXPECTED,"***** Start Input hash contents *****");
-	ParserHashWalk(ph->argsHead, hashWalkPrint);
+	ParserHashWalk(ph, "args", hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** End Input hash contents *****");
 			
 
+	/* Pre-define the output hash */
 	
+	ParserHashNew(ph, "xplout");
 	
 	ParserParseHCL(parseCtrl, (*argv[1] == 'f'), argv[2]);
 	
@@ -103,11 +107,11 @@ int main(int argc, char *argv[])
 		res = -1;
 	}
 	
-
-	debug(DEBUG_EXPECTED,"***** Start P-code dump before execution *****");
-	ParserPcodeDumpList(ph);
-	debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");
-
+	if(!res){
+		debug(DEBUG_EXPECTED,"***** Start P-code dump before execution *****");
+		ParserPcodeDumpList(ph);
+		debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");
+	}
 	
 	if(!res){
 		if(ParserExecPcode(ph)){
