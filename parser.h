@@ -102,7 +102,6 @@ typedef struct pcheader_s {
 	int ctrlStructRefCount;
 	int seq;
 	short pushCount;
-	short numFuncArgs;
 	Bool dumpPcode;
 	void *argListContext; // To be removed
 	void *xplServicePtr;
@@ -128,7 +127,7 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value));
 Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const String key, const String value);
 const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, const String key);
-void ParserExecFunction(struct ParseCtrl_s *this, int tokenID);
+void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi);
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2);
 void ParserPcodeDumpList(pcodeHeaderPtr_t ph);
 void ParserSetJumps(ParseCtrlPtr_t this, int tokenID);

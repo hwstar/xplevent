@@ -158,7 +158,7 @@ expression ::= function .
 
 function ::= builtinFunction(A) OPAREN argumentlist CPAREN .
 {
-	ParserPcodeEmit(parseCtrl, OP_FUNC, 0, A->stringVal, NULL); 
+	ParserPcodeEmit(parseCtrl, OP_FUNC, A->tokenID, A->stringVal, NULL); 
 }
 
 /*

@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 		res = -1;
 	}
 	
-	if(!res & fullPcodeDump){
+	if(!res && fullPcodeDump){
 		debug(DEBUG_EXPECTED,"***** Start P-code dump before execution *****");
 		ParserPcodeDumpList(ph);
 		debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");

@@ -175,6 +175,7 @@ static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
 static void deleteHashContents(ParseHashSTEPtr_t se)
 {
 	ASSERT_FAIL(se)
+	debug(DEBUG_ACTION,"Deleting contents of hash: %s", se->name);
 	talloc_free(se->context);
 	se->context = se->head = NULL;
 }
@@ -193,9 +194,9 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, Pa
 	
 	ASSERT_FAIL(ph)
 	
-	if(!ph->steHead)
+	if(!ph->steHead){
 		return NULL; /* Empty symbol table */
-		
+	}
 	hashVal = hash(hashName);
 	
 	for(se = ph->steHead; (se); se = se->next){
@@ -220,7 +221,7 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, Pa
 * 
 */
 
-void hashAppend(ParseSTRPtrPte_t ptail, String name)
+void hashAppend(pcodeHeaderPtr_t ph, ParseHashSTEPtrPtr_t ptail, String name)
 {
 	ParseHashSTEPtr_t hNew;
 
@@ -246,7 +247,7 @@ void hashAppend(ParseSTRPtrPte_t ptail, String name)
  * Send xPL command if everything looks good
  */
 
-static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
+static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 {
 	String tag;
 	String class;
@@ -265,9 +266,9 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 	ctx = talloc_new(ph);
 	ASSERT_FAIL(ctx)
 			
-	if(ph->numFuncArgs != 4){
+	if(ph->pushCount != 4){
 		ph->failReason = talloc_asprintf(ph, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
-		ph->numFuncArgs);
+		ph->pushCount);
 		goto end;
 	}
 
@@ -312,7 +313,7 @@ static void sendXPLCommand(pcodeHeaderPtr ph, pcodePtr_t pi)
 		debug(DEBUG_EXPECTED, "Instance: %s", instance);
 	}		
 
-	se = findHash(ph, hash)	
+	se = findHash(ph, hash, NULL);
 	ASSERT_FAIL(se)
 	for(kvp = se->head; kvp; kvp = kvp->next){
 		
@@ -497,17 +498,27 @@ Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const Str
 	
 	/* Attempt to find the hash in the symbol table */
 	
-	if(!findHash(ph, hashName, &h);){
-		debug(DEBUG_ACTION, "Creating hash: %s", hashName);
-		hashAppend(&h->next, hashName); /* Was not found, add it to the symbol table */
-		h = h->next;
-		ASSERT_FAIL(h)
-	}
-	if(!h->context){
-		h->context = talloc_new(h);
-	}
-	ASSERT_FAIL(h->context);
+	if(ph->steHead){ /* If symbol table isn't empty */
+		if(!findHash(ph, hashName, &h)){
+			debug(DEBUG_ACTION, "Creating hash: %s in symbol table", hashName);
+			hashAppend(ph, &h->next, hashName); /* Was not found, add it to the symbol table */
+			h = h->next;
+			ASSERT_FAIL(h)
+			h->context = talloc_new(h);
+			ASSERT_FAIL(h->context);
+		}
+
 	
+	}
+	else{ /* Empty symbol table */
+		debug(DEBUG_ACTION, "Creating first hash: %s in empty symbol table", hashName);
+		hashAppend(ph, &ph->steHead, hashName);
+		h = ph->steHead;
+		h->context = talloc_new(h);
+		ASSERT_FAIL(h->context);
+	}
+	
+
 		
 	/* Initialize a new key list entry */
 	 
@@ -520,6 +531,8 @@ Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const Str
 	ASSERT_FAIL(keNew->value);
 	keNew->hash = hash(key);
 
+	/* add the key/value to the hash, replacing any existing identical key */
+	
 	if(!h->head){
 		/* First entry */
 		debug(DEBUG_ACTION, "First entry in hash %s is: %s", h->name, key);
@@ -785,10 +798,10 @@ void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 	ASSERT_FAIL(pi);
 	
 	
-	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", pi->tokenID, ph->numFuncArgs);
+	debug(DEBUG_ACTION,"Executing function with token id: %d, number of args: %d", pi->operand, ph->pushCount);
 	
 	
-	switch(pi->tokenID){
+	switch(pi->operand){
 		case TOK_XPLCMD:
 			sendXPLCommand(ph, pi); 
 		break;
@@ -902,7 +915,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_FUNC:
-				ParserExecFunction(ph, pe)
+				ParserExecFunction(ph, pe);
 				break;
 				
 			
