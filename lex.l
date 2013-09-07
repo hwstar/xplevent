@@ -44,6 +44,7 @@ static void *lexContext = NULL;
 
 digit       [0-9]
 letter      [a-zA-Z]
+floatlit	{digit}+"."*{digit}+
 intlit		{digit}{digit}*
 ucn			((\\u([[:xdigit:]]{4}))|(\\U([[:xdigit:]]{8})))
 bareword	([_[:alpha:]]|{ucn})([_[:alnum:]]|{ucn})*
@@ -53,6 +54,8 @@ stringlit	L?\"([^\"\\\n]|(\\['\"?\\abfnrtv])|(\\([0123456]{1,3}))|(\\x[[:xdigit:
 comment		#.*\n
 
 %%		/* Rules */
+">="					{return (TOK_NGET);}
+"<="					{return (TOK_NLET);}
 "=="					{return (TOK_EQEQ);}
 "!="					{return (TOK_NEQ);}
 "("						{return (TOK_OPAREN);}
@@ -63,6 +66,9 @@ comment		#.*\n
 ";"						{return (TOK_SEMI);}
 ","						{return (TOK_COMMA);}
 "\\"					{return (TOK_BACKSLASH);}
+">"						{return (TOK_NGT);}
+"<"						{return (TOK_NLT);}
+"eq"					{return (TOK_SEQ);}
 "xplcmd"				{return (TOK_XPLCMD);}
 "if"					{return (TOK_IF);}
 "else"					{return (TOK_ELSE);}
@@ -70,6 +76,7 @@ comment		#.*\n
 {scalar}				{return (TOK_SCALAR);}
 {hash}					{return (TOK_HASH);}
 {bareword}				{return (TOK_BAREWORD);}
+{floatlit}				{return (TOK_FLOATLIT);}
 {intlit}				{return (TOK_INTLIT);}
 {stringlit}				{return (TOK_STRINGLIT);}
 {comment}				/* skip comment */

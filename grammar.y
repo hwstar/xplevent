@@ -247,11 +247,50 @@ testop(A) ::= EQEQ . /* Numeric Equality */
 	A->anno = "Num eq.";
 }
 
+testop(A) ::= NGT . /* Numeric Greater Than */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_NUMGTRTHAN;
+	A->anno = "Num gtr. than";
+}
+
+testop(A) ::= NLT . /* Numeric Less than */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_NUMLESSTHAN;
+	A->anno = "Num less than";
+}
+
+
+testop(A) ::= NGET . /* Numeric Greater Than */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_NUMGTREQTHAN;
+	A->anno = "Num gtr. eq. than";
+}
+
+testop(A) ::= NLET . /* Numeric Less than */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_NUMLESSEQTHAN;
+	A->anno = "Num less eq. than";
+}
+
 testop(A) ::= NEQ . /* Numeric Not Equal */
 {
 	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMINEQUALITY;
 	A->anno = "Num ineq.";
+}
+
+
+
+
+testop(A) ::= SEQ . /* String Equality */
+{
+	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	A->operand = OPRT_STREQUALITY;
+	A->anno = "String eq.";
 }
 
 
@@ -275,6 +314,13 @@ rvalue ::= INTLIT(A) .
 {
 	ASSERT_FAIL(A)
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_INTLIT, A->stringVal, "integer literal"); 
+	talloc_free(A);
+}
+
+rvalue ::= FLOATLIT(A) .
+{
+	ASSERT_FAIL(A)
+	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_FLOATLIT, A->stringVal, "float literal"); 
 	talloc_free(A);
 }
 

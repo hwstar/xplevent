@@ -631,6 +631,7 @@ Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
 		
 		case OPRD_STRINGLIT: /* Literals */
 		case OPRD_INTLIT:
+		case OPRD_FLOATLIT:
 			value = instr->data1;
 			break;
 			
@@ -842,8 +843,8 @@ void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 int ParserExecPcode(pcodeHeaderPtr_t ph)
 {
 	pcodePtr_t pe,p;
-	String value;
-	int leftNum, rightNum;
+	String value,rvalue;
+	double leftNum, rightNum;
 	Bool testRes;
 	int res = PASS;
 
@@ -909,15 +910,15 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 					break;
 				}
 				debug(DEBUG_ACTION,"Left string: %s", value);				
-				leftNum = atoi(value);
+				leftNum = atof(value);
 				p = pe->prev;
-				if(ParserPcodeGetValue(ph, p, &value)){ /* Right */
+				if(ParserPcodeGetValue(ph, p, &rvalue)){ /* Right */
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}	
-				debug(DEBUG_ACTION,"Right string: %s", value);					
-				rightNum = atoi(value);
-				debug(DEBUG_ACTION,"leftNum = %d, rightNum = %d", leftNum, rightNum);
+				debug(DEBUG_ACTION,"Right string: %s", rvalue);					
+				rightNum = atof(rvalue);
+				debug(DEBUG_ACTION,"leftNum = %f, rightNum = %f", leftNum, rightNum);
 				
 				switch(pe->operand){
 					case OPRT_NUMEQUALITY:
@@ -926,6 +927,26 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 						
 					case OPRT_NUMINEQUALITY:
 						testRes = (leftNum != rightNum);
+						break;
+						
+					case OPRT_NUMGTRTHAN:
+						testRes = (leftNum > rightNum);
+						break;
+					
+					case OPRT_NUMLESSTHAN:
+						testRes = (leftNum < rightNum);
+						break;
+					
+					case OPRT_NUMGTREQTHAN:
+						testRes = (leftNum >= rightNum);
+						break;
+					
+					case OPRT_NUMLESSEQTHAN:
+						testRes = (leftNum <= rightNum);
+						break;
+					
+					case OPRT_STREQUALITY:
+						testRes = (0 == strcmp(rvalue, value));
 						break;
 					
 					default:

@@ -317,7 +317,7 @@ static void kvDump(const String key, const String value)
  * Parse the string passed in
  */
 
-static Bool parseHCL(xPL_MessagePtr triggerMessage, const String hcl)
+static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String hcl)
 {
 	int i;
 	Bool res = PASS;
@@ -485,7 +485,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	 * Check to see if this is a trigger message we need to act on
 	 */
 	 
-	// Transaction start
+	/* Transaction start */
 	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
 	if(errorMessage){
 		errs++;
@@ -506,7 +506,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	
 	
 	if(!errs){
-		// Transaction commit	
+		/* Transaction commit */	
 		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
 			errs++;
@@ -517,7 +517,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 			
 	 
 	if((!errs) && action){
-		parseHCL(theMessage, action);
+		actOnXPLTrig(theMessage, action);
 		talloc_free(action);
 	}
 	

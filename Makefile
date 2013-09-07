@@ -39,7 +39,7 @@ $(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h
 #Rules
 
 
-grammar.c:	grammar.y parse.h parser.h types.h defs.h notify.h
+grammar.c grammar.h:	grammar.y parse.h parser.h types.h defs.h notify.h
 	$(ACC) grammar.y
 
 lex.c:	lex.l lex.h grammar.c grammar.y parse.h parser.h types.h defs.h notify.h
