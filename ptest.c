@@ -24,11 +24,27 @@
 
 
 #include <stdio.h>
+#include <getopt.h>
+#include <unistd.h>
 #include <talloc.h>
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
 #include "parser.h"
+
+#define SHORT_OPTIONS "af:mpt"
+
+/* Commandline options. */
+
+static struct option longOptions[] = {
+	{"all", 0, 0, 'a'},
+	{"file", 1, 0, 'f'},
+	{"memory", 0, 0,'m'},
+	{"pcode", 0, 0, 'p'},
+	{"trace", 0, 0, 't'},
+	{0, 0, 0, 0}
+};
+
 
 /*
  * Parser test harness
@@ -41,7 +57,8 @@ char *progName;
 int debugLvl = 4;
 
 Bool fullPcodeDump = FALSE;
-Bool execPcodeTrace = TRUE;
+Bool execPcodeTrace = FALSE;
+Bool memoryUsage = FALSE;
 
 /*
  * Print the contents of a hash entry
@@ -56,34 +73,78 @@ void hashWalkPrint(const String key, const String value)
 
 int main(int argc, char *argv[])
 {
-	progName = argv[0];
+	int longindex;
+	int optchar;
 	TALLOC_CTX *top;
 	ParseCtrlPtr_t parseCtrl;
 	pcodeHeaderPtr_t ph;
+	String fileName;
 	int res = 0;
+	
+	/* Set the program name */
+	progName=argv[0];
 
 
-	if(argc != 3){
-		fatal("Missing input parameters\n");
-		exit(-1);
-	}
 	
 	/* Allocate top context */
 	
 	top = talloc_new(NULL);
 	ASSERT_FAIL(top)
+
+		/* Parse the arguments. */
+	while((optchar=getopt_long(argc, argv, SHORT_OPTIONS, longOptions, &longindex)) != EOF) {
+		
+		/* Handle each argument. */
+		switch(optchar) {
+			
+			/* If it was an error, exit right here. */
+			case '?':
+				fatal("Optarg error");
+				exit(1);
+				
+			case 'a':
+				memoryUsage = execPcodeTrace = fullPcodeDump = TRUE;
+				break;
+		
+				
+			case 'm':
+				memoryUsage = TRUE;
+				break;
+				
+			case 't': /* Pcode Trace */
+				execPcodeTrace = TRUE;
+				break;
+				
+			case 'p': /* Pcode Dump */
+				fullPcodeDump = TRUE;
+				break;
+			
+			case 'f':
+				ASSERT_FAIL(fileName = talloc_strdup(top, optarg))
+				break;
+				
+			/* It was something weird.. */
+			default:
+				fatal("Unhandled getopt return value %d", optchar);
+		}
+
+	}
+	
+
+
+	
 	
 	/* Allocate pcode header */
 	ph = talloc_zero(top, pcodeHeader_t);
 	ASSERT_FAIL(ph)
 	
-	ph->dumpPcode = execPcodeTrace; /* Turn on exec P-code trace if enabled */
+
 	
 	/* Allocate parser control structure */
 		
 	parseCtrl = talloc_zero(top, ParseCtrl_t);
-	ASSERT_FAIL(top)
-	
+	ASSERT_FAIL(parseCtrl)
+
 	/* Add pointer to pcode header in parse control block */
 	parseCtrl->pcodeHeader = ph;
 	
@@ -92,35 +153,40 @@ int main(int argc, char *argv[])
 	ParserHashAddKeyValue(ph,"args", "current", "78.0");
 	ParserHashAddKeyValue(ph, "args", "units", "Fahrenheit");
 
-	
+
 	debug(DEBUG_EXPECTED,"***** Start Input hash contents *****");
 	ParserHashWalk(ph, "args", hashWalkPrint);
 	debug(DEBUG_EXPECTED,"***** End Input hash contents *****");
-			
+		
 	
-	ParserParseHCL(parseCtrl, (*argv[1] == 'f'), argv[2]);
+	ParserParseHCL(parseCtrl, TRUE, fileName);
+
 	
 	if(parseCtrl->failReason){
 		debug(DEBUG_UNEXPECTED,"Parse Error: %s", parseCtrl->failReason);	
 		res = -1;
 	}
-	
-	if(!res && fullPcodeDump){
+
+	if((!res) && (fullPcodeDump == TRUE)){
 		debug(DEBUG_EXPECTED,"***** Start P-code dump before execution *****");
 		ParserPcodeDumpList(ph);
 		debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");
 	}
+
 	
 	if(!res){
+		ph->tracePcode = execPcodeTrace;
 		if(ParserExecPcode(ph)){
 			ASSERT_FAIL(ph->failReason);
 			debug(DEBUG_UNEXPECTED,"Pcode error: %s", ph->failReason);
 		}
 	}
 
-	
-	talloc_report(top, stdout);
-	
+	if(memoryUsage == TRUE){
+		talloc_report(top, stdout);
+	}
+
+
 	talloc_free(top);
 	
 	exit(res);

@@ -51,6 +51,7 @@
 #include "parser.h"
 
 
+
 #define SHORT_OPTIONS "c:d:f:hi:l:ns:v"
 
 #define WS_SIZE 256
@@ -73,6 +74,8 @@ typedef struct cloverrides {
 	unsigned interface : 1;
 	unsigned sqlitefile : 1;
 } clOverride_t;
+
+
 
 
 char *progName;

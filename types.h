@@ -7,7 +7,7 @@
 
 /* Define common types */
 #ifndef COMMON_TYPES
-typedef char Bool;
+typedef int Bool;
 typedef char * String;
 #define COMMON_TYPES
 #endif

@@ -39,15 +39,15 @@ $(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h
 #Rules
 
 
-grammar.c:	grammar.y parse.h parser.h types.h defs.h
+grammar.c:	grammar.y parse.h parser.h types.h defs.h notify.h
 	$(ACC) grammar.y
 
-lex.c:	lex.l lex.h grammar.c grammar.y parse.h parser.h types.h defs.h
+lex.c:	lex.l lex.h grammar.c grammar.y parse.h parser.h types.h defs.h notify.h
 	$(LEX) -o lex.c lex.l
 	
-parser.o:	parser.c grammar.c lex.c lex.l grammar.y
+parser.o:	parser.c grammar.c lex.c lex.l grammar.y parser.h parse.h defs.h types.h notify.h 
 
-ptest: $(PTEST_OBJS)
+ptest: $(PTEST_OBJS) parser.h parse.h grammar.c lex.c defs.h types.h notify.h 
 	$(CC) $(CFLAGS) -o ptest $(PTEST_OBJS) $(LIBS)
 
 $(PACKAGE): $(PACKAGE_OBJS)

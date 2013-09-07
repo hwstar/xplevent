@@ -64,8 +64,12 @@ static ParseCtrlPtr_t parseCtrl; /* Not re-entrant because of this */
 
 static uint32_t hash(const String key)
 {
-	int len = strlen(key);
+	int len;
 	register uint32_t hash, i;
+	
+	ASSERT_FAIL(key)
+	
+	len = strlen(key);
 
 	if(!key)
 		return 0;
@@ -103,6 +107,8 @@ static void *parserMalloc(size_t size)
 
 static void parserFree(void *ctx)
 {
+	ASSERT_FAIL(ctx)
+	
 	talloc_free(ctx);
 }
 
@@ -114,6 +120,7 @@ static void printOpcode(pcodePtr_t p)
 {
 	String op ,data1, data2;
 	
+	ASSERT_FAIL(p)
 	
 	switch(p->opcode){
 		case OP_NOP:
@@ -163,7 +170,12 @@ static void printOpcode(pcodePtr_t p)
 
 static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
 {
-	String res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
+	String res;
+	
+	ASSERT_FAIL(ph)
+	ASSERT_FAIL(var)
+	
+	res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
 	ASSERT_FAIL(res);
 	ph->failReason = res;
 }
@@ -193,6 +205,7 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, Pa
 	ParseHashSTEPtr_t se,p;
 	
 	ASSERT_FAIL(ph)
+	ASSERT_FAIL(hashName)
 	
 	if(!ph->steHead){
 		return NULL; /* Empty symbol table */
@@ -225,6 +238,7 @@ void hashAppend(pcodeHeaderPtr_t ph, ParseHashSTEPtrPtr_t ptail, String name)
 {
 	ParseHashSTEPtr_t hNew;
 
+	ASSERT_FAIL(ph)
 	ASSERT_FAIL(ptail)
 	ASSERT_FAIL(name)
 		
@@ -261,7 +275,8 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 	pcodePtr_t pa;
 
 
-	ASSERT_FAIL(ph);
+	ASSERT_FAIL(ph)
+	ASSERT_FAIL(pi)
 	
 	ctx = talloc_new(ph);
 	ASSERT_FAIL(ctx)
@@ -294,7 +309,6 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 	}
 
 	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
-	
 			
 		/* Create xpl command message */
 		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
@@ -379,6 +393,9 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 	int res = PASS;
 	int done = FALSE;
 	int i,j,state, begin;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(tag)
 	
 	for(i = 0, j = 0, state = 0, begin = 0; !done; i++,j++){
 
@@ -578,12 +595,14 @@ void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
 	ParseHashSTEPtr_t h;
 	
 	ASSERT_FAIL(ph)
+	ASSERT_FAIL(name)
+	/* NULL function pointer is fatal */
+	ASSERT_FAIL(parseHashWalkCallback)
 
 	h = findHash(ph, name, NULL);
 	
 
-	/* NULL function pointer is fatal */
-	ASSERT_FAIL(parseHashWalkCallback)
+	
 		
 	for(ke = h->head; (ke); ke = ke->next){ /* Traverse key list */
 		ASSERT_FAIL(KE_MAGIC == ke->magic)
@@ -820,20 +839,22 @@ void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
  
 int ParserExecPcode(pcodeHeaderPtr_t ph)
 {
-	int res = PASS;
 	pcodePtr_t pe,p;
 	String value;
 	int leftNum, rightNum;
 	Bool testRes;
-	
+	int res = PASS;
+
 	ASSERT_FAIL(ph)
-	
 	ASSERT_FAIL(ph->head)
 	
 
 	/* Execution loop */
 	for(pe = ph->head;(pe) && (!ph->failReason); pe = pe->next){
-		printOpcode(pe); // DEBUG
+		/* Print instruction if trace enabled */
+		if(ph->tracePcode){
+			printOpcode(pe);
+		}
 
 		/* If not a push opcode reset first push location */
 		if(pe->opcode != OP_PUSH){
@@ -915,6 +936,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				break;
 				
 			case OP_FUNC:
+	
 				ParserExecFunction(ph, pe);
 				break;
 				
@@ -955,12 +977,7 @@ int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str)
 	
 	/* Initialize parser control variables */
 	
-	
-	/* Create an xplout context for the output variable */
-	/* This makes it easy to delete the hash and start over */
-	
-	ph->xplOutContext = talloc_new(ph);
-	ASSERT_FAIL(ph->xplOutContext)
+
 	
 	/* Allocate memory for parser */
 	pParser = ParseAlloc(parserMalloc);

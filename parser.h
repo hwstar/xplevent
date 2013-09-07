@@ -93,17 +93,12 @@ typedef struct pcheader_s {
 	pcodePtr_t head;
 	pcodePtr_t tail;
 	ParseHashSTEPtr_t steHead;
-	ParseHashKVPtr_t argsHead; // To be removed
-	ParseHashKVPtr_t xplOutHead; // To be removed
-	void *xplOutContext; // To be removed
-	argListEntryPtr_t argListHead; // To be removed
 	pcodePtr_t firstPush;
 	String failReason;
 	int ctrlStructRefCount;
 	int seq;
-	short pushCount;
-	Bool dumpPcode;
-	void *argListContext; // To be removed
+	int pushCount;
+	Bool tracePcode;
 	void *xplServicePtr;
 	
 } pcodeHeader_t;
