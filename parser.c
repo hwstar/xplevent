@@ -329,8 +329,9 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 
 	se = findHash(ph, hash, NULL);
 	ASSERT_FAIL(se)
+	/* Build xPL name value pairs from hash entries */
 	for(kvp = se->head; kvp; kvp = kvp->next){
-		
+		ASSERT_FAIL(se->magic == SE_MAGIC)
 		if(!ph->xplServicePtr){
 			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
 		}
@@ -779,7 +780,8 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 		debug(DEBUG_ACTION,"Set Jumps TOK_ELSE");
 		/* Now, go back in the pcode and find the prior close block instr */
 		for(; (p) ; p = p->prev){
-			ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC);
+			ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC)
+			ASSERT_FAIL(p->magic == PC_MAGIC)
 			if((p->ctrlStructRefCount == myCBRC) && (p->opcode == OP_BLOCK) && (p->operand == OPRB_END)){
 				p->skip = tail; /* Install jump over second block */
 				elseblock = p->next; /* Note the beginning of the else block */
@@ -851,6 +853,8 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 
 	/* Execution loop */
 	for(pe = ph->head;(pe) && (!ph->failReason); pe = pe->next){
+		ASSERT_FAIL(pe->magic == PC_MAGIC);
+		
 		/* Print instruction if trace enabled */
 		if(ph->tracePcode){
 			printOpcode(pe);
