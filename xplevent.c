@@ -52,7 +52,7 @@
 
 
 
-#define SHORT_OPTIONS "c:d:f:hi:l:ns:v"
+#define SHORT_OPTIONS "c:d:ef:hi:l:ns:v"
 
 #define WS_SIZE 256
 
@@ -81,6 +81,7 @@ typedef struct cloverrides {
 char *progName;
 int debugLvl = 0; 
 int NumRows = 0;
+Bool exitOnErr = FALSE;
 
 
 
@@ -110,6 +111,7 @@ static char sqliteFile[WS_SIZE] = DEF_SQLITE_FILE;
 static struct option longOptions[] = {
 	{"config-file", 1, 0, 'c'},
 	{"debug", 1, 0, 'd'},
+	{"exitonerr",0, 0, 'e'},
 	{"pid-file", 0, 0, 'f'},
 	{"help", 0, 0, 'h'},
 	{"interface", 1, 0, 'i'},
@@ -310,62 +312,66 @@ static void kvDump(const String key, const String value)
 	debug(DEBUG_EXPECTED, "Key = %s, Value = %s", key, value);
 }
 
-
 /*
- * We received a message we need to act on.
- * 
- * Parse the string passed in
+ * Parse and execute based on contents of trigger message
  */
-
-static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String hcl)
+ 
+static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
 {
+	ParseCtrlPtr_t parseCtrl;
+	xPL_NameValueListPtr msgBody;
+	String classType,sourceAddress; 
 	int i;
 	Bool res = PASS;
-	ParseCtrlPtr_t parseCtrl;
-	xPL_NameValueListPtr msgBody; 
-	pcodeHeaderPtr_t ph = NULL;
-	
-	
-	ASSERT_FAIL(triggerMessage)
-	ASSERT_FAIL(hcl)
-	
-	msgBody = xPL_getMessageBody(triggerMessage);
-	
 	
 	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
 
 	parseCtrl = talloc_zero(masterCTX, ParseCtrl_t);
 	ASSERT_FAIL(parseCtrl);
 	
-	/* Initialize pcode header */
-	
-	ph = talloc_zero(masterCTX, pcodeHeader_t);
-	ASSERT_FAIL(ph);
-	
 	/* Save pointer to pcode header in parse control block */
 	
 	parseCtrl->pcodeHeader = ph;
 	 
 	
-	/* Set the pointer to the service */
-	ph->xplServicePtr = xpleventService;
+	/* Initialize and fill %xplnvin */
+		
+	msgBody = xPL_getMessageBody(triggerMessage);
 	
-	
-	/* Initialize and fill %args */
 	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
 		if(!msgBody->namedValues[i]->isBinary){
-			ParserHashAddKeyValue(ph, "args", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
+			ParserHashAddKeyValue(ph, "xplnvin", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
 		}
 	}
 
-	debug(DEBUG_ACTION, "Args:");
+	debug(DEBUG_ACTION, "xplnvin:");
 	
-	ParserHashWalk(ph, "args", kvDump);
+	ParserHashWalk(ph, "xplnvin", kvDump);
+	
+	/* Initialize and fill %xplin */
+	
+	classType = talloc_asprintf(ph, "%s.%s", 
+	xPL_getSchemaClass(triggerMessage),
+	xPL_getSchemaType(triggerMessage));
+	ASSERT_FAIL(classType);
+	ParserHashAddKeyValue(ph, "xplin", "classtype", classType);
+	
+	sourceAddress= talloc_asprintf(ph,"%s-%s.%s",
+	xPL_getSourceVendor(triggerMessage),
+	xPL_getSourceInstanceID(triggerMessage),
+	xPL_getSourceDeviceID(triggerMessage));
+	ASSERT_FAIL(sourceAddress);
+	ParserHashAddKeyValue(ph, "xplin", "sourceaddress", sourceAddress);
+	
+	/* Parse user code */
 	
 	res = ParserParseHCL(parseCtrl, FALSE, hcl);
 	
 	if(parseCtrl->failReason){
 		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
+		if(exitOnErr){
+			exit(-1);
+		}
 	}
 	
 	talloc_free(parseCtrl);
@@ -373,41 +379,215 @@ static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String hcl)
 
 	debug(DEBUG_ACTION, "***Parsing complete***");
 	
+	/* Execute user code */
 	
 	if(res == PASS){
 		res = ParserExecPcode(ph);
 		if(res == FAIL){
 			debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
+			if(exitOnErr){
+				exit(-1);
+			}
 		}
 		
 	}
+	return res;
+}
+
+/*
+ * Execute a trigger script, and return the pcode header for further processing
+ */
+
+static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHeaderPtrPtr_t ph)
+{
+	Bool res;
+
+	ASSERT_FAIL(triggerMessage)
+	ASSERT_FAIL(script)
+	ASSERT_FAIL(ph);
+	
+	
+	/* Initialize pcode header */
+	
+	*ph = talloc_zero(masterCTX, pcodeHeader_t);
+	ASSERT_FAIL(*ph);
+	
+	/* Set the pointer to the service */
+	(*ph)->xplServicePtr = xpleventService;
+
+	res = parseAndExec(*ph, triggerMessage, script);
+		
+	return res;
+	
+}
+
+
+
+/*
+ * We received a message we need to act on.
+ * 
+ * Parse the string passed in
+ */
+
+static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
+{
+	Bool res;
+	pcodeHeaderPtr_t ph = NULL;
+
+	
+	
+	ASSERT_FAIL(triggerMessage)
+	ASSERT_FAIL(trigaction)
+	
+	
+	res = trigExec(triggerMessage, trigaction, &ph);
+	
 	talloc_free(ph);
 	
 	return res;
 	
 }
 
+
 /*
- * Trigger action callback
+ * fetchScript callback
  */
  
 
-static int trigactionSelect(void *objptr, int argc, String *argv, String *colnames)
+static int fetchScriptCallback(void *objptr, int argc, String *argv, String *colnames)
 {
-	String *ppAction = (String *) objptr;
+	String *ppScript = (String *) objptr;
 	
-	ASSERT_FAIL(ppAction)
+	ASSERT_FAIL(ppScript)
 	
 	ASSERT_FAIL(3 == argc)
 	
-	*ppAction = talloc_strdup(masterCTX, argv[2]);
+	*ppScript = talloc_strdup(masterCTX, argv[2]);
 	
-	ASSERT_FAIL(*ppAction);	
+	ASSERT_FAIL(*ppScript);	
 	
 	
 	return 0;
 }
 
+
+/*
+ * Fetch script from database
+ * 
+ * Return script as a talloc string
+ */
+
+static String fetchScript(const String scriptName)
+{
+	String errorMessage;
+	int errs = 0;
+	String buffer;
+	String script = NULL;
+	
+	
+	/* Transaction start */
+	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
+	if(errorMessage){
+		errs++;
+		debug(DEBUG_UNEXPECTED,"Sqlite error on fetchscript begin tx: %s", errorMessage);
+		sqlite3_free(errorMessage);
+	}
+
+	buffer = talloc_asprintf(masterCTX, "SELECT * FROM scripts WHERE scriptname='%s'", scriptName);
+	ASSERT_FAIL(buffer);
+	if(!errs){
+		sqlite3_exec(myDB, buffer, fetchScriptCallback, (void *) &script , &errorMessage);
+		if(errorMessage){
+			errs++;
+			debug(DEBUG_UNEXPECTED,"Sqlite select error on fetchscript select: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}
+	talloc_free(buffer);
+	
+	
+	if(!errs){
+		/* Transaction commit */	
+		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			errs++;
+			debug(DEBUG_UNEXPECTED,"Sqlite error on fetchsctipt commit : %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}
+	return script;		
+	
+}
+
+/*
+ * fetchScriptName callback
+ */
+ 
+
+static int fetchScriptNameCallback(void *objptr, int argc, String *argv, String *colnames)
+{
+	String *ppScriptName = (String *) objptr;
+	
+	ASSERT_FAIL(ppScriptName)
+	
+	ASSERT_FAIL(3 == argc)
+	
+	*ppScriptName = talloc_strdup(masterCTX, argv[2]);
+	
+	ASSERT_FAIL(*ppScriptName);	
+	
+	
+	return 0;
+}
+
+
+/*
+ * Fetch script name from database using source TAG
+ * 
+ * Return script name as talloc string
+ */
+
+static String fetchScriptName(const String source)
+{
+	String errorMessage;
+	int errs = 0;
+	String buffer;
+	String scriptName = NULL;
+	
+	
+	/* Transaction start */
+	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
+	if(errorMessage){
+		errs++;
+		debug(DEBUG_UNEXPECTED,"Sqlite error on fetchScriptName begin tx: %s", errorMessage);
+		sqlite3_free(errorMessage);
+	}
+
+	buffer = talloc_asprintf(masterCTX, "SELECT * FROM trigaction WHERE source='%s'", source);
+	ASSERT_FAIL(buffer);
+	if(!errs){
+		sqlite3_exec(myDB, buffer, fetchScriptNameCallback, (void *) &scriptName , &errorMessage);
+		if(errorMessage){
+			errs++;
+			debug(DEBUG_UNEXPECTED,"Sqlite select error on fetchScriptName select: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}
+	talloc_free(buffer);
+	
+	
+	if(!errs){
+		/* Transaction commit */	
+		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			errs++;
+			debug(DEBUG_UNEXPECTED,"Sqlite error on fetchScriptName commit : %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}
+	return scriptName;		
+	
+}
 
 
 /*
@@ -428,7 +608,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	const String device = xPL_getSourceDeviceID(theMessage);
 	const String instance_id = xPL_getSourceInstanceID(theMessage);
 	const xPL_NameValueListPtr msgBody = xPL_getMessageBody(theMessage);
-	String subaddress = NULL;
+	
 	String nvpairs;
 	const String schema_class = xPL_getSchemaClass(theMessage);
 	const String schema_type = xPL_getSchemaType(theMessage); 
@@ -436,7 +616,11 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	char source[96];
 	char schema[64];
 	String errorMessage;
-	String action = NULL;
+	String scriptName;
+	String ppScript;
+	String subAddress;
+	String script = NULL;
+	pcodeHeaderPtr_t ph;
 
 	
 	
@@ -459,25 +643,48 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	*nvpairs = 0; // Empty string
 	
 	
-
-
-	// Make combined schema string;
-	snprintf(schema, 63, "%s.%s", schema_class, schema_type);
-	debug(DEBUG_ACTION, "Schema: %s", schema);
+	ppScript = fetchScript("preprocess");
 	
-	// Test for sensor.basic
-	if(!strcmp(schema, "sensor.basic"))
-		subaddress = xPL_getMessageNamedValue(theMessage, "device");
+	if(!ppScript){
+		debug(DEBUG_EXPECTED,"Preprocess script not found, using canned subaddress generation");
+		// Make combined schema string;
+		snprintf(schema, 63, "%s.%s", schema_class, schema_type);
+		debug(DEBUG_ACTION, "Schema: %s", schema);
 	
-	// Test for hvac.zone or security.gateway
-	if((!strcmp(schema, "hvac.zone")) || (!strcmp(schema, "security.gateway")))
-		subaddress = xPL_getMessageNamedValue(theMessage, "zone");
+		// Test for sensor.basic
+		if(!strcmp(schema, "sensor.basic"))
+			subAddress = xPL_getMessageNamedValue(theMessage, "device");
 	
-	// Make source name with sub-address if available
-	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
-	if(subaddress){
-		snprintf(source + strlen(source), 31, ":%s", subaddress);
+		// Test for hvac.zone or security.gateway
+		if((!strcmp(schema, "hvac.zone")) || (!strcmp(schema, "security.gateway")))
+			subAddress = xPL_getMessageNamedValue(theMessage, "zone");
+	
+		// Make source name with sub-address if available
+		snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
+		if(subAddress){
+			snprintf(source + strlen(source), 31, ":%s", subAddress);
+		}	
 	}
+	else{
+		debug(DEBUG_EXPECTED,"Preprocess script found");
+		errs = trigExec(theMessage, ppScript, &ph);
+		if(!errs){
+			
+		}
+		/* See if subaddress is set in the result hash */
+		snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
+		subAddress = ParserHashGetValue(ph, "result", "subaddress");
+	
+		if(subAddress){
+			snprintf(source + strlen(source), 31, ":%s", subAddress);
+		}	
+		
+		/* Free script name and pcode */
+		talloc_free(ppScript);
+		talloc_free(ph);
+		
+	}
+	
 	
 	debug(DEBUG_EXPECTED,"Trigger message received from: %s", source);
 
@@ -485,40 +692,19 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	 * Check to see if this is a trigger message we need to act on
 	 */
 	 
-	/* Transaction start */
-	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		errs++;
-		debug(DEBUG_UNEXPECTED,"Sqlite error on trigaction: %s", errorMessage);
-		sqlite3_free(errorMessage);
-	}
-
-	snprintf(buffer, 127, "SELECT * FROM trigaction WHERE source='%s'", source);
-	if(!errs){
-		sqlite3_exec(myDB, buffer, trigactionSelect, (void *) &action , &errorMessage);
-		if(errorMessage){
-			errs++;
-			debug(DEBUG_UNEXPECTED,"Sqlite select error on trigaction: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
-  
+	scriptName = fetchScriptName(source);
 	
+	/* Fetch the script by name */
 	
-	if(!errs){
-		/* Transaction commit */	
-		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			errs++;
-			debug(DEBUG_UNEXPECTED,"Sqlite commit error on trigaction: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}	
-			
-	 
-	if((!errs) && action){
-		actOnXPLTrig(theMessage, action);
-		talloc_free(action);
+	if(scriptName){
+		script = fetchScript(scriptName);
+		talloc_free(scriptName);
+	}
+		
+	/* Execute the script if it exists */ 
+	if(script){
+		errs = actOnXPLTrig(theMessage, script);
+		talloc_free(script);
 	}
 	
 
@@ -666,6 +852,7 @@ void showHelp(void)
 	printf("  -c, --config-file PATH  Set the path to the config file\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
 	printf("                          compiled-in default is %d and the max\n", debugLvl);
+	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -f, --pid-file PATH     Set new pid file path, default is: %s\n", pidFile);
 	printf("  -h, --help              Shows this\n");
@@ -759,6 +946,10 @@ int main(int argc, char *argv[])
 					fatal("Invalid debug level");
 				}
 
+				break;
+				
+			case 'e':
+				exitOnErr = TRUE;
 				break;
 
 			/* Was it a pid file switch? */

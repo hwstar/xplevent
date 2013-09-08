@@ -151,6 +151,10 @@ static void printOpcode(pcodePtr_t p)
 			op = "Test";
 			break;
 			
+		case OP_EXISTS:
+			op = "Exists";
+			break;
+			
 
 		default:
 			op = "UNK";
@@ -303,10 +307,7 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 		ph->failReason = talloc_asprintf(ph, "Bad xPL Tag: %s", tag);
 		goto end;
 	}
-	if(strcmp("xplout", hash)){
-		ph->failReason = talloc_asprintf(ph, "Hash must be named xplout");
-		goto end;
-	}
+
 
 	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
 			
@@ -771,7 +772,7 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	/* Must be currently on a close block instr */
 	ASSERT_FAIL((tail->opcode == OP_BLOCK) && (tail->operand == OPRB_END))
 	
-	p = tail->prev;
+	p = tail;
 	
 	ASSERT_FAIL(p) /* Previous instruction must exist */
 
@@ -794,15 +795,17 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 		ASSERT_FAIL(elseblock)
 		
 	}
-	/* Look for test instruction */		
+	/* Look for test or exists instruction */		
 	for(; (p); p = p->prev){
 		ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC);
-		if((p->ctrlStructRefCount == myCBRC) && (p->opcode == OP_TEST)){
+		if((p->ctrlStructRefCount == myCBRC) && ((p->opcode == OP_TEST)||(p->opcode == OP_EXISTS))){
 			if(tokenID == TOK_IF){
-				debug(DEBUG_ACTION,"Set Jumps TOK_IF");
+				debug(DEBUG_ACTION,"Set Jumps TOK_IF, line = %d, seq = %d, CBRC = %d", p->lineNo, p->seq, p->ctrlStructRefCount);
+				ASSERT_FAIL(tail)
 				p->skip = tail; /* Note end of block for if test */	
 			}
 			else{
+				ASSERT_FAIL(elseblock)
 				p->skip = elseblock; /* Note start of else block for if-else */
 			}
 			break;	
@@ -955,10 +958,26 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				debug(DEBUG_ACTION, "Test result: %d", testRes);
 				if(!testRes){
 					debug(DEBUG_ACTION,"Test Skip");
+					ASSERT_FAIL(pe->skip);
 					pe = pe->skip;
 
 				}
 				break;
+				
+			case OP_EXISTS: /* Hash key exists */
+				ASSERT_FAIL(ph->pushCount == 1)
+				p = pe->prev;
+				if(ParserPcodeGetValue(ph, p, &value) == FAIL){
+					debug(DEBUG_ACTION,"Key does not exist");
+					ASSERT_FAIL(pe->skip);
+					pe = pe->skip; /* Not present */
+				}
+				else{
+					debug(DEBUG_ACTION,"Key exists");
+				}
+				
+				break;
+			
 				
 			case OP_FUNC:
 	

@@ -148,17 +148,16 @@ int main(int argc, char *argv[])
 	/* Add pointer to pcode header in parse control block */
 	parseCtrl->pcodeHeader = ph;
 	
-	/* Initialize the args hash with some test data */
-
-	ParserHashAddKeyValue(ph,"args", "current", "78.0");
-	ParserHashAddKeyValue(ph, "args", "units", "Fahrenheit");
-
-
-	debug(DEBUG_EXPECTED,"***** Start Input hash contents *****");
-	ParserHashWalk(ph, "args", hashWalkPrint);
-	debug(DEBUG_EXPECTED,"***** End Input hash contents *****");
-		
+	/* Initialize the xplin and xplnvin hashes with some test data */
 	
+	ParserHashAddKeyValue(ph,"xplin", "source", "hwstar-test.0");
+	ParserHashAddKeyValue(ph, "xplin", "classtype", "x10.advanced");
+
+	ParserHashAddKeyValue(ph,"xplnvin", "current", "78.0");
+	ParserHashAddKeyValue(ph, "xplnvin", "units", "Fahrenheit");
+	ParserHashAddKeyValue(ph, "xplnvin", "device", "0");
+
+
 	ParserParseHCL(parseCtrl, TRUE, fileName);
 
 	
@@ -172,6 +171,7 @@ int main(int argc, char *argv[])
 		ParserPcodeDumpList(ph);
 		debug(DEBUG_EXPECTED,"***** End P-code dump before execution *****");
 	}
+
 
 	
 	if(!res){

@@ -239,6 +239,16 @@ test ::= rvalue testop(A) hash .
 	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
 }
 
+/*
+* Array key exists test
+*/
+
+test ::= EXISTS OPAREN hash CPAREN .
+{
+	ParserPcodeEmit(parseCtrl, OP_EXISTS, 0, "test", "exists"); 
+}
+
+
 
 testop(A) ::= EQEQ . /* Numeric Equality */
 {

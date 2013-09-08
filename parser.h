@@ -7,7 +7,7 @@ OPRT_NUMGTREQTHAN, OPRT_NUMLESSEQTHAN, OPRT_STREQUALITY};
 enum {OPRB_BEGIN=0, OPRB_END=1};
 enum {EXS_NORMAL = 0, EXS_IF_BLOCK = 1, EXS_ELSE_BLOCK = 2, EXS_BLOCK_SKIP = 3};
 
-typedef enum {OP_NOP =0, OP_PUSH, OP_ASSIGN, OP_FUNC, OP_BLOCK, OP_IF, OP_TEST } opType_t;
+typedef enum {OP_NOP =0, OP_PUSH, OP_ASSIGN, OP_FUNC, OP_BLOCK, OP_IF, OP_TEST, OP_EXISTS } opType_t;
 
 
 typedef enum {ATYPE_STRING = 0, ATYPE_HASH = 1} argType_t;
@@ -105,6 +105,7 @@ typedef struct pcheader_s {
 } pcodeHeader_t;
 
 typedef pcodeHeader_t * pcodeHeaderPtr_t;
+typedef pcodeHeaderPtr_t * pcodeHeaderPtrPtr_t;
 	
 
 /* Parse Control Block */

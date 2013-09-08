@@ -72,6 +72,7 @@ comment		#.*\n
 "xplcmd"				{return (TOK_XPLCMD);}
 "if"					{return (TOK_IF);}
 "else"					{return (TOK_ELSE);}
+"exists"				{return (TOK_EXISTS);}
 
 {scalar}				{return (TOK_SCALAR);}
 {hash}					{return (TOK_HASH);}
