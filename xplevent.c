@@ -588,7 +588,7 @@ static String fetchScriptName(const String source)
  */
 
 
-static void checkTriggerMessage(xPL_MessagePtr theMessage)
+static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 {
 	
 	pcodeHeaderPtr_t ph;
@@ -662,6 +662,10 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage)
 		
 	}
 	
+	if(sourceDevice){ /* Store a copy of the source device tag if so requested */
+		*sourceDevice = talloc_strdup(masterCTX, source);
+		ASSERT_FAIL(*sourceDevice);
+	}
 	
 	debug(DEBUG_EXPECTED,"Trigger message received from: %s", source);
 
@@ -692,7 +696,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage)
  */
 
 
-static void logTriggerMessage(xPL_MessagePtr theMessage)
+static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 {
 	ASSERT_FAIL(theMessage);
 	
@@ -700,13 +704,16 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 	int numRows = 0;
 	unsigned nvInitSize = 512;
 	int i;
-	const xPL_NameValueListPtr msgBody = xPL_getMessageBody(theMessage);
-	char source[96];
-	char schema[64];
+	xPL_NameValueListPtr msgBody;
+	String schema;
 	String errorMessage;
 	String nvpairs;
 	String sql;
+	String schema_class, schema_type;
 	TALLOC_CTX *log;
+
+	ASSERT_FAIL(theMessage)
+	ASSERT_FAIL(sourceDevice);
 
 	/* Allocate a dedicated context off of master */
 	
@@ -717,6 +724,19 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 	nvpairs = talloc_array(log, char, nvInitSize);
 	ASSERT_FAIL(nvpairs)
 	*nvpairs = 0; /* Empty string */
+	
+	/* Grab xPL strings */
+	ASSERT_FAIL(theMessage);
+	msgBody = xPL_getMessageBody(theMessage);
+	ASSERT_FAIL(msgBody);
+	schema_class = xPL_getSchemaClass(theMessage);
+	ASSERT_FAIL(schema_class);
+	schema_type = xPL_getSchemaType(theMessage); 
+	ASSERT_FAIL(schema_type);
+	
+	/* Make combined schema/class */
+	schema = talloc_asprintf(log, "%s.%s", schema_class, schema_type);
+	ASSERT_FAIL(schema);
 	
 	/*
 	 * Update trigger log
@@ -760,7 +780,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 	}	
 
 	/* See if source is already in the table */
-	sql = talloc_asprintf(log, "SELECT * FROM triglog WHERE source='%s'", source); 
+	sql = talloc_asprintf(log, "SELECT * FROM triglog WHERE source='%s'", sourceDevice); 
 	ASSERT_FAIL(sql);
 	if(!errs){
 		sqlite3_exec(myDB, sql, countRows, &numRows, &errorMessage);
@@ -769,11 +789,10 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 			sqlite3_free(errorMessage);
 		}
 		talloc_free(sql);
-		sql = NULL;
 	
 		if(numRows){
 			// Delete any rows if they exist
-			sql = talloc_asprintf(log, "DELETE FROM triglog WHERE source='%s'", source);
+			sql = talloc_asprintf(log, "DELETE FROM triglog WHERE source='%s'", sourceDevice);
 			ASSERT_FAIL(sql);
 			sqlite3_exec(myDB, sql, countRows, NULL, &errorMessage);
 			if(errorMessage){
@@ -782,12 +801,11 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 				errs++;
 			}
 			talloc_free(sql);
-			sql = NULL;
 		}
 	}
 	if(!errs){
 		/* Insert new record */
-		sql = talloc_asprintf(log, "INSERT INTO triglog VALUES ('%s','%s','%s',DATETIME())", source, schema, nvpairs);
+		sql = talloc_asprintf(log, "INSERT INTO triglog VALUES ('%s','%s','%s',DATETIME())", sourceDevice, schema, nvpairs);
 		ASSERT_FAIL(sql);
 		sqlite3_exec(myDB, sql, countRows, NULL, &errorMessage);
 		if(errorMessage){
@@ -796,7 +814,6 @@ static void logTriggerMessage(xPL_MessagePtr theMessage)
 			errs++;
 		}
 		talloc_free(sql);
-		sql = NULL;
 	}			
 	if(!errs){
 		/* Transaction commit */	
@@ -833,9 +850,11 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 			logHeartBeatMessage(theMessage);
 		}
 		else if(mtype == xPL_MESSAGE_TRIGGER){
+			String sourceDevice;
 			// Process trigger message
-			checkTriggerMessage(theMessage);
-			logTriggerMessage(theMessage);
+			checkTriggerMessage(theMessage, &sourceDevice);
+			logTriggerMessage(theMessage, sourceDevice);
+			talloc_free(sourceDevice);
 		}
 	}
 }
