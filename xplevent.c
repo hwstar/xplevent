@@ -82,6 +82,7 @@ char *progName;
 int debugLvl = 0; 
 int NumRows = 0;
 Bool exitOnErr = FALSE;
+Bool exitRequest = FALSE;
 
 
 
@@ -198,14 +199,7 @@ static int pid_write(char *filename, pid_t pid) {
 
 static void shutdownHandler(int onSignal)
 {
-	xPL_setServiceEnabled(xpleventService, FALSE);
-	xPL_releaseService(xpleventService);
-	xPL_shutdown();
-	if(myDB)
-		sqlite3_close(myDB);
-	/* Unlink the pid file if we can. */
-	(void) unlink(pidFile);
-	exit(0);
+	exitRequest = TRUE;
 }
 
 
@@ -589,64 +583,47 @@ static String fetchScriptName(const String source)
 	
 }
 
-
 /*
- * Trigger message processor
+ * Trigger message check
  */
 
 
-static void processTriggerMessage(xPL_MessagePtr theMessage)
+static void checkTriggerMessage(xPL_MessagePtr theMessage)
 {
-	ASSERT_FAIL(theMessage);
 	
-	int errs = 0;
-	int numRows = 0;
-	unsigned bufInitSize = 32768;
-	unsigned nvInitSize = 512;
-	int i;
-	const String vendor = xPL_getSourceVendor(theMessage);
-	const String device = xPL_getSourceDeviceID(theMessage);
-	const String instance_id = xPL_getSourceInstanceID(theMessage);
-	const xPL_NameValueListPtr msgBody = xPL_getMessageBody(theMessage);
-	
-	String nvpairs;
-	const String schema_class = xPL_getSchemaClass(theMessage);
-	const String schema_type = xPL_getSchemaType(theMessage); 
-	String buffer;
-	char source[96];
-	char schema[64];
-	String errorMessage;
+	pcodeHeaderPtr_t ph;
+	String vendor;
+	String device;
+	String instance_id;
+	String schema_class;
+	String schema_type; 
 	String scriptName;
-	String ppScript;
+	String pScript;
 	String subAddress;
 	String script = NULL;
-	pcodeHeaderPtr_t ph;
+	char source[96];
+	char schema[64];
+	int errs = 0;
 
+	ASSERT_FAIL(theMessage);
 	
-	
+	vendor = xPL_getSourceVendor(theMessage);
+	device = xPL_getSourceDeviceID(theMessage);
+	instance_id = xPL_getSourceInstanceID(theMessage);
+	schema_class = xPL_getSchemaClass(theMessage);
+	schema_type = xPL_getSchemaType(theMessage); 
 
-	
-
-	// Test for valid schema
+	/* Test for valid schema */
 	if(!schema_class || !schema_type){
 		debug(DEBUG_UNEXPECTED, "logTriggerMessage: Bad or missing schema");
 		return;
 	}
-	// Allocate buffer
-	buffer = talloc_array(masterCTX, char, bufInitSize);
-	ASSERT_FAIL(buffer)
-	*buffer = 0; // Empty string	
+
+	/* Get any preprocessing script */
+	pScript = fetchScript("preprocess");
 	
-	// Allocate space for nvpairs
-	nvpairs = talloc_array(masterCTX, char, nvInitSize);
-	ASSERT_FAIL(nvpairs)
-	*nvpairs = 0; // Empty string
-	
-	
-	ppScript = fetchScript("preprocess");
-	
-	if(!ppScript){
-		debug(DEBUG_EXPECTED,"Preprocess script not found, using canned subaddress generation");
+	if(!pScript){
+		debug(DEBUG_EXPECTED,"Preprocess script not found, using canned subaddress handling");
 		// Make combined schema string;
 		snprintf(schema, 63, "%s.%s", schema_class, schema_type);
 		debug(DEBUG_ACTION, "Schema: %s", schema);
@@ -667,7 +644,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	}
 	else{
 		debug(DEBUG_EXPECTED,"Preprocess script found");
-		errs = trigExec(theMessage, ppScript, &ph);
+		errs = trigExec(theMessage, pScript, &ph);
 		if(!errs){
 			
 		}
@@ -679,8 +656,8 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 			snprintf(source + strlen(source), 31, ":%s", subAddress);
 		}	
 		
-		/* Free script name and pcode */
-		talloc_free(ppScript);
+		/* Free script and pcode */
+		talloc_free(pScript);
 		talloc_free(ph);
 		
 	}
@@ -706,21 +683,53 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 		errs = actOnXPLTrig(theMessage, script);
 		talloc_free(script);
 	}
-	
+			
+}
 
+
+/*
+ * Trigger message logging
+ */
+
+
+static void logTriggerMessage(xPL_MessagePtr theMessage)
+{
+	ASSERT_FAIL(theMessage);
+	
+	int errs = 0;
+	int numRows = 0;
+	unsigned nvInitSize = 512;
+	int i;
+	const xPL_NameValueListPtr msgBody = xPL_getMessageBody(theMessage);
+	char source[96];
+	char schema[64];
+	String errorMessage;
+	String nvpairs;
+	String sql;
+	TALLOC_CTX *log;
+
+	/* Allocate a dedicated context off of master */
+	
+	log = talloc_new(masterCTX);
+	ASSERT_FAIL(log);
+
+	/* Allocate space for nvpairs */
+	nvpairs = talloc_array(log, char, nvInitSize);
+	ASSERT_FAIL(nvpairs)
+	*nvpairs = 0; /* Empty string */
 	
 	/*
 	 * Update trigger log
 	 */
 	 
-	errs = 0;
 	 
-	// Build name/value pair list
+	/* Build name/value pair list */
 	if(msgBody){
 		for(i = 0; i < msgBody-> namedValueCount; i++){
 			if(!msgBody->namedValues[i]->isBinary){
-				if(i)
+				if(i){
 					snprintf(nvpairs + strlen(nvpairs), 2, ","); 
+				}
 				snprintf(nvpairs + strlen(nvpairs), 32, "%s=%s",
 				msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
 				if(strlen(nvpairs) > nvInitSize - 128){
@@ -728,7 +737,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 					// Double the buffer size
 					nvInitSize <<= 1;
 					// Re-allocate the buffer
-					nvpairs = talloc_realloc(masterCTX, nvpairs, char, nvInitSize);
+					nvpairs = talloc_realloc(log, nvpairs, char, nvInitSize);
 					ASSERT_FAIL(nvpairs);
 				}
 			}
@@ -739,9 +748,10 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 	}
 	else{
 		debug(DEBUG_UNEXPECTED, "Missing message body");
+		nvpairs[0] = 0;
 	}
 	
-	// Transaction start
+	/* Transaction start */
 	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
 	if(errorMessage){
 		errs++;
@@ -749,39 +759,47 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 		sqlite3_free(errorMessage);
 	}	
 
-	// See if source is already in the table
-
-	snprintf(buffer, 127, "SELECT * FROM triglog WHERE source='%s'", source);
+	/* See if source is already in the table */
+	sql = talloc_asprintf(log, "SELECT * FROM triglog WHERE source='%s'", source); 
+	ASSERT_FAIL(sql);
 	if(!errs){
-		sqlite3_exec(myDB, buffer, countRows, &numRows, &errorMessage);
+		sqlite3_exec(myDB, sql, countRows, &numRows, &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite select error on triglog: %s", errorMessage);
 			sqlite3_free(errorMessage);
 		}
-		
+		talloc_free(sql);
+		sql = NULL;
+	
 		if(numRows){
 			// Delete any rows if they exist
-			snprintf(buffer, 127,"DELETE FROM triglog WHERE source='%s'", source);
-			sqlite3_exec(myDB, buffer, countRows, NULL, &errorMessage);
+			sql = talloc_asprintf(log, "DELETE FROM triglog WHERE source='%s'", source);
+			ASSERT_FAIL(sql);
+			sqlite3_exec(myDB, sql, countRows, NULL, &errorMessage);
 			if(errorMessage){
 				debug(DEBUG_UNEXPECTED,"Sqlite delete error on triglog: %s", errorMessage);
 				sqlite3_free(errorMessage);
 				errs++;
 			}
+			talloc_free(sql);
+			sql = NULL;
 		}
 	}
 	if(!errs){
-		// Insert new record
-		snprintf(buffer, 32767, "INSERT INTO triglog VALUES ('%s','%s','%s',DATETIME())", source, schema, nvpairs);
-		sqlite3_exec(myDB, buffer, countRows, NULL, &errorMessage);
+		/* Insert new record */
+		sql = talloc_asprintf(log, "INSERT INTO triglog VALUES ('%s','%s','%s',DATETIME())", source, schema, nvpairs);
+		ASSERT_FAIL(sql);
+		sqlite3_exec(myDB, sql, countRows, NULL, &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite insert error on triglog: %s", errorMessage);
 			sqlite3_free(errorMessage);
 			errs++;
 		}
+		talloc_free(sql);
+		sql = NULL;
 	}			
 	if(!errs){
-		// Transaction commit	
+		/* Transaction commit */	
 		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite commit error on triglog: %s", errorMessage);
@@ -796,12 +814,7 @@ static void processTriggerMessage(xPL_MessagePtr theMessage)
 		}
 	}
 	
-
-	
-	if(nvpairs)
-		talloc_free(nvpairs); // Free name-value pairs buffer
-	if(buffer)
-		talloc_free(buffer);
+	talloc_free(log);
 }
 
 /*
@@ -821,7 +834,8 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 		}
 		else if(mtype == xPL_MESSAGE_TRIGGER){
 			// Process trigger message
-			processTriggerMessage(theMessage);
+			checkTriggerMessage(theMessage);
+			logTriggerMessage(theMessage);
 		}
 	}
 }
@@ -835,7 +849,22 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 
 static void tickHandler(int userVal, xPL_ObjectPtr obj)
 {
-
+	
+	/* Terminate if requested to do so */
+	if(exitRequest){
+		xPL_setServiceEnabled(xpleventService, FALSE);
+		xPL_releaseService(xpleventService);
+		xPL_shutdown();
+		if(myDB){
+			sqlite3_close(myDB);
+		}
+		/* Unlink the pid file if we can. */
+		(void) unlink(pidFile);
+		if(masterCTX){
+			talloc_free(masterCTX);
+		}
+		exit(0);
+	}
 }
 
 /*
