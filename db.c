@@ -10,7 +10,7 @@
 
 typedef struct callbackData_s {
 	TALLOC_CTX *ctx;
-	String colName;
+	String valueName;
 	String res;
 } callbackData_t;
 	
@@ -79,7 +79,7 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
 	/* Find index to column */
 	
 	for(i = 0; colnames[i]; i++){
-		if(!strcmp(colnames[i], cbd->colName)){
+		if(!strcmp(colnames[i], cbd->valueName)){
 			break;
 		}
 	}
@@ -97,7 +97,8 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
  * Result must be talloc_free'd when no longer required
  */
 
-static const String dbReadField(TALLOC_CTX *ctx, String id, void *db, String table, String colName, String key)
+static const String dbReadField(TALLOC_CTX *ctx, String id, void *db, String table, 
+String colName, String key, String valueName)
 {
 	String errorMessage;
 	String sql;
@@ -107,8 +108,9 @@ static const String dbReadField(TALLOC_CTX *ctx, String id, void *db, String tab
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(colName)
 	ASSERT_FAIL(key)
+	ASSERT_FAIL(valueName)
 	
-	cbd.colName = colName;
+	cbd.valueName = valueName;
 	cbd.res = NULL;
 	cbd.ctx = ctx;
 	
@@ -213,7 +215,7 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 		return NULL;
 	}
 		
-	p = dbReadField(ctx, id, db, "nvstate", "value", key);
+	p = dbReadField(ctx, id, db, "nvstate", "key", key, "value");
 
 
 	/* Transaction commit */
@@ -248,7 +250,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	
 
 
-	p = dbReadField(ctx, id, db, "nvstate", "value", key);
+	p = dbReadField(ctx, id, db, "nvstate", "key", key, "value");
 	if(p){
 		res = dbDeleteRow(ctx, id, db, "nvstate", "key",  key);
 	}
@@ -278,3 +280,55 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	return res;
 	
 }
+
+/*
+* Fetch a script from the script table
+*/
+
+
+static String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
+{
+	String errorMessage;
+	String script = NULL;
+	static const String id = "DBFetchScript";
+	
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(scriptName)
+
+	if(dbTxBegin(id) == FAIL){
+		return NULL;
+	}
+	
+	script = dbReadField(ctx, id, db, "scripts", "scriptname", key, "script");
+	
+	dbTxEnd(id, PASS);
+	
+	return script;
+}
+
+/*
+* Fetch script name given trigger tag/subaddress
+*/
+
+static String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
+{
+	String errorMessage;
+	String script = NULL;
+	static const String id = "DBFetchScriptName";
+	
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(scriptName)
+
+	if(dbTxBegin(id) == FAIL){
+		return NULL;
+	}
+	
+	script = dbReadField(ctx, id, db, "trigaction", "source", key, "scriptname");
+	
+	dbTxEnd(id, PASS);
+	
+	return script;
+}
+	
+
+
