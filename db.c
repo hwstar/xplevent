@@ -169,10 +169,12 @@ void *DBOpen(String sqlitefile)
 	/* Open Database File */
 	if(!access(sqliteFile, R_OK | W_OK)){
 		if((rc = sqlite3_open_v2(sqliteFile, &db, SQLITE_OPEN_READWRITE, NULL))){
+			debug(DEBUG_UNEXPECTED,"Sqlite file open error on file: %s", sqlitefile);
 			return NULL;
 		}
 	}
 	else{
+		debug(DEBUG_UNEXPECTED,"Sqlite file access error on file: %s", sqlitefile);
 		return NULL;
 	}
 	return (void *) db;
