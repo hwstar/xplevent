@@ -163,20 +163,20 @@ static Bool dbDeleteRow(TALLOC_CTX *ctx, String id, void *db, String table, Stri
 * Open the database
 */
 
-void *DBOpen(String sqlitefile)
+void *DBOpen(String file)
 {
 	sqlite3 *db;
 	
-	ASSERT_FAIL(sqlitefile)
+	ASSERT_FAIL(file)
 	/* Open Database File */
-	if(!access(sqliteFile, R_OK | W_OK)){
-		if((rc = sqlite3_open_v2(sqliteFile, &db, SQLITE_OPEN_READWRITE, NULL))){
-			debug(DEBUG_UNEXPECTED,"Sqlite file open error on file: %s", sqlitefile);
+	if(!access(file, R_OK | W_OK)){
+		if((rc = sqlite3_open_v2(file, &db, SQLITE_OPEN_READWRITE, NULL))){
+			debug(DEBUG_UNEXPECTED,"Sqlite file open error on file: %s", file);
 			return NULL;
 		}
 	}
 	else{
-		debug(DEBUG_UNEXPECTED,"Sqlite file access error on file: %s", sqlitefile);
+		debug(DEBUG_UNEXPECTED,"Sqlite file access error on file: %s", file);
 		return NULL;
 	}
 	return (void *) db;
