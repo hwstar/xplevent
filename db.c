@@ -86,9 +86,32 @@ static const String dbReadField(TALLOC_CTX *ctx, void *db, String table, String 
  * Delete a row from a table
  */
  
-static Bool dbDeleteRow(TALLOC_CTX *ctx, void *db, String table, String key)
+static Bool dbDeleteRow(TALLOC_CTX *ctx, void *db, String table, String colName, String key)
 {
-	return PASS;
+	String sql;
+	String errorMessage;
+	Bool res = PASS;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(table)
+	ASSERT_FAIL(colName)
+	ASSERT_FAIL(key)
+	
+	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s='%s'", table, colName, key);
+	ASSERT_FAIL(sql)
+	
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+
+	if(errorMessage){
+		debug(DEBUG_UNEXPECTED,"Sqlite select error on dbDeleteRow DELETE: %s", errorMessage);
+		sqlite3_free(errorMessage);
+		res = FAIL;
+	}
+	
+	talloc_free(sql);
+	
+	return res;
 }
 
 /*
@@ -143,7 +166,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 	p = dbReadField(ctx, db, "nvstate", "value", key);
 	if(p){
-		res = dbDeleteRow(ctx, db, "nvstate", key);
+		res = dbDeleteRow(ctx, db, "nvstate", "value",  key);
 	}
 	
 
