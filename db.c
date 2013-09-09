@@ -299,7 +299,7 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 		return NULL;
 	}
 	
-	script = dbReadField(ctx, id, db, "scripts", "scriptname", key, "script");
+	script = dbReadField(ctx, id, db, "scripts", "scriptname", scriptName, "script");
 	
 	dbTxEnd(id, PASS);
 	
@@ -313,21 +313,21 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
 {
 	String errorMessage;
-	String script = NULL;
+	String scriptName = NULL;
 	static const String id = "DBFetchScriptName";
 	
 	ASSERT_FAIL(db)
-	ASSERT_FAIL(scriptName)
+	ASSERT_FAIL(tagSubAddr)
 
 	if(dbTxBegin(id) == FAIL){
 		return NULL;
 	}
 	
-	script = dbReadField(ctx, id, db, "trigaction", "source", key, "scriptname");
+	scriptName = dbReadField(ctx, id, db, "trigaction", "source", tagSubAddr, "scriptname");
 	
 	dbTxEnd(id, PASS);
 	
-	return script;
+	return scriptName;
 }
 	
 
