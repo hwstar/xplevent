@@ -97,7 +97,7 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
  * Result must be talloc_free'd when no longer required
  */
 
-static const String dbReadField(TALLOC_CTX *ctx, void *db, String table, String colName, String key)
+static const String dbReadField(TALLOC_CTX *ctx, String id, void *db, String table, String colName, String key)
 {
 	String errorMessage;
 	String sql;
@@ -116,7 +116,7 @@ static const String dbReadField(TALLOC_CTX *ctx, void *db, String table, String 
 	ASSERT_FAIL(sql);
 	sqlite3_exec(db, sql, dbReadFieldCallback, (void *) &cbd , &errorMessage);
 	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite select error on dbReadField select: %s", errorMessage);
+		debug(DEBUG_UNEXPECTED,"Sqlite select error on %s select: %s", id, errorMessage);
 		sqlite3_free(errorMessage);
 	}
 
@@ -130,13 +130,13 @@ static const String dbReadField(TALLOC_CTX *ctx, void *db, String table, String 
  * Delete a row from a table
  */
  
-static Bool dbDeleteRow(TALLOC_CTX *ctx, void *db, String table, String colName, String key)
+static Bool dbDeleteRow(TALLOC_CTX *ctx, String id, void *db, String table, String colName, String key)
 {
 	String sql;
 	String errorMessage;
 	Bool res = PASS;
 	
-
+	ASSERT_FAIL(id);
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(colName)
 	ASSERT_FAIL(key)
@@ -147,7 +147,7 @@ static Bool dbDeleteRow(TALLOC_CTX *ctx, void *db, String table, String colName,
 	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 
 	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite select error on dbDeleteRow DELETE: %s", errorMessage);
+		debug(DEBUG_UNEXPECTED,"Sqlite DELETE error on %s: %s", id, errorMessage);
 		sqlite3_free(errorMessage);
 		res = FAIL;
 	}
@@ -167,22 +167,23 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 
 	String errorMessage;
 	String p;
+	static const String id = "DBReadNVState";
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(key)
 		
 	/* Transaction start */
-	if(dbTxBegin("DBReadNVState") != PASS){
+	if(dbTxBegin(id) != PASS){
 		return NULL;
 	}
 		
-	p = dbReadField(ctx, db, "nvstate", "value", key);
+	p = dbReadField(ctx, id, db, "nvstate", "value", key);
 
 
 	/* Transaction commit */
 	
-	dbTxEnd(PASS, "DBReadNVState");
+	dbTxEnd(PASS, id);
 
 	return p;
 }
@@ -194,6 +195,7 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String value)
 {
 	Bool res = PASS;
+	static const String id = "DBWriteNVState";
 	String errorMessage;
 	String sql;
 	String p;
@@ -205,15 +207,15 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin("DBWriteNVState") != PASS){
+	if(dbTxBegin(id) != PASS){
 		return FAIL;
 	}
 	
 
 
-	p = dbReadField(ctx, db, "nvstate", "value", key);
+	p = dbReadField(ctx, id, db, "nvstate", "value", key);
 	if(p){
-		res = dbDeleteRow(ctx, db, "nvstate", "key",  key);
+		res = dbDeleteRow(ctx, id, db, "nvstate", "key",  key);
 	}
 	
 	if(res == PASS){
@@ -225,7 +227,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite insert error on DBWriteNVState: %s", errorMessage);
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
 			sqlite3_free(errorMessage);
 			res = FAIL;
 		}
@@ -236,7 +238,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 	/* Transaction end */
 	
-	dbTxEnd(res, "DBWriteNVState");
+	dbTxEnd(res, id);
 
 	return res;
 	
