@@ -18,6 +18,52 @@ typedef callbackData_t * callbackDataPtr_t;
 
 
 /*
+* Transaction begin
+*/
+
+static Bool dbTxBegin(String id)
+{
+	String errorMessage;
+	
+	/* Transaction start */
+	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
+	if(errorMessage){
+		debug(DEBUG_UNEXPECTED,"Sqlite error on %s begin tx: %s", id, errorMessage);
+		sqlite3_free(errorMessage);
+		return FAIL;
+	}
+	return PASS;
+}
+
+/*
+* Transaction end
+*/
+
+static void dbTxEnd(Bool res, String id)
+{
+	String errorMessage;
+	
+	/* Transaction commit */
+	if(res == PASS){
+		sqlite3_exec(db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite error on %s commit : %s", id, errorMessage);
+			sqlite3_free(errorMessage);
+			return;
+		}
+	}
+	else{
+		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite rollback error on %s: %s", id, errorMessage);
+			sqlite3_free(errorMessage);
+			return;
+		}
+	}
+}
+
+
+/*
  * DBReadField callback function
  */
 
@@ -127,23 +173,17 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 	ASSERT_FAIL(key)
 		
 	/* Transaction start */
-	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite error on DBReadNVState begin tx: %s", errorMessage);
-		sqlite3_free(errorMessage);
+	if(dbTxBegin("DBReadNVState") != PASS){
 		return NULL;
 	}
-
+		
 	p = dbReadField(ctx, db, "nvstate", "value", key);
 
-	
 
-	/* Transaction commit */	
-	sqlite3_exec(db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite error on DBReadNVState commit : %s", errorMessage);
-		sqlite3_free(errorMessage);
-	}
+	/* Transaction commit */
+	
+	dbTxEnd(PASS, "DBReadNVState");
+
 	return p;
 }
 
@@ -163,51 +203,41 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	ASSERT_FAIL(key)
 	ASSERT_FAIL(value)
 		
-	/* Transaction start */
-	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite error on DBWriteNVState begin tx: %s", errorMessage);
-		sqlite3_free(errorMessage);
+	/* Transaction begin */
+	
+	if(dbTxBegin("DBWriteNVState") != PASS){
 		return FAIL;
 	}
+	
+
 
 	p = dbReadField(ctx, db, "nvstate", "value", key);
 	if(p){
 		res = dbDeleteRow(ctx, db, "nvstate", "key",  key);
 	}
 	
-	sql = talloc_asprinf(ctx, "INSERT INTO %s (key,value,date) VALUES ('%s','%s',DATETIME()),
-	"nvstate", key, value");
+	if(res == PASS){
+		sql = talloc_asprinf(ctx, "INSERT INTO %s (key,value,date) VALUES ('%s','%s',DATETIME()),
+		"nvstate", key, value");
 	
-	ASSERT_FAIL(sql)
+		ASSERT_FAIL(sql)
 	
-	sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
 	
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite insert error on DBWriteNVState: %s", errorMessage);
-		sqlite3_free(errorMessage);
-		res = FAIL;
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite insert error on DBWriteNVState: %s", errorMessage);
+			sqlite3_free(errorMessage);
+			res = FAIL;
+		}
 	}
 	
 	
 	talloc_free(sql);
 
-	/* Transaction commit */
-	if(res == PASS){
-		sqlite3_exec(db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite error on DBWriteNVState commit : %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
-	else{
-		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite rollback error on DBWriteNVState: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}	
+	/* Transaction end */
 	
+	dbTxEnd(res, "DBWriteNVState");
+
 	return res;
 	
 }
