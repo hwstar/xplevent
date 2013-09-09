@@ -101,6 +101,7 @@ typedef struct pcheader_s {
 	int pushCount;
 	Bool tracePcode;
 	void *xplServicePtr;
+	void *sqliteDB;
 	
 } pcodeHeader_t;
 
@@ -122,8 +123,8 @@ typedef ParseCtrl_t * ParseCtrlPtr_t;
 
 int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String *device, String *instance);
 void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value));
-Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const String key, const String value);
-const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, const String key);
+Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key, const String value);
+const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key);
 void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi);
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2);
 void ParserPcodeDumpList(pcodeHeaderPtr_t ph);

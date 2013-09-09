@@ -40,6 +40,7 @@
 #include "parser.h"
 #include "parse.h"
 #include "lex.h"
+#include "db.h"
 
 /* Definitions */
 
@@ -475,30 +476,40 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 
 
 /*
- * Get a value from the hash
+ * Get a value from the hash.
  */
 
-const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, const String key)
+const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key)
 {
 	unsigned kh;
+	String s;
 	ParseHashSTEPtr_t h;
 	ParseHashKVPtr_t ke;
 
-	ASSERT_FAIL(ph && hashName && key)
+	ASSERT_FAIL(ctx && ph && hashName && key)
 	
-	h = findHash(ph, hashName, NULL);
-	if(!h)
-		return NULL;
-		
-	/* Hash the section string passed in */
-	kh = hash(key);
-	for(ke = h->head; (ke); ke = ke->next){ /* Traverse key list */
-		ASSERT_FAIL(KE_MAGIC == ke->magic)
-		/* Compare hashes, and if they match, compare strings */
-		if((kh == ke->hash) && (!strcmp(ke->key, key)))
-			return ke->value;
+	if((ph->sqliteDB) && (!strcmp(hashName, "nvstate"))){
+		/* nvstate database hash */
+		return DBReadNVState(ctx, ph->sqliteDB, key);
 	}
-	return NULL; /* No match found */
+	else{ /* In memory hash */
+		h = findHash(ph, hashName, NULL);
+		if(!h)
+			return NULL;
+		
+		/* Hash the section string passed in */
+		kh = hash(key);
+		for(ke = h->head; (ke); ke = ke->next){ /* Traverse key list */
+			ASSERT_FAIL(KE_MAGIC == ke->magic)
+			/* Compare hashes, and if they match, compare strings */
+			if((kh == ke->hash) && (!strcmp(ke->key, key))){
+				s = talloc_strdup(ctx, ke->value);
+				ASSERT_FAIL(s)
+				return s;
+			}
+		}
+		return NULL; /* No match found */
+	}
 }
 
 /*
@@ -507,7 +518,7 @@ const String ParserHashGetValue(pcodeHeaderPtr_t ph, const String hashName, cons
  * Add hash to the symbol table if it does not already exist.
  */
  
-Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
+Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
 {
 	ParseHashSTEPtr_t h;
 	ParseHashKVPtr_t ke, keNew, kePrev;
@@ -515,76 +526,82 @@ Bool ParserHashAddKeyValue(pcodeHeaderPtr_t ph, const String hashName, const Str
 
 	ASSERT_FAIL(ph && hashName && key && value)
 	
-	/* Attempt to find the hash in the symbol table */
+	if((ph->sqliteDB) && (!strcmp(hashName, "nvstate"))){
+		/* nvstate database hash */
+		return DBWriteNVState(ctx, ph->sqliteDB, key, value);
+	}
+	else{	/* In memory hash */	
+		/* Attempt to find the hash in the symbol table */
+		
+		if(ph->steHead){ /* If symbol table isn't empty */
+			if(!findHash(ph, hashName, &h)){
+				debug(DEBUG_ACTION, "Creating hash: %s in symbol table", hashName);
+				hashAppend(ph, &h->next, hashName); /* Was not found, add it to the symbol table */
+				h = h->next;
+				ASSERT_FAIL(h)
+				h->context = talloc_new(h);
+				ASSERT_FAIL(h->context);
+			}
 	
-	if(ph->steHead){ /* If symbol table isn't empty */
-		if(!findHash(ph, hashName, &h)){
-			debug(DEBUG_ACTION, "Creating hash: %s in symbol table", hashName);
-			hashAppend(ph, &h->next, hashName); /* Was not found, add it to the symbol table */
-			h = h->next;
-			ASSERT_FAIL(h)
+		
+		}
+		else{ /* Empty symbol table */
+			debug(DEBUG_ACTION, "Creating first hash: %s in empty symbol table", hashName);
+			hashAppend(ph, &ph->steHead, hashName);
+			h = ph->steHead;
 			h->context = talloc_new(h);
 			ASSERT_FAIL(h->context);
 		}
-
-	
-	}
-	else{ /* Empty symbol table */
-		debug(DEBUG_ACTION, "Creating first hash: %s in empty symbol table", hashName);
-		hashAppend(ph, &ph->steHead, hashName);
-		h = ph->steHead;
-		h->context = talloc_new(h);
-		ASSERT_FAIL(h->context);
-	}
-	
-
 		
-	/* Initialize a new key list entry */
-	 
-	keNew = talloc_zero(h->context, ParseHashKV_t);
-	ASSERT_FAIL(keNew)
-	keNew->magic = KE_MAGIC;
-	keNew->key = talloc_strdup(keNew, key);
-	ASSERT_FAIL(keNew->key)
-	keNew->value = talloc_strdup(keNew, value);
-	ASSERT_FAIL(keNew->value);
-	keNew->hash = hash(key);
-
-	/* add the key/value to the hash, replacing any existing identical key */
 	
-	if(!h->head){
-		/* First entry */
-		debug(DEBUG_ACTION, "First entry in hash %s is: %s", h->name, key);
-		h->head = keNew;
-	}
-	else{
-		for(ke = h->head, kePrev = NULL; (ke); ke = ke->next){ /* Traverse key list */
-			ASSERT_FAIL(KE_MAGIC == ke->magic);
-			/* Compare hashes, and if they match, compare strings */
-			if((keNew->hash == ke->hash) && (!strcmp(ke->key, key))){
-				/* Key already exists, need to replace it */
-				keNew->next = ke->next;
-				if(!kePrev){
-					debug(DEBUG_ACTION, "Replacing first entry in hash %s: %s", h->name, key);
-					h->head = keNew; /* Change first entry */
-				}
-				else{
-					debug(DEBUG_ACTION, "Replacing other than the first entry in hash %s: %s", h->name, key);
-					kePrev->next = keNew; /* Change subsequent entry */
-				}	
-				talloc_free(ke); /* Free the old entry and its strings */
-				break;
-			}
-			else if(!ke->next){
-				debug(DEBUG_ACTION, "Appending entry to end of hash %s: %s", h->name, key);
-				/* At end of list, need to append it */
-				ke->next = keNew;
-				break;	
-			}
-			kePrev = ke;	
+			
+		/* Initialize a new key list entry */
+		 
+		keNew = talloc_zero(h->context, ParseHashKV_t);
+		ASSERT_FAIL(keNew)
+		keNew->magic = KE_MAGIC;
+		keNew->key = talloc_strdup(keNew, key);
+		ASSERT_FAIL(keNew->key)
+		keNew->value = talloc_strdup(keNew, value);
+		ASSERT_FAIL(keNew->value);
+		keNew->hash = hash(key);
+	
+		/* add the key/value to the hash, replacing any existing identical key */
+		
+		if(!h->head){
+			/* First entry */
+			debug(DEBUG_ACTION, "First entry in hash %s is: %s", h->name, key);
+			h->head = keNew;
 		}
-	}
-	return PASS;	
+		else{
+			for(ke = h->head, kePrev = NULL; (ke); ke = ke->next){ /* Traverse key list */
+				ASSERT_FAIL(KE_MAGIC == ke->magic);
+				/* Compare hashes, and if they match, compare strings */
+				if((keNew->hash == ke->hash) && (!strcmp(ke->key, key))){
+					/* Key already exists, need to replace it */
+					keNew->next = ke->next;
+					if(!kePrev){
+						debug(DEBUG_ACTION, "Replacing first entry in hash %s: %s", h->name, key);
+						h->head = keNew; /* Change first entry */
+					}
+					else{
+						debug(DEBUG_ACTION, "Replacing other than the first entry in hash %s: %s", h->name, key);
+						kePrev->next = keNew; /* Change subsequent entry */
+					}	
+					talloc_free(ke); /* Free the old entry and its strings */
+					break;
+				}
+				else if(!ke->next){
+					debug(DEBUG_ACTION, "Appending entry to end of hash %s: %s", h->name, key);
+					/* At end of list, need to append it */
+					ke->next = keNew;
+					break;	
+				}
+				kePrev = ke;	
+			}
+		}
+		return PASS;
+	}	
 }
 
 /*
@@ -637,7 +654,7 @@ Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
 			break;
 			
 		case OPRD_HASHKV:  /* Assoc array key/value */
-			value = ParserHashGetValue(ph, instr->data1, instr->data2);
+			value = ParserHashGetValue(ph, ph, instr->data1, instr->data2);
 			break;
 			
 		case OPRD_HASHREF: /* Hash reference */
@@ -670,7 +687,7 @@ Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
 	}
 	
 
-	return ParserHashAddKeyValue(ph, instr->data1, instr->data2, value);
+	return ParserHashAddKeyValue(ph, ph, instr->data1, instr->data2, value);
 }
 
 /*

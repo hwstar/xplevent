@@ -334,7 +334,7 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	
 	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
 		if(!msgBody->namedValues[i]->isBinary){
-			ParserHashAddKeyValue(ph, "xplnvin", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
+			ParserHashAddKeyValue(ph, ph, "xplnvin", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
 		}
 	}
 
@@ -348,14 +348,14 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	xPL_getSchemaClass(triggerMessage),
 	xPL_getSchemaType(triggerMessage));
 	ASSERT_FAIL(classType);
-	ParserHashAddKeyValue(ph, "xplin", "classtype", classType);
+	ParserHashAddKeyValue(ph, ph, "xplin", "classtype", classType);
 	
 	sourceAddress= talloc_asprintf(ph,"%s-%s.%s",
 	xPL_getSourceVendor(triggerMessage),
 	xPL_getSourceInstanceID(triggerMessage),
 	xPL_getSourceDeviceID(triggerMessage));
 	ASSERT_FAIL(sourceAddress);
-	ParserHashAddKeyValue(ph, "xplin", "sourceaddress", sourceAddress);
+	ParserHashAddKeyValue(ph, ph, "xplin", "sourceaddress", sourceAddress);
 	
 	/* Parse user code */
 	
@@ -650,7 +650,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 		}
 		/* See if subaddress is set in the result hash */
 		snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
-		subAddress = ParserHashGetValue(ph, "result", "subaddress");
+		subAddress = ParserHashGetValue(ph, ph, "result", "subaddress");
 	
 		if(subAddress){
 			snprintf(source + strlen(source), 31, ":%s", subAddress);

@@ -150,12 +150,12 @@ int main(int argc, char *argv[])
 	
 	/* Initialize the xplin and xplnvin hashes with some test data */
 	
-	ParserHashAddKeyValue(ph,"xplin", "source", "hwstar-test.0");
-	ParserHashAddKeyValue(ph, "xplin", "classtype", "x10.advanced");
+	ParserHashAddKeyValue(ph, ph,"xplin", "source", "hwstar-test.0");
+	ParserHashAddKeyValue(ph, ph, "xplin", "classtype", "x10.advanced");
 
-	ParserHashAddKeyValue(ph,"xplnvin", "current", "78.0");
-	ParserHashAddKeyValue(ph, "xplnvin", "units", "Fahrenheit");
-	ParserHashAddKeyValue(ph, "xplnvin", "device", "0");
+	ParserHashAddKeyValue(ph, ph,"xplnvin", "current", "78.0");
+	ParserHashAddKeyValue(ph, ph, "xplnvin", "units", "Fahrenheit");
+	ParserHashAddKeyValue(ph, ph, "xplnvin", "device", "0");
 
 
 	ParserParseHCL(parseCtrl, TRUE, fileName);
