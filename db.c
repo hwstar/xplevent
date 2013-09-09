@@ -26,7 +26,7 @@ static Bool dbTxBegin(String id)
 	String errorMessage;
 	
 	/* Transaction start */
-	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
+	sqlite3_exec((sqlite3 *) db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
 	if(errorMessage){
 		debug(DEBUG_UNEXPECTED,"Sqlite error on %s begin tx: %s", id, errorMessage);
 		sqlite3_free(errorMessage);
@@ -45,7 +45,7 @@ static void dbTxEnd(Bool res, String id)
 	
 	/* Transaction commit */
 	if(res == PASS){
-		sqlite3_exec(db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
+		sqlite3_exec((sqlite3 *)db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite error on %s commit : %s", id, errorMessage);
 			sqlite3_free(errorMessage);
@@ -53,7 +53,7 @@ static void dbTxEnd(Bool res, String id)
 		}
 	}
 	else{
-		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
+		sqlite3_exec((sqlite3 *) db, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite rollback error on %s: %s", id, errorMessage);
 			sqlite3_free(errorMessage);
@@ -114,7 +114,7 @@ static const String dbReadField(TALLOC_CTX *ctx, String id, void *db, String tab
 	
 	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s='%s'", table, colName, key);
 	ASSERT_FAIL(sql);
-	sqlite3_exec(db, sql, dbReadFieldCallback, (void *) &cbd , &errorMessage);
+	sqlite3_exec((sqlite3 *) db, sql, dbReadFieldCallback, (void *) &cbd , &errorMessage);
 	if(errorMessage){
 		debug(DEBUG_UNEXPECTED,"Sqlite select error on %s select: %s", id, errorMessage);
 		sqlite3_free(errorMessage);
@@ -144,7 +144,7 @@ static Bool dbDeleteRow(TALLOC_CTX *ctx, String id, void *db, String table, Stri
 	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s='%s'", table, colName, key);
 	ASSERT_FAIL(sql)
 	
-	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	sqlite3_exec((sqlite3 *) db, sql, NULL, NULL, &errorMessage);
 
 	if(errorMessage){
 		debug(DEBUG_UNEXPECTED,"Sqlite DELETE error on %s: %s", id, errorMessage);
@@ -156,6 +156,39 @@ static Bool dbDeleteRow(TALLOC_CTX *ctx, String id, void *db, String table, Stri
 	
 	return res;
 }
+
+/*
+* Open the database
+*/
+
+void *DBOpen(String sqlitefile)
+{
+	sqlite3 *db;
+	
+	ASSERT_FAIL(sqlitefile)
+	/* Open Database File */
+	if(!access(sqliteFile, R_OK | W_OK)){
+		if((rc = sqlite3_open_v2(sqliteFile, &db, SQLITE_OPEN_READWRITE, NULL))){
+			return NULL;
+		}
+	}
+	else{
+		return NULL;
+	}
+	return (void *) db;
+}
+
+
+/* 
+* Close the database
+*/
+
+void DBClose(void *db)
+{
+	ASSERT_FAIL(db)
+	sqlite3_close((sqlite3 *) db);
+}
+
 
 /*
 * Read a value from the nvstate table
