@@ -58,8 +58,6 @@ static const String dbReadField(TALLOC_CTX *ctx, void *db, String table, String 
 	callbackData_t cbd;
 	
 	
-	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(colName)
 	ASSERT_FAIL(key)
@@ -92,8 +90,7 @@ static Bool dbDeleteRow(TALLOC_CTX *ctx, void *db, String table, String colName,
 	String errorMessage;
 	Bool res = PASS;
 	
-	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(colName)
 	ASSERT_FAIL(key)
@@ -124,6 +121,10 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 
 	String errorMessage;
 	String p;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(key)
 		
 	/* Transaction start */
 	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
@@ -154,7 +155,13 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 {
 	Bool res = PASS;
 	String errorMessage;
+	String sql;
 	String p;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(key)
+	ASSERT_FAIL(value)
 		
 	/* Transaction start */
 	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
@@ -166,9 +173,24 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 	p = dbReadField(ctx, db, "nvstate", "value", key);
 	if(p){
-		res = dbDeleteRow(ctx, db, "nvstate", "value",  key);
+		res = dbDeleteRow(ctx, db, "nvstate", "key",  key);
 	}
 	
+	sql = talloc_asprinf(ctx, "INSERT INTO %s (key,value,date) VALUES ('%s','%s',DATETIME()),
+	"nvstate", key, value");
+	
+	ASSERT_FAIL(sql)
+	
+	sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
+	
+	if(errorMessage){
+		debug(DEBUG_UNEXPECTED,"Sqlite insert error on DBWriteNVState: %s", errorMessage);
+		sqlite3_free(errorMessage);
+		res = FAIL;
+	}
+	
+	
+	talloc_free(sql);
 
 	/* Transaction commit */
 	if(res == PASS){
@@ -178,6 +200,14 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 			sqlite3_free(errorMessage);
 		}
 	}
+	else{
+		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite rollback error on DBWriteNVState: %s", errorMessage);
+			sqlite3_free(errorMessage);
+		}
+	}	
+	
 	return res;
 	
 }
