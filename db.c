@@ -219,7 +219,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprinf(ctx, "INSERT INTO %s (key,value,date) VALUES ('%s','%s',DATETIME()),
+		sql = talloc_asprinf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s',DATETIME()),
 		"nvstate", key, value");
 	
 		ASSERT_FAIL(sql)
