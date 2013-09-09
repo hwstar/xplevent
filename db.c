@@ -329,6 +329,65 @@ const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAdd
 	
 	return scriptName;
 }
+
+
+/*
+* Update the trigger log
+*/
+
+Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const String nvpairs)
+{
+	Bool res = PASS;
+	static const String id = "DBUpdateTrigLog";
+	String errorMessage;
+	String sql;
+	String p;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(key)
+	ASSERT_FAIL(value)
+		
+	/* Transaction begin */
+	
+	if(dbTxBegin(id) != PASS){
+		return FAIL;
+	}
+	
+
+
+	p = dbReadField(ctx, id, db, "triglog", "source", source, "nvpairs");
+	if(p){
+		res = dbDeleteRow(ctx, id, db, "triglog", "source", source);
+	}
+	
+	if(res == PASS){
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,nvpairs,timestamp) VALUES ('%s','%s',DATETIME())",
+		"triglog", source, nvpairs");
+	
+		ASSERT_FAIL(sql)
+	
+		sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
+	
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			sqlite3_free(errorMessage);
+			res = FAIL;
+		}
+	}
+	
+	
+	talloc_free(sql);
+
+	/* Transaction end */
+	
+	dbTxEnd(res, id);
+
+	return res;
+	
+}
+
+
 	
 
 
