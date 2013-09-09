@@ -286,7 +286,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 */
 
 
-static String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
+const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 {
 	String errorMessage;
 	String script = NULL;
@@ -310,7 +310,7 @@ static String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 * Fetch script name given trigger tag/subaddress
 */
 
-static String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
+const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
 {
 	String errorMessage;
 	String script = NULL;
