@@ -373,6 +373,8 @@ String ParserMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
 	ASSERT_FAIL(newCtx)
 	ASSERT_FAIL(oldStr)
 	
+	ASSERT_FAIL(strlen(oldStr) <= offset)
+	
 	if((newStr = talloc_strdup(newCtx, oldStr + offset))){
 		talloc_free(oldStr);
 	}
