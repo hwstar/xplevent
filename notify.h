@@ -41,6 +41,9 @@ void fatal_with_reason(int error, const String message, ...);
 /* Fatal error handler. */
 void fatal(const String message, ...);
 
+/* Assertion failure handler */
+void assertion_failure(const String file, int line);
+
 /* Debugging handler. */
 void debug(int level, const String message, ...);
 
