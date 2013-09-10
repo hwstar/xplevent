@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sqlite3.h>
 #include <talloc.h>
 #include  "defs.h"
@@ -21,7 +22,7 @@ typedef callbackData_t * callbackDataPtr_t;
 * Transaction begin
 */
 
-static Bool dbTxBegin(String id)
+static Bool dbTxBegin(void *db, String id)
 {
 	String errorMessage;
 	
@@ -39,12 +40,12 @@ static Bool dbTxBegin(String id)
 * Transaction end
 */
 
-static void dbTxEnd(Bool res, String id)
+static void dbTxEnd(void *db, String id, Bool type)
 {
 	String errorMessage;
 	
 	/* Transaction commit */
-	if(res == PASS){
+	if(type == PASS){
 		sqlite3_exec((sqlite3 *)db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite error on %s commit : %s", id, errorMessage);
@@ -74,7 +75,7 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
 	
 	ASSERT_FAIL(objptr)
 	ASSERT_FAIL(cbd->ctx)
-	ASSERT_FAIL(cbd->colName)
+	ASSERT_FAIL(cbd->valueName)
 	
 	/* Find index to column */
 	
@@ -97,7 +98,7 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
  * Result must be talloc_free'd when no longer required
  */
 
-static const String dbReadField(TALLOC_CTX *ctx, String id, void *db, String table, 
+static const String dbReadField(void *db, TALLOC_CTX *ctx, String id, String table, 
 String colName, String key, String valueName)
 {
 	String errorMessage;
@@ -132,7 +133,7 @@ String colName, String key, String valueName)
  * Delete a row from a table
  */
  
-static Bool dbDeleteRow(TALLOC_CTX *ctx, String id, void *db, String table, String colName, String key)
+static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, String id, String table, String colName, String key)
 {
 	String sql;
 	String errorMessage;
@@ -170,7 +171,7 @@ void *DBOpen(String file)
 	ASSERT_FAIL(file)
 	/* Open Database File */
 	if(!access(file, R_OK | W_OK)){
-		if((rc = sqlite3_open_v2(file, &db, SQLITE_OPEN_READWRITE, NULL))){
+		if((sqlite3_open_v2(file, &db, SQLITE_OPEN_READWRITE, NULL))){
 			debug(DEBUG_UNEXPECTED,"Sqlite file open error on file: %s", file);
 			return NULL;
 		}
@@ -202,7 +203,7 @@ void DBClose(void *db)
 const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 {
 
-	String errorMessage;
+
 	String p;
 	static const String id = "DBReadNVState";
 	
@@ -211,16 +212,16 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 	ASSERT_FAIL(key)
 		
 	/* Transaction start */
-	if(dbTxBegin(id) != PASS){
+	if(dbTxBegin(db, id) != PASS){
 		return NULL;
 	}
 		
-	p = dbReadField(ctx, id, db, "nvstate", "key", key, "value");
+	p = dbReadField(db, ctx, id, "nvstate", "key", key, "value");
 
 
 	/* Transaction commit */
 	
-	dbTxEnd(PASS, id);
+	dbTxEnd(db, id, PASS);
 
 	return p;
 }
@@ -232,8 +233,8 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String value)
 {
 	Bool res = PASS;
-	static const String id = "DBWriteNVState";
 	String errorMessage;
+	static const String id = "DBWriteNVState";
 	String sql;
 	String p;
 	
@@ -244,24 +245,25 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(id) != PASS){
+	if(dbTxBegin(db, id) != PASS){
 		return FAIL;
 	}
 	
 
 
-	p = dbReadField(ctx, id, db, "nvstate", "key", key, "value");
+	p = dbReadField(db, ctx, id, "nvstate", "key", key, "value");
 	if(p){
-		res = dbDeleteRow(ctx, id, db, "nvstate", "key",  key);
+		talloc_free(p);
+		res = dbDeleteRow(db, ctx, id, "nvstate", "key",  key);
 	}
 	
 	if(res == PASS){
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s',DATETIME())",
-		"nvstate", key, value");
+		"nvstate", key, value);
 	
 		ASSERT_FAIL(sql)
 	
-		sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
@@ -275,7 +277,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 	/* Transaction end */
 	
-	dbTxEnd(res, id);
+	dbTxEnd(db, id, res);
 
 	return res;
 	
@@ -288,20 +290,20 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 {
-	String errorMessage;
+
 	String script = NULL;
 	static const String id = "DBFetchScript";
 	
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(scriptName)
 
-	if(dbTxBegin(id) == FAIL){
+	if(dbTxBegin(db, id) == FAIL){
 		return NULL;
 	}
 	
-	script = dbReadField(ctx, id, db, "scripts", "scriptname", scriptName, "script");
+	script = dbReadField(db, ctx, id, "scripts", "scriptname", scriptName, "scriptcode");
 	
-	dbTxEnd(id, PASS);
+	dbTxEnd(db, id, PASS);
 	
 	return script;
 }
@@ -312,20 +314,20 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 
 const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
 {
-	String errorMessage;
+
 	String scriptName = NULL;
 	static const String id = "DBFetchScriptName";
 	
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(tagSubAddr)
 
-	if(dbTxBegin(id) == FAIL){
+	if(dbTxBegin(db, id) == FAIL){
 		return NULL;
 	}
 	
-	scriptName = dbReadField(ctx, id, db, "trigaction", "source", tagSubAddr, "scriptname");
+	scriptName = dbReadField(db, ctx, id, "trigaction", "source", tagSubAddr, "action");
 	
-	dbTxEnd(id, PASS);
+	dbTxEnd(db, id, PASS);
 	
 	return scriptName;
 }
@@ -335,39 +337,41 @@ const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAdd
 * Update the trigger log
 */
 
-Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const String nvpairs)
+Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const String schema, const String nvpairs)
 {
 	Bool res = PASS;
-	static const String id = "DBUpdateTrigLog";
 	String errorMessage;
+	static const String id = "DBUpdateTrigLog";
 	String sql;
 	String p;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
-	ASSERT_FAIL(key)
-	ASSERT_FAIL(value)
+	ASSERT_FAIL(source)
+	ASSERT_FAIL(schema)
+	ASSERT_FAIL(nvpairs)
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(id) != PASS){
+	if(dbTxBegin(db, id) != PASS){
 		return FAIL;
 	}
 	
 
 
-	p = dbReadField(ctx, id, db, "triglog", "source", source, "nvpairs");
+	p = dbReadField(db, ctx, id, "triglog", "source", source, "nvpairs");
 	if(p){
-		res = dbDeleteRow(ctx, id, db, "triglog", "source", source);
+		talloc_free(p);
+		res = dbDeleteRow(db, ctx, id, "triglog", "source", source);
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,nvpairs,timestamp) VALUES ('%s','%s',DATETIME())",
-		"triglog", source, nvpairs");
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s',DATETIME())",
+		"triglog", source, schema, nvpairs);
 	
 		ASSERT_FAIL(sql)
 	
-		sqlite3_exec(myDB, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
@@ -381,12 +385,66 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 
 	/* Transaction end */
 	
-	dbTxEnd(res, id);
+	dbTxEnd(db, id, res);
 
 	return res;
 	
 }
 
+/*
+* Update the heartbeat log
+*/
+
+Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
+{
+	Bool res = PASS;
+	String errorMessage;
+	static const String id = "DBUpdateTrigLog";
+	String sql;
+	String p;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(source)
+
+		
+	/* Transaction begin */
+	
+	if(dbTxBegin(db, id) != PASS){
+		return FAIL;
+	}
+	
+	p = dbReadField(db, ctx, id, "hbeatlog", "source", source, "source");
+	if(p){
+		talloc_free(p);
+		res = dbDeleteRow(db, ctx, id, "hbeatlog", "source", source);
+	}
+	
+	if(res == PASS){
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s',DATETIME())",
+		"hbeatlog", source);
+	
+		ASSERT_FAIL(sql)
+	
+		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			sqlite3_free(errorMessage);
+			res = FAIL;
+		}
+	}
+	
+	
+	talloc_free(sql);
+
+	/* Transaction end */
+	
+	dbTxEnd(db, id, res);
+
+	return res;
+	
+}
 
 	
 

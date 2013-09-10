@@ -49,6 +49,7 @@
 #include "notify.h"
 #include "confread.h"
 #include "parser.h"
+#include "db.h"
 
 
 
@@ -59,7 +60,7 @@
 
 #define DEF_CONFIG_FILE		"./xplevent.conf"
 #define DEF_PID_FILE		"./xplevent.pid"
-#define DEF_SQLITE_FILE		"./xplevent.sqlite3"
+#define DEF_DB_FILE		"./xplevent.sqlite3"
 
 #define DEF_INTERFACE		"eth1"
 
@@ -72,7 +73,7 @@ typedef struct cloverrides {
 	unsigned instance_id : 1;
 	unsigned log_path : 1;
 	unsigned interface : 1;
-	unsigned sqlitefile : 1;
+	unsigned dbfile : 1;
 } clOverride_t;
 
 
@@ -96,14 +97,14 @@ static xPL_ServicePtr xpleventService = NULL;
 static xPL_MessagePtr xpleventTriggerMessage = NULL;
 static ConfigEntryPtr_t	configEntry = NULL;
 
-static sqlite3 *myDB = NULL;
+static void *myDB = NULL;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
 static char interface[WS_SIZE] = DEF_INTERFACE;
 static char logPath[WS_SIZE] = "";
 static char instanceID[WS_SIZE] = DEF_INSTANCE_ID;
 static char pidFile[WS_SIZE] = DEF_PID_FILE;
-static char sqliteFile[WS_SIZE] = DEF_SQLITE_FILE;
+static char dbFile[WS_SIZE] = DEF_DB_FILE;
 
 
 
@@ -118,7 +119,7 @@ static struct option longOptions[] = {
 	{"interface", 1, 0, 'i'},
 	{"log", 1, 0, 'l'},
 	{"no-background", 0, 0, 'n'},	
-	{"sqlite-file", 1, 0, 'o'},
+	{"db-file", 1, 0, 'o'},
 	{"instance", 1, 0, 's'},
 	{"version", 0, 0, 'v'},
 	{0, 0, 0, 0}
@@ -204,19 +205,6 @@ static void shutdownHandler(int onSignal)
 
 
 
-
-/*
- * Select Callback for counting rows
- */
- 
-static int countRows(void *objptr, int argc, String *argv, String *colnames )
-{
-	if(objptr)
-		(*((int *) objptr))++;
-	return 0;
-}
-
-
 /*
  * Heartbeat logger
  */
@@ -224,74 +212,22 @@ static int countRows(void *objptr, int argc, String *argv, String *colnames )
 
 static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 {
-	int errs = 0;
-	int numRows = 0;
+
+	TALLOC_CTX *log;
 	const String vendor = xPL_getSourceVendor(theMessage);
 	const String device = xPL_getSourceDeviceID(theMessage);
 	const String instance_id = xPL_getSourceInstanceID(theMessage);
-	char buffer[128];
+
 	char source[64];
-	String errorMessage;
 	
-	// Setup
+	/* Setup */
+	ASSERT_FAIL(log = talloc_new(masterCTX))
+	
 	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
 	debug(DEBUG_EXPECTED,"Heartbeat status message received: vendor = %s, device = %s, instance_id = %s",
 	vendor, device, instance_id);
-	
-	// Transaction start
-	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		errs++;
-		debug(DEBUG_UNEXPECTED,"Sqlite error: %s", errorMessage);
-		sqlite3_free(errorMessage);
-	}	
-
-	// See if source is already in the table
-
-	snprintf(buffer, 127, "SELECT * FROM hbeatlog WHERE source='%s'", source);
-	if(!errs){
-		sqlite3_exec(myDB, buffer, countRows, &numRows, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite select error on hbeatlog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-		
-		if(numRows){
-			// Delete any rows if they exist
-			snprintf(buffer, 127,"DELETE FROM hbeatlog WHERE source='%s'", source);
-			sqlite3_exec(myDB, buffer, countRows, NULL, &errorMessage);
-			if(errorMessage){
-				debug(DEBUG_UNEXPECTED,"Sqlite delete error on hbeatlog: %s", errorMessage);
-				sqlite3_free(errorMessage);
-				errs++;
-			}
-		}
-	}
-	if(!errs){
-		// Insert new record
-		snprintf(buffer, 127, "INSERT INTO hbeatlog VALUES ('%s',DATETIME())", source);
-		sqlite3_exec(myDB, buffer, countRows, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite insert error on hbeatlog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-			errs++;
-		}
-	}			
-	if(!errs){
-		// Transaction commit	
-		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite commit error on hbeatlog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}	
-	}
-	else{
-		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite rollback error hbeatlog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}		
+	DBUpdateHeartbeatLog(log, myDB, source);
+	talloc_free(log);
 }
 
 /*
@@ -444,146 +380,6 @@ static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
 
 
 /*
- * fetchScript callback
- */
- 
-
-static int fetchScriptCallback(void *objptr, int argc, String *argv, String *colnames)
-{
-	String *ppScript = (String *) objptr;
-	
-	ASSERT_FAIL(ppScript)
-	
-	ASSERT_FAIL(3 == argc)
-	
-	*ppScript = talloc_strdup(masterCTX, argv[2]);
-	
-	ASSERT_FAIL(*ppScript);	
-	
-	
-	return 0;
-}
-
-
-/*
- * Fetch script from database
- * 
- * Return script as a talloc string
- */
-
-static String fetchScript(const String scriptName)
-{
-	String errorMessage;
-	int errs = 0;
-	String buffer;
-	String script = NULL;
-	
-	
-	/* Transaction start */
-	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		errs++;
-		debug(DEBUG_UNEXPECTED,"Sqlite error on fetchscript begin tx: %s", errorMessage);
-		sqlite3_free(errorMessage);
-	}
-
-	buffer = talloc_asprintf(masterCTX, "SELECT * FROM scripts WHERE scriptname='%s'", scriptName);
-	ASSERT_FAIL(buffer);
-	if(!errs){
-		sqlite3_exec(myDB, buffer, fetchScriptCallback, (void *) &script , &errorMessage);
-		if(errorMessage){
-			errs++;
-			debug(DEBUG_UNEXPECTED,"Sqlite select error on fetchscript select: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
-	talloc_free(buffer);
-	
-	
-	if(!errs){
-		/* Transaction commit */	
-		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			errs++;
-			debug(DEBUG_UNEXPECTED,"Sqlite error on fetchsctipt commit : %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
-	return script;		
-	
-}
-
-/*
- * fetchScriptName callback
- */
- 
-
-static int fetchScriptNameCallback(void *objptr, int argc, String *argv, String *colnames)
-{
-	String *ppScriptName = (String *) objptr;
-	
-	ASSERT_FAIL(ppScriptName)
-	
-	ASSERT_FAIL(3 == argc)
-	
-	*ppScriptName = talloc_strdup(masterCTX, argv[2]);
-	
-	ASSERT_FAIL(*ppScriptName);	
-	
-	
-	return 0;
-}
-
-
-/*
- * Fetch script name from database using source TAG
- * 
- * Return script name as talloc string
- */
-
-static String fetchScriptName(const String source)
-{
-	String errorMessage;
-	int errs = 0;
-	String buffer;
-	String scriptName = NULL;
-	
-	
-	/* Transaction start */
-	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		errs++;
-		debug(DEBUG_UNEXPECTED,"Sqlite error on fetchScriptName begin tx: %s", errorMessage);
-		sqlite3_free(errorMessage);
-	}
-
-	buffer = talloc_asprintf(masterCTX, "SELECT * FROM trigaction WHERE source='%s'", source);
-	ASSERT_FAIL(buffer);
-	if(!errs){
-		sqlite3_exec(myDB, buffer, fetchScriptNameCallback, (void *) &scriptName , &errorMessage);
-		if(errorMessage){
-			errs++;
-			debug(DEBUG_UNEXPECTED,"Sqlite select error on fetchScriptName select: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
-	talloc_free(buffer);
-	
-	
-	if(!errs){
-		/* Transaction commit */	
-		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			errs++;
-			debug(DEBUG_UNEXPECTED,"Sqlite error on fetchScriptName commit : %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
-	return scriptName;		
-	
-}
-
-/*
  * Trigger message check
  */
 
@@ -601,6 +397,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	String pScript;
 	String subAddress;
 	String script = NULL;
+	TALLOC_CTX *ctx;
 	char source[96];
 	char schema[64];
 	int errs = 0;
@@ -618,9 +415,12 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 		debug(DEBUG_UNEXPECTED, "logTriggerMessage: Bad or missing schema");
 		return;
 	}
+	
+	ASSERT_FAIL(ctx = talloc_new(masterCTX))
+	
 
 	/* Get any preprocessing script */
-	pScript = fetchScript("preprocess");
+	pScript = DBFetchScript(ctx, myDB, "preprocess");
 	
 	if(!pScript){
 		debug(DEBUG_EXPECTED,"Preprocess script not found, using canned subaddress handling");
@@ -673,20 +473,19 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	 * Check to see if this is a trigger message we need to act on
 	 */
 	 
-	scriptName = fetchScriptName(source);
+	scriptName = DBFetchScriptName(ctx, myDB, source);
 	
 	/* Fetch the script by name */
 	
 	if(scriptName){
-		script = fetchScript(scriptName);
-		talloc_free(scriptName);
+		script = DBFetchScript(ctx, myDB, scriptName);
 	}
 		
 	/* Execute the script if it exists */ 
 	if(script){
 		errs = actOnXPLTrig(theMessage, script);
-		talloc_free(script);
 	}
+	talloc_free(ctx);
 			
 }
 
@@ -700,15 +499,11 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 {
 	ASSERT_FAIL(theMessage);
 	
-	int errs = 0;
-	int numRows = 0;
 	unsigned nvInitSize = 512;
 	int i;
 	xPL_NameValueListPtr msgBody;
 	String schema;
-	String errorMessage;
 	String nvpairs;
-	String sql;
 	String schema_class, schema_type;
 	TALLOC_CTX *log;
 
@@ -771,65 +566,8 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 		nvpairs[0] = 0;
 	}
 	
-	/* Transaction start */
-	sqlite3_exec(myDB, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		errs++;
-		debug(DEBUG_UNEXPECTED,"Sqlite error: %s", errorMessage);
-		sqlite3_free(errorMessage);
-	}	
-
-	/* See if source is already in the table */
-	sql = talloc_asprintf(log, "SELECT * FROM triglog WHERE source='%s'", sourceDevice); 
-	ASSERT_FAIL(sql);
-	if(!errs){
-		sqlite3_exec(myDB, sql, countRows, &numRows, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite select error on triglog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-		talloc_free(sql);
+	DBUpdateTrigLog(log, myDB, sourceDevice, schema, nvpairs);
 	
-		if(numRows){
-			// Delete any rows if they exist
-			sql = talloc_asprintf(log, "DELETE FROM triglog WHERE source='%s'", sourceDevice);
-			ASSERT_FAIL(sql);
-			sqlite3_exec(myDB, sql, countRows, NULL, &errorMessage);
-			if(errorMessage){
-				debug(DEBUG_UNEXPECTED,"Sqlite delete error on triglog: %s", errorMessage);
-				sqlite3_free(errorMessage);
-				errs++;
-			}
-			talloc_free(sql);
-		}
-	}
-	if(!errs){
-		/* Insert new record */
-		sql = talloc_asprintf(log, "INSERT INTO triglog VALUES ('%s','%s','%s',DATETIME())", sourceDevice, schema, nvpairs);
-		ASSERT_FAIL(sql);
-		sqlite3_exec(myDB, sql, countRows, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite insert error on triglog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-			errs++;
-		}
-		talloc_free(sql);
-	}			
-	if(!errs){
-		/* Transaction commit */	
-		sqlite3_exec(myDB, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite commit error on triglog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}	
-	}
-	else{
-		sqlite3_exec(myDB, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite rollback error triglog: %s", errorMessage);
-			sqlite3_free(errorMessage);
-		}
-	}
 	
 	talloc_free(log);
 }
@@ -868,15 +606,23 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 
 static void tickHandler(int userVal, xPL_ObjectPtr obj)
 {
+	static int ticks = 0;
+	
+	/* Report memory usage every 30 seconds if enabled and not in daemon mode */
+	ticks++;
+	if(noBackground && (ticks >= 30)){
+		ticks = 0;
+		talloc_report(masterCTX, stdout);
+	}
+	
 	
 	/* Terminate if requested to do so */
 	if(exitRequest){
 		xPL_setServiceEnabled(xpleventService, FALSE);
 		xPL_releaseService(xpleventService);
 		xPL_shutdown();
-		if(myDB){
-			sqlite3_close(myDB);
-		}
+		DBClose(myDB);
+	
 		/* Unlink the pid file if we can. */
 		(void) unlink(pidFile);
 		if(masterCTX){
@@ -907,7 +653,7 @@ void showHelp(void)
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
 	printf("  -l, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
-	printf("  -o, --sqlite-file       Sqlite database file");
+	printf("  -o, --db-file           Database file");
 	printf("  -s, --instance ID       Set instance id. Default is %s", instanceID);
 	printf("  -v, --version           Display program version\n");
 	printf("\n");
@@ -952,7 +698,6 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 int main(int argc, char *argv[])
 {
 	int longindex;
-	int rc;
 	int optchar;
 	String p;
 	
@@ -1034,10 +779,10 @@ int main(int argc, char *argv[])
 				break;
 
 			
-			case 'o': /* Instance ID */
-				ConfReadStringCopy(sqliteFile, optarg, WS_SIZE);
-				clOverride.sqlitefile = 1;
-				debug(DEBUG_ACTION,"New sqlite file is: %s", sqliteFile);
+			case 'o': /* Database file */
+				ConfReadStringCopy(dbFile, optarg, WS_SIZE);
+				clOverride.dbfile = 1;
+				debug(DEBUG_ACTION,"New db file is: %s", dbFile);
 				break;			
 			
 			
@@ -1087,9 +832,9 @@ int main(int argc, char *argv[])
 		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configEntry, "general", "log-path")))
 			ConfReadStringCopy(logPath, p, sizeof(logPath));
 		
-		/* sqlite-file */
-		if((!clOverride.sqlitefile) && (p = ConfReadValueBySectKey(configEntry, "general", "sqlite-file")))
-			ConfReadStringCopy(sqliteFile, p, sizeof(sqliteFile));
+		/* db-file */
+		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configEntry, "general", "db-file")))
+			ConfReadStringCopy(dbFile, p, sizeof(dbFile));
 		
 	}
 	else
@@ -1102,14 +847,10 @@ int main(int argc, char *argv[])
 	if(debugLvl >= 5)
 		xPL_setDebugging(TRUE);
 		
-		
-	/* Open Database File */
-	if(!access(sqliteFile, R_OK | W_OK)){
-		if((rc = sqlite3_open_v2(sqliteFile, &myDB, SQLITE_OPEN_READWRITE, NULL)))
-			fatal("Sqlite error on open: %s", sqlite3_errmsg(myDB));
+	
+	if(!(myDB = DBOpen(dbFile))){
+			fatal("Database file does not exist or is not writeble: %s", dbFile);
 	}
-	else
-		fatal("Database file does not exist or is not writeble: %s", sqliteFile);
 		
 	/* Fork into the background. */	
 	if(!noBackground) {
