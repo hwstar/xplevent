@@ -101,7 +101,7 @@ typedef struct pcheader_s {
 	int pushCount;
 	Bool tracePcode;
 	void *xplServicePtr;
-	void *sqliteDB;
+	void *DB;
 	
 } pcodeHeader_t;
 
