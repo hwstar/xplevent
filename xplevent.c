@@ -221,7 +221,7 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 	char source[64];
 	
 	/* Setup */
-	ASSERT_FAIL(log = talloc_new(masterCTX))
+	MALLOC_FAIL(log = talloc_new(masterCTX))
 	
 	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
 	debug(DEBUG_EXPECTED,"Heartbeat status message received: vendor = %s, device = %s, instance_id = %s",
@@ -257,7 +257,7 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
 
 	parseCtrl = talloc_zero(masterCTX, ParseCtrl_t);
-	ASSERT_FAIL(parseCtrl);
+	MALLOC_FAIL(parseCtrl);
 	
 	/* Save pointer to pcode header in parse control block */
 	
@@ -283,14 +283,14 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	classType = talloc_asprintf(ph, "%s.%s", 
 	xPL_getSchemaClass(triggerMessage),
 	xPL_getSchemaType(triggerMessage));
-	ASSERT_FAIL(classType);
+	MALLOC_FAIL(classType);
 	ParserHashAddKeyValue(ph, ph, "xplin", "classtype", classType);
 	
 	sourceAddress= talloc_asprintf(ph,"%s-%s.%s",
 	xPL_getSourceVendor(triggerMessage),
 	xPL_getSourceInstanceID(triggerMessage),
 	xPL_getSourceDeviceID(triggerMessage));
-	ASSERT_FAIL(sourceAddress);
+	MALLOC_FAIL(sourceAddress);
 	ParserHashAddKeyValue(ph, ph, "xplin", "sourceaddress", sourceAddress);
 	
 	/* Parse user code */
@@ -340,7 +340,7 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHe
 	/* Initialize pcode header */
 	
 	*ph = talloc_zero(masterCTX, pcodeHeader_t);
-	ASSERT_FAIL(*ph);
+	MALLOC_FAIL(*ph);
 	
 	/* Set the pointer to the service */
 	(*ph)->xplServicePtr = xpleventService;
@@ -415,7 +415,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 		return;
 	}
 	
-	ASSERT_FAIL(ctx = talloc_new(masterCTX))
+	MALLOC_FAIL(ctx = talloc_new(masterCTX))
 	
 
 	/* Get any preprocessing script */
@@ -509,11 +509,11 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 	/* Allocate a dedicated context off of master */
 	
 	logctx = talloc_new(masterCTX);
-	ASSERT_FAIL(logctx);
+	MALLOC_FAIL(logctx);
 
 	/* Allocate space for nvpairs */
 	nvpairs = talloc_zero(logctx, char);
-	ASSERT_FAIL(nvpairs)
+	MALLOC_FAIL(nvpairs)
 	
 	/* Grab xPL strings */
 	ASSERT_FAIL(theMessage);
@@ -526,7 +526,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 	
 	/* Make combined schema/class */
 	schema = talloc_asprintf(logctx, "%s.%s", schema_class, schema_type);
-	ASSERT_FAIL(schema);
+	MALLOC_FAIL(schema);
 	
 	/*
 	 * Update trigger log
@@ -539,11 +539,11 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 			if(!msgBody->namedValues[i]->isBinary){
 				if(i){
 					nvpairs = talloc_asprintf_append(nvpairs, ",");
-					ASSERT_FAIL(nvpairs)
+					MALLOC_FAIL(nvpairs)
 				}
 				nvpairs = talloc_asprintf_append(nvpairs, "%s=%s",
 				msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
-				ASSERT_FAIL(nvpairs)
+				MALLOC_FAIL(nvpairs)
 			}
 			else{
 				debug(DEBUG_UNEXPECTED, "Skipping binary message");
@@ -692,7 +692,7 @@ int main(int argc, char *argv[])
 	String p;
 	
 	masterCTX = talloc_new(NULL);
-	ASSERT_FAIL(masterCTX);
+	MALLOC_FAIL(masterCTX);
 
 
 	/* Set the program name */
