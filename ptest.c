@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 	/* Allocate top context */
 	
 	top = talloc_new(NULL);
-	ASSERT_FAIL(top)
+	MALLOC_FAIL(top)
 
 		/* Parse the arguments. */
 	while((optchar=getopt_long(argc, argv, SHORT_OPTIONS, longOptions, &longindex)) != EOF) {
@@ -136,14 +136,14 @@ int main(int argc, char *argv[])
 	
 	/* Allocate pcode header */
 	ph = talloc_zero(top, pcodeHeader_t);
-	ASSERT_FAIL(ph)
+	MALLOC_FAIL(ph)
 	
 
 	
 	/* Allocate parser control structure */
 		
 	parseCtrl = talloc_zero(top, ParseCtrl_t);
-	ASSERT_FAIL(parseCtrl)
+	MALLOC_FAIL(parseCtrl)
 
 	/* Add pointer to pcode header in parse control block */
 	parseCtrl->pcodeHeader = ph;
