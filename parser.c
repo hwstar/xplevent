@@ -173,14 +173,14 @@ static void printOpcode(pcodePtr_t p)
  * Set undefined variable error message
  */
 
-static void undefVar(TALLOC_CTX *ctx, String var, int lineNo)
+static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
 {
 	String res;
 	
-	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(ph)
 	ASSERT_FAIL(var)
 	
-	res = talloc_asprintf(ctx, "Variable '%s' undefined on line number %d", var, lineNo);
+	res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
 	ASSERT_FAIL(res);
 	ph->failReason = res;
 }
@@ -294,13 +294,13 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 
 
 	pa = pi->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &hash) == PASS)
+	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &hash) == PASS)
 	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &schema) == PASS)
+	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &schema) == PASS)
 	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &class) == PASS)
+	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &class) == PASS)
 	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ph, pa, &tag) == PASS)
+	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &tag) == PASS)
 
 	
 	
@@ -636,7 +636,7 @@ void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
  */
  
 
-Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
+Bool ParserPcodeGetValue(talloc CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
 {
 	String value = NULL;
 	
@@ -654,7 +654,7 @@ Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
 			break;
 			
 		case OPRD_HASHKV:  /* Assoc array key/value */
-			value = ParserHashGetValue(ph, ph, instr->data1, instr->data2);
+			value = ParserHashGetValue(ctx, ph, instr->data1, instr->data2);
 			break;
 			
 		case OPRD_HASHREF: /* Hash reference */
@@ -676,7 +676,7 @@ Bool ParserPcodeGetValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
  * Put a value in a variable
  */
 
-Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
+Bool ParserPcodePutValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
 {
 	ASSERT_FAIL(ph)
 	ASSERT_FAIL(instr)
@@ -687,7 +687,7 @@ Bool ParserPcodePutValue(pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
 	}
 	
 
-	return ParserHashAddKeyValue(ph, ph, instr->data1, instr->data2, value);
+	return ParserHashAddKeyValue(ctx, ph, instr->data1, instr->data2, value);
 }
 
 /*
@@ -866,10 +866,13 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 	String value,rvalue;
 	double leftNum, rightNum;
 	Bool testRes;
+	TALLOC_CTX *ctx;
 	int res = PASS;
 
 	ASSERT_FAIL(ph)
 	ASSERT_FAIL(ph->head)
+	
+	ASSERT_FAIL(ctx = talloc_new(ph))
 	
 
 	/* Execution loop */
@@ -909,13 +912,13 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 			case OP_ASSIGN: /* Assignment */
 				ASSERT_FAIL(ph->pushCount == 2)
 				p = pe->prev;
-				if(ParserPcodeGetValue(ph, p, &value)){
+				if(ParserPcodeGetValue(ctx, ph, p, &value)){
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}
 				ASSERT_FAIL(value)
 				p = pe->prev->prev;
-			    if(ParserPcodePutValue(ph, p, value)){
+			    if(ParserPcodePutValue(ctx, ph, p, value)){
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}	
@@ -925,14 +928,14 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 			case OP_TEST: /* Variable test */
 				ASSERT_FAIL(ph->pushCount == 2)
 				p = pe->prev->prev;
-				if(ParserPcodeGetValue(ph, p, &value)){ /* Left */
+				if(ParserPcodeGetValue(ctx, ph, p, &value)){ /* Left */
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}
 				debug(DEBUG_ACTION,"Left string: %s", value);				
 				leftNum = atof(value);
 				p = pe->prev;
-				if(ParserPcodeGetValue(ph, p, &rvalue)){ /* Right */
+				if(ParserPcodeGetValue(ctx, ph, p, &rvalue)){ /* Right */
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}	
@@ -984,7 +987,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 			case OP_EXISTS: /* Hash key exists */
 				ASSERT_FAIL(ph->pushCount == 1)
 				p = pe->prev;
-				if(ParserPcodeGetValue(ph, p, &value) == FAIL){
+				if(ParserPcodeGetValue(ctx, ph, p, &value) == FAIL){
 					debug(DEBUG_ACTION,"Key does not exist");
 					ASSERT_FAIL(pe->skip);
 					pe = pe->skip; /* Not present */
@@ -1012,6 +1015,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 	if(ph->failReason){
 		res = FAIL;
 	}
+	talloc_free(ctx);
 	return res;	
 }
 
