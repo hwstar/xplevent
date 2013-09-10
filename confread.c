@@ -1,4 +1,3 @@
-
 /*
  * confread.c Created 7/07/12
  * 
@@ -592,7 +591,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 	/* Allocate a config entry */
 
 	ce = talloc_zero(ctx, ConfigEntry_t);
-	ASSERT_FAIL(ce)
+	MALLOC_FAIL(ce)
 	
 	
 	/* Initialize config entry */
@@ -602,13 +601,13 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 	/* Allocate a line buffer */
 
 	ce->line = talloc_zero_array(ctx, char, MAX_CONFIG_LINE);
-	ASSERT_FAIL(ce->line)
+	MALLOC_FAIL(ce->line)
 
 
 	/* Allocate a line buffer */
 
 	ce->work_string = talloc_zero_array(ctx, char, MAX_CONFIG_LINE);
-	ASSERT_FAIL(ce->work_string)
+	MALLOC_FAIL(ce->work_string)
 
 
 	/* Open the config file */
@@ -644,14 +643,14 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 			case TOK_SECTION:
 
 				se = talloc_zero(ctx, SectionEntry_t);
-				ASSERT_FAIL(se)
+				MALLOC_FAIL(se)
 				
 				/* Initialize section entry */
 				se->magic = SE_MAGIC;
 
 				/* Copy the section name into the new entry */
 				se->section = talloc_strdup(ctx, ce->work_string);
-				ASSERT_FAIL(se->section);
+				MALLOC_FAIL(se->section);
 			
 				/* Hash the section */
 				se->hash = confreadHash(se->section);
@@ -689,7 +688,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 				kv = NULL;
 				if(se){	/* There has to be a section defined */
 					kv = talloc_zero(ctx, KeyEntry_t);
-					ASSERT_FAIL(kv)
+					MALLOC_FAIL(kv)
 					
 		
 					/* Initialize section entry */
@@ -697,7 +696,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 
 					/* Save the key */
 					kv->key = talloc_strdup(ctx, ce->work_string);
-					ASSERT_FAIL(kv->key);
+					MALLOC_FAIL(kv->key);
 				
 
 					/* Hash the key */
