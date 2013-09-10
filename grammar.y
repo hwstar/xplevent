@@ -203,7 +203,7 @@ argument ::= rvalue .
 argument ::= BACKSLASH HASH(A) .
 {
 	A->stringVal = ParserMoveString(A, A->stringVal, 1); /* Chop off percent */
-	ASSERT_FAIL(A->stringVal);
+	MALLOC_FAIL(A->stringVal);
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHREF, A->stringVal, NULL); 
 }
 
@@ -252,21 +252,21 @@ test ::= EXISTS OPAREN hash CPAREN .
 
 testop(A) ::= EQEQ . /* Numeric Equality */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMEQUALITY;
 	A->anno = "Num eq.";
 }
 
 testop(A) ::= NGT . /* Numeric Greater Than */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMGTRTHAN;
 	A->anno = "Num gtr. than";
 }
 
 testop(A) ::= NLT . /* Numeric Less than */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMLESSTHAN;
 	A->anno = "Num less than";
 }
@@ -274,21 +274,21 @@ testop(A) ::= NLT . /* Numeric Less than */
 
 testop(A) ::= NGET . /* Numeric Greater Than */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMGTREQTHAN;
 	A->anno = "Num gtr. eq. than";
 }
 
 testop(A) ::= NLET . /* Numeric Less than */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMLESSEQTHAN;
 	A->anno = "Num less eq. than";
 }
 
 testop(A) ::= NEQ . /* Numeric Not Equal */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_NUMINEQUALITY;
 	A->anno = "Num ineq.";
 }
@@ -298,7 +298,7 @@ testop(A) ::= NEQ . /* Numeric Not Equal */
 
 testop(A) ::= SEQ . /* String Equality */
 {
-	ASSERT_FAIL(A = talloc_zero(parseCtrl, token_t)) 
+	MALLOC_FAIL(A = talloc_zero(parseCtrl, token_t)) 
 	A->operand = OPRT_STREQUALITY;
 	A->anno = "String eq.";
 }
@@ -311,7 +311,7 @@ testop(A) ::= SEQ . /* String Equality */
 hash ::= SCALAR(B) OBRACE BAREWORD(A) CBRACE .
 {
 	B->stringVal = ParserMoveString(B, B->stringVal, 1); /* Chop off dollar sign */
-	ASSERT_FAIL(B->stringVal);
+	MALLOC_FAIL(B->stringVal);
 	
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHKV, B->stringVal, A->stringVal);
 }
@@ -347,7 +347,7 @@ rvalue ::= STRINGLIT(A) .
 	
 	A->stringVal[strlen(A->stringVal) - 1] = 0;
 	A->stringVal = ParserMoveString(A, A->stringVal, 1);
-	ASSERT_FAIL(A->stringVal);
+	MALLOC_FAIL(A->stringVal);
 	
 	
 	/* Emit pcode */
