@@ -86,7 +86,7 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
 	}
 	if(colnames[i] && i < argc){ /* If a result was found */
 		cbd->res = talloc_strdup(cbd->ctx, argv[i]);
-		ASSERT_FAIL(cbd->res);
+		MALLOC_FAIL(cbd->res);
 	
 	}
 	
@@ -116,7 +116,7 @@ String colName, String key, String valueName)
 	cbd.ctx = ctx;
 	
 	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s='%s'", table, colName, key);
-	ASSERT_FAIL(sql);
+	MALLOC_FAIL(sql);
 	sqlite3_exec((sqlite3 *) db, sql, dbReadFieldCallback, (void *) &cbd , &errorMessage);
 	if(errorMessage){
 		debug(DEBUG_UNEXPECTED,"Sqlite select error on %s select: %s", id, errorMessage);
@@ -145,7 +145,7 @@ static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, String id, String table, Stri
 	ASSERT_FAIL(key)
 	
 	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s='%s'", table, colName, key);
-	ASSERT_FAIL(sql)
+	MALLOC_FAIL(sql)
 	
 	sqlite3_exec((sqlite3 *) db, sql, NULL, NULL, &errorMessage);
 
@@ -261,7 +261,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s',DATETIME())",
 		"nvstate", key, value);
 	
-		ASSERT_FAIL(sql)
+		MALLOC_FAIL(sql)
 	
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
@@ -377,7 +377,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s',DATETIME())",
 		"triglog", source, schema, nvpairs);
 	
-		ASSERT_FAIL(sql)
+		MALLOC_FAIL(sql)
 	
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
