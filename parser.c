@@ -490,7 +490,7 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const Stri
 	
 	if((ph->sqliteDB) && (!strcmp(hashName, "nvstate"))){
 		/* nvstate database hash */
-		return DBReadNVState(ctx, ph->sqliteDB, key);
+		return DBReadNVState(ctx, ph->DB, key);
 	}
 	else{ /* In memory hash */
 		h = findHash(ph, hashName, NULL);
@@ -528,7 +528,7 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
 	
 	if((ph->sqliteDB) && (!strcmp(hashName, "nvstate"))){
 		/* nvstate database hash */
-		return DBWriteNVState(ctx, ph->sqliteDB, key, value);
+		return DBWriteNVState(ctx, ph->DB, key, value);
 	}
 	else{	/* In memory hash */	
 		/* Attempt to find the hash in the symbol table */
