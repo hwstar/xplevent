@@ -496,26 +496,24 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 {
 	ASSERT_FAIL(theMessage);
 	
-	unsigned nvInitSize = 512;
 	int i;
 	xPL_NameValueListPtr msgBody;
 	String schema;
 	String nvpairs;
 	String schema_class, schema_type;
-	TALLOC_CTX *log;
+	TALLOC_CTX *logctx;
 
 	ASSERT_FAIL(theMessage)
 	ASSERT_FAIL(sourceDevice);
 
 	/* Allocate a dedicated context off of master */
 	
-	log = talloc_new(masterCTX);
-	ASSERT_FAIL(log);
+	logctx = talloc_new(masterCTX);
+	ASSERT_FAIL(logctx);
 
 	/* Allocate space for nvpairs */
-	nvpairs = talloc_array(log, char, nvInitSize);
+	nvpairs = talloc_zero(logctx, char);
 	ASSERT_FAIL(nvpairs)
-	*nvpairs = 0; /* Empty string */
 	
 	/* Grab xPL strings */
 	ASSERT_FAIL(theMessage);
@@ -527,7 +525,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 	ASSERT_FAIL(schema_type);
 	
 	/* Make combined schema/class */
-	schema = talloc_asprintf(log, "%s.%s", schema_class, schema_type);
+	schema = talloc_asprintf(logctx, "%s.%s", schema_class, schema_type);
 	ASSERT_FAIL(schema);
 	
 	/*
@@ -540,21 +538,16 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 		for(i = 0; i < msgBody-> namedValueCount; i++){
 			if(!msgBody->namedValues[i]->isBinary){
 				if(i){
-					snprintf(nvpairs + strlen(nvpairs), 2, ","); 
+					nvpairs = talloc_asprintf_append(nvpairs, ",");
+					ASSERT_FAIL(nvpairs)
 				}
-				snprintf(nvpairs + strlen(nvpairs), 32, "%s=%s",
+				nvpairs = talloc_asprintf_append(nvpairs, "%s=%s",
 				msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
-				if(strlen(nvpairs) > nvInitSize - 128){
-					debug(DEBUG_EXPECTED,"Increasing nvpairs buffer size");
-					// Double the buffer size
-					nvInitSize <<= 1;
-					// Re-allocate the buffer
-					nvpairs = talloc_realloc(log, nvpairs, char, nvInitSize);
-					ASSERT_FAIL(nvpairs);
-				}
+				ASSERT_FAIL(nvpairs)
 			}
-			else
+			else{
 				debug(DEBUG_UNEXPECTED, "Skipping binary message");
+			}
 		}
 		debug(DEBUG_ACTION, "Name value pairs: %s", nvpairs);
 	}
@@ -563,10 +556,10 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 		nvpairs[0] = 0;
 	}
 	
-	DBUpdateTrigLog(log, myDB, sourceDevice, schema, nvpairs);
+	DBUpdateTrigLog(logctx, myDB, sourceDevice, schema, nvpairs);
 	
 	
-	talloc_free(log);
+	talloc_free(logctx);
 }
 
 /*
