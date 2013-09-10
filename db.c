@@ -294,6 +294,7 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 	String script = NULL;
 	static const String id = "DBFetchScript";
 	
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(scriptName)
 
@@ -309,15 +310,17 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 }
 
 /*
-* Fetch script name given trigger tag/subaddress
+* Fetch script given trigger tag/subaddress
 */
 
-const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
+const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
 {
 
 	String scriptName = NULL;
+	String script = NULL;
 	static const String id = "DBFetchScriptName";
 	
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(tagSubAddr)
 
@@ -327,9 +330,14 @@ const String DBFetchScriptName(TALLOC_CTX *ctx, void *db, const String tagSubAdd
 	
 	scriptName = dbReadField(db, ctx, id, "trigaction", "source", tagSubAddr, "action");
 	
+	if(scriptName){
+		script = dbReadField(db, ctx, id, "scripts", "scriptname", scriptName, "scriptcode");
+		talloc_free(scriptName);
+	}
+	
 	dbTxEnd(db, id, PASS);
 	
-	return scriptName;
+	return script;
 }
 
 

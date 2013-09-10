@@ -393,7 +393,6 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	String instance_id;
 	String schema_class;
 	String schema_type; 
-	String scriptName;
 	String pScript;
 	String subAddress;
 	String script = NULL;
@@ -473,13 +472,11 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	 * Check to see if this is a trigger message we need to act on
 	 */
 	 
-	scriptName = DBFetchScriptName(ctx, myDB, source);
+ 
+	/* Fetch the script by source tag and sub-address */
 	
-	/* Fetch the script by name */
-	
-	if(scriptName){
-		script = DBFetchScript(ctx, myDB, scriptName);
-	}
+	script = DBFetchScriptByTag(ctx, myDB, source);
+
 		
 	/* Execute the script if it exists */ 
 	if(script){
