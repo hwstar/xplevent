@@ -108,6 +108,12 @@ void fatal(const String message, ...) {
 	exit(1);
 }
 
+/* Assertion failure handler */
+
+void assertion_failure(const String file, int line)
+{
+	fatal("Assertion failure detected in file: %s, line: %d", file, line);
+}
 
 /* Normal error handler. */
 void error(const String message, ...) {
