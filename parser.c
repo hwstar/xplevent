@@ -173,14 +173,14 @@ static void printOpcode(pcodePtr_t p)
  * Set undefined variable error message
  */
 
-static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
+static void undefVar(TALLOC_CTX *ctx, String var, int lineNo)
 {
 	String res;
 	
-	ASSERT_FAIL(ph)
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(var)
 	
-	res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
+	res = talloc_asprintf(ctx, "Variable '%s' undefined on line number %d", var, lineNo);
 	ASSERT_FAIL(res);
 	ph->failReason = res;
 }
@@ -239,17 +239,17 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, Pa
 * 
 */
 
-void hashAppend(pcodeHeaderPtr_t ph, ParseHashSTEPtrPtr_t ptail, String name)
+void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
 {
 	ParseHashSTEPtr_t hNew;
 
-	ASSERT_FAIL(ph)
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(ptail)
 	ASSERT_FAIL(name)
 		
 	/* Initialize a new list entry */
 	 
-	hNew = talloc_zero(ph, ParseHashSTE_t);
+	hNew = talloc_zero(ctx, ParseHashSTE_t);
 	ASSERT_FAIL(hNew)
 	hNew->magic = SE_MAGIC;
 	hNew->name = talloc_strdup(hNew, name);
@@ -366,7 +366,7 @@ end:
 /*
 * Move string from one context to another
 */
-String ParserMoveString(void *newCtx, String oldStr, int offset)
+String ParserMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
 {
 	String newStr;
 	
