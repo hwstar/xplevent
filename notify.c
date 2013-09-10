@@ -115,6 +115,14 @@ void assertion_failure(const String file, int line)
 	fatal("Assertion failure detected in file: %s, line: %d", file, line);
 }
 
+/* Memory allocation failure handler */
+
+void malloc_failure(const String file, int line)
+{
+	fatal("Memory allocation failure detected in file: %s, line: %d", file, line);
+}
+
+
 /* Normal error handler. */
 void error(const String message, ...) {
 	va_list ap;
