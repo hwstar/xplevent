@@ -147,12 +147,12 @@ tokenPtr_t yyTokenVal(void *context)
 	
 	/* Allocate a token */
 	token = talloc_zero(context, token_t);
-	ASSERT_FAIL(token);
+	MALLOC_FAIL(token);
 	
 
 	/* copy string from lexer */
 	res = talloc_strndup(token, yytext, yyleng + 1);
-	ASSERT_FAIL(res);
+	MALLOC_FAIL(res);
 
 	res[yyleng] = 0;
 	token->stringVal = res;
