@@ -97,7 +97,7 @@ static void *parserMalloc(size_t size)
 {	
 	void *p;
 	p = talloc_size(parseCtrl, size);
-	ASSERT_FAIL(p)
+	MALLOC_FAIL(p)
 	return p;
 }
 
@@ -181,7 +181,7 @@ static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
 	ASSERT_FAIL(var)
 	
 	res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
-	ASSERT_FAIL(res);
+	MALLOC_FAIL(res);
 	ph->failReason = res;
 }
 
@@ -250,10 +250,10 @@ void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
 	/* Initialize a new list entry */
 	 
 	hNew = talloc_zero(ctx, ParseHashSTE_t);
-	ASSERT_FAIL(hNew)
+	MALLOC_FAIL(hNew)
 	hNew->magic = SE_MAGIC;
 	hNew->name = talloc_strdup(hNew, name);
-	ASSERT_FAIL(hNew->name)
+	MALLOC_FAIL(hNew->name)
 	hNew->hash = hash(name);
 	hNew->writable = TRUE;
 
@@ -284,7 +284,7 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 	ASSERT_FAIL(pi)
 	
 	ctx = talloc_new(ph);
-	ASSERT_FAIL(ctx)
+	MALLOC_FAIL(ctx)
 			
 	if(ph->pushCount != 4){
 		ph->failReason = talloc_asprintf(ph, "Incorrect number of arguments passed to xplcmd, requires 4, got %d",
@@ -420,7 +420,7 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 					else{
 						if(vendor){
 							*vendor = talloc_strndup(ctx, tag, j);
-							ASSERT_FAIL(*vendor)
+							MALLOC_FAIL(*vendor)
 						}
 						begin = i + 1;
 						j = 0;
@@ -460,7 +460,7 @@ int ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String 
 					}
 					if(res != FAIL && device){
 							*instance = talloc_strndup(ctx, tag + begin, j - 1);
-							ASSERT_FAIL(*device);
+							MALLOC_FAIL(*device);
 					}
 					done = TRUE;
 				}
@@ -506,7 +506,7 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const Stri
 			/* Compare hashes, and if they match, compare strings */
 			if((kh == ke->hash) && (!strcmp(ke->key, key))){
 				s = talloc_strdup(ctx, ke->value);
-				ASSERT_FAIL(s)
+				MALLOC_FAIL(s)
 				return s;
 			}
 		}
@@ -542,7 +542,7 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
 				h = h->next;
 				ASSERT_FAIL(h)
 				h->context = talloc_new(h);
-				ASSERT_FAIL(h->context);
+				MALLOC_FAIL(h->context);
 			}
 	
 		
@@ -552,7 +552,7 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
 			hashAppend(ph, &ph->steHead, hashName);
 			h = ph->steHead;
 			h->context = talloc_new(h);
-			ASSERT_FAIL(h->context);
+			MALLOC_FAIL(h->context);
 		}
 		
 	
@@ -560,12 +560,12 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
 		/* Initialize a new key list entry */
 		 
 		keNew = talloc_zero(h->context, ParseHashKV_t);
-		ASSERT_FAIL(keNew)
+		MALLOC_FAIL(keNew)
 		keNew->magic = KE_MAGIC;
 		keNew->key = talloc_strdup(keNew, key);
-		ASSERT_FAIL(keNew->key)
+		MALLOC_FAIL(keNew->key)
 		keNew->value = talloc_strdup(keNew, value);
-		ASSERT_FAIL(keNew->value);
+		MALLOC_FAIL(keNew->value);
 		keNew->hash = hash(key);
 	
 		/* add the key/value to the hash, replacing any existing identical key */
@@ -721,12 +721,12 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
 		if(data1){
 			/* Make a copy of the string */
 			new->data1 = talloc_strdup(new, data1);
-			ASSERT_FAIL(new->data1);
+			MALLOC_FAIL(new->data1);
 		}
 		if(data2){
 			/* Make a copy of the string */
 			new->data2 = talloc_strdup(new, data2);
-			ASSERT_FAIL(new->data2);
+			MALLOC_FAIL(new->data2);
 		}
 		
 		if(!ph->head){
@@ -918,7 +918,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}
-				ASSERT_FAIL(value)
+				MALLOC_FAIL(value)
 				p = pe->prev->prev;
 			    if(ParserPcodePutValue(ctx, ph, p, value)){
 					undefVar(ph, p->data1, pe->lineNo); 
@@ -1064,6 +1064,7 @@ int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str)
 			yySetInputFile(file);
 		else{
 			this->failReason = talloc_asprintf(this, "Can't open file: \"%s\". %s", str, strerror(errno));
+			MALLOC_FAIL(this->failReason)
 			return res;
 		}
 	}
