@@ -41,6 +41,7 @@
 #include "xplevent.h"
 
 
+static String instanceID;
 
 /*
  * Heartbeat logger
@@ -456,10 +457,11 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 	}
 }
 
-void MonitorPreForkSetup(String interface)
+void MonitorPreForkSetup(String interface, String instance_id)
 {
 	/* Set the xPL interface */
 	xPL_setBroadcastInterface(interface);
+	instanceID = instance_id;
 	
 }
 
@@ -476,7 +478,7 @@ void MonitorRun(void)
 		xPL_setDebugging(TRUE);
 		
 	/* Create a service and set our application version */
-	Globals->xplEventService = xPL_createService("hwstar", "xplevent", Globals->instanceID);
+	Globals->xplEventService = xPL_createService("hwstar", "xplevent", instanceID);
   	xPL_setServiceVersion(Globals->xplEventService, VERSION);
 
 
