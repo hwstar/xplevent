@@ -249,6 +249,20 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 
 }
 
+
+void XPLEventExit(int returnCode)
+{
+	DBClose(Globals->db);
+
+	/* Unlink the pid file if we can. */
+	(void) unlink(Globals->pidFile);
+	if(Globals->masterCTX){
+		TALLOC_CTX *m = Globals->masterCTX;
+		talloc_free(m);
+	}
+	exit(returnCode);
+}
+
 /*
 * main
 */
