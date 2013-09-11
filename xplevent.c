@@ -41,6 +41,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <xPL.h>
 #include <sqlite3.h>
 #include <talloc.h>
