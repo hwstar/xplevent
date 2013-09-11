@@ -373,7 +373,7 @@ String ParserMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
 	ASSERT_FAIL(newCtx)
 	ASSERT_FAIL(oldStr)
 	
-	ASSERT_FAIL(strlen(oldStr) <= offset)
+	ASSERT_FAIL(strlen(oldStr) > offset)
 	
 	if((newStr = talloc_strdup(newCtx, oldStr + offset))){
 		talloc_free(oldStr);
@@ -490,7 +490,7 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const Stri
 
 	ASSERT_FAIL(ctx && ph && hashName && key)
 	
-	if((ph->sqliteDB) && (!strcmp(hashName, "nvstate"))){
+	if((ph->DB) && (!strcmp(hashName, "nvstate"))){
 		/* nvstate database hash */
 		return DBReadNVState(ctx, ph->DB, key);
 	}
@@ -528,7 +528,7 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
 
 	ASSERT_FAIL(ph && hashName && key && value)
 	
-	if((ph->sqliteDB) && (!strcmp(hashName, "nvstate"))){
+	if((ph->DB) && (!strcmp(hashName, "nvstate"))){
 		/* nvstate database hash */
 		return DBWriteNVState(ctx, ph->DB, key, value);
 	}
@@ -638,7 +638,7 @@ void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
  */
  
 
-Bool ParserPcodeGetValue(talloc CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
+Bool ParserPcodeGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
 {
 	String value = NULL;
 	
