@@ -84,7 +84,6 @@ typedef struct cloverrides {
 
 XPLEvGlobalsPtr_t Globals = NULL;
 
-
 static clOverride_t clOverride = {0,0,0,0,0};
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
@@ -423,15 +422,10 @@ int main(int argc, char *argv[])
 	else
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
 	
-	/* Set strings in Global Data*/
-	
-	Globals->pidFile = pidFile;
-	Globals->instanceID = instanceID;
-	
 
 	/* Set the broadcast interface */
 	
-	MonitorPreForkSetup(interface);	
+	MonitorPreForkSetup(interface, instanceID);	
 		
 	
 	if(!(Globals->db = DBOpen(dbFile))){
