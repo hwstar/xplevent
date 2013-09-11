@@ -7,8 +7,6 @@ typedef struct XPLEvGlobals_s {
 	Bool noBackground;
 	int debugLvl;
 	String progName;
-	String pidFile;
-	String instanceID;
 	void *masterCTX;
 	void *xplEventService;
 	void *configEntry;
