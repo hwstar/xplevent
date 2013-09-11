@@ -191,6 +191,16 @@ static void shutdownHandler(int onSignal)
 }
 
 /*
+* Reap zombie child processes
+*/
+
+static void reaper(int onSignal)
+{
+	int status;
+	while (waitpid(-1, &status, WNOHANG) > 0);
+}
+
+/*
 * Show help
 */
 
@@ -509,6 +519,7 @@ int main(int argc, char *argv[])
 	/* Install signal traps for proper shutdown */
  	signal(SIGTERM, shutdownHandler);
  	signal(SIGINT, shutdownHandler);
+ 	signal(SIGCHLD, reaper)
 
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");
