@@ -451,15 +451,8 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
 		xPL_releaseService(Globals->xplEventService);
 		xPL_shutdown();
-		DBClose(Globals->db);
-	
-		/* Unlink the pid file if we can. */
-		(void) unlink(Globals->pidFile);
-		if(Globals->masterCTX){
-			TALLOC_CTX *m = Globals->masterCTX;
-			talloc_free(m);
-		}
-		exit(0);
+		void XPLEventExit(0);
+
 	}
 }
 
