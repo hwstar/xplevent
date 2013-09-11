@@ -35,14 +35,9 @@
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
+#include "xplevent.h"
 
 #define LOGOUT (output == NULL ? stderr : output)
-
-/* Program name */
-extern String progName;
-
-/* Debug level. */
-extern int debugLvl;
 
 static FILE *output = NULL;
 
@@ -84,7 +79,7 @@ void fatal_with_reason(int error, const String message, ...)
     
     va_start(ap, message);
 
-    fprintf(LOGOUT, "%s: ", progName);
+    fprintf(LOGOUT, "%s: ", Globals->progName);
     vfprintf(LOGOUT, message, ap);
     fprintf(LOGOUT, ": %s\n",strerror(error));
 
@@ -99,7 +94,7 @@ void fatal(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
-	fprintf(LOGOUT,"%s: ",progName);
+	fprintf(LOGOUT,"%s: ", Globals->progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -129,7 +124,7 @@ void error(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
-	fprintf(LOGOUT,"%s: ",progName);
+	fprintf(LOGOUT,"%s: ",Globals->progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -144,7 +139,7 @@ void warn(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print warning message. */
-	fprintf(LOGOUT,"%s: warning: ",progName);
+	fprintf(LOGOUT,"%s: warning: ", Globals->progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -164,7 +159,7 @@ void debug(int level, const String message, ...) {
 	int l;
  	
 	/* We only do this code if we are at or above the debug level. */
-	if(debugLvl >= level) {
+	if(Globals->debugLvl >= level) {
 		if(timeen){
 			t = time(NULL);
 			strncpy(timenow,ctime(&t), 31);
@@ -174,7 +169,7 @@ void debug(int level, const String message, ...) {
 			timenow[l-1] = '\0';
       
 			/* Print the error message. */
-			fprintf(LOGOUT,"%s [ %s ] (debug): ", progName, timenow);
+			fprintf(LOGOUT,"%s [ %s ] (debug): ", Globals->progName, timenow);
 		}
 		vfprintf(LOGOUT, message, ap);
 		fprintf(LOGOUT,"\n");
@@ -191,8 +186,8 @@ void debug_hexdump(int level, const void *buf, int buflen, const String message,
 	va_list ap;
 	va_start(ap, message);
 
-	if(debugLvl >= level) {
-		fprintf(LOGOUT,"%s: (debug): ",progName);
+	if(Globals->debugLvl >= level) {
+		fprintf(LOGOUT,"%s: (debug): ",Globals->progName);
 		vfprintf(LOGOUT,message,ap);
 		for(i = 0 ; i < buflen ; i++)
 			fprintf(LOGOUT,"%02X ",((int) ((char *)buf)[i]) & 0xFF);

@@ -31,6 +31,7 @@
 #include "types.h"
 #include "notify.h"
 #include "parser.h"
+#include "xplevent.h"
 
 #define SHORT_OPTIONS "af:mpt"
 
@@ -50,15 +51,13 @@ static struct option longOptions[] = {
  * Parser test harness
  */
  
-/* Program name */
-char *progName;
 
-/* Debug level. */
-int debugLvl = 4;
 
 Bool fullPcodeDump = FALSE;
 Bool execPcodeTrace = FALSE;
 Bool memoryUsage = FALSE;
+
+XPLEvGlobalsPtr_t Globals = NULL;
 
 /*
  * Print the contents of a hash entry
@@ -81,15 +80,21 @@ int main(int argc, char *argv[])
 	String fileName;
 	int res = 0;
 	
+	if(!(top = talloc_new(NULL))){
+		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
+		exit(1);
+	}
+	
+	if(!(Globals = talloc_zero(top, XPLEvGlobals_t))){
+		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
+		exit(1);
+	}
+	Globals->masterCTX = top;
+	
 	/* Set the program name */
-	progName=argv[0];
-
+	Globals->progName = argv[0];
 
 	
-	/* Allocate top context */
-	
-	top = talloc_new(NULL);
-	MALLOC_FAIL(top)
 
 		/* Parse the arguments. */
 	while((optchar=getopt_long(argc, argv, SHORT_OPTIONS, longOptions, &longindex)) != EOF) {

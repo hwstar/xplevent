@@ -33,6 +33,7 @@
 #include "notify.h"
 #include "grammar.h"
 #include "parser.h"
+#include "xplevent.h"
 
 }
 

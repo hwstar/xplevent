@@ -10,7 +10,6 @@
 #define MALLOC_FAIL(C) if(!(C)) malloc_failure(__FILE__,__LINE__);
 #endif
 
-	
 
 #ifndef TRUE
 #define TRUE 1

@@ -8,6 +8,7 @@
 #include "types.h"
 #include "notify.h"
 #include "db.h"
+#include "xplevent.h"
 
 typedef struct callbackData_s {
 	TALLOC_CTX *ctx;

@@ -41,6 +41,7 @@
 #include "parse.h"
 #include "lex.h"
 #include "db.h"
+#include "xplevent.h"
 
 /* Definitions */
 

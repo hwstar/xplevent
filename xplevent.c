@@ -50,6 +50,7 @@
 #include "confread.h"
 #include "parser.h"
 #include "db.h"
+#include "xplevent.h"
 
 
 
@@ -79,25 +80,12 @@ typedef struct cloverrides {
 
 
 
-char *progName;
-int debugLvl = 0; 
-int NumRows = 0;
-Bool exitOnErr = FALSE;
-Bool exitRequest = FALSE;
 
-
+XPLEvGlobalsPtr_t Globals = NULL;
 
 static Bool noBackground = FALSE;
-
-static clOverride_t clOverride = {0,0,0,0};
-
-static TALLOC_CTX *masterCTX = NULL;
-
-static xPL_ServicePtr xpleventService = NULL;
+static clOverride_t clOverride = {0,0,0,0,0};
 static xPL_MessagePtr xpleventTriggerMessage = NULL;
-static ConfigEntryPtr_t	configEntry = NULL;
-
-static void *myDB = NULL;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
 static char interface[WS_SIZE] = DEF_INTERFACE;
@@ -200,7 +188,7 @@ static int pid_write(char *filename, pid_t pid) {
 
 static void shutdownHandler(int onSignal)
 {
-	exitRequest = TRUE;
+	Globals->exitRequest = TRUE;
 }
 
 
@@ -221,12 +209,12 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 	char source[64];
 	
 	/* Setup */
-	MALLOC_FAIL(log = talloc_new(masterCTX))
+	MALLOC_FAIL(log = talloc_new(Globals->masterCTX))
 	
 	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
 	debug(DEBUG_EXPECTED,"Heartbeat status message received: vendor = %s, device = %s, instance_id = %s",
 	vendor, device, instance_id);
-	DBUpdateHeartbeatLog(log, myDB, source);
+	DBUpdateHeartbeatLog(log, Globals->db, source);
 	talloc_free(log);
 }
 
@@ -256,7 +244,7 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	
 	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
 
-	parseCtrl = talloc_zero(masterCTX, ParseCtrl_t);
+	parseCtrl = talloc_zero(Globals->masterCTX, ParseCtrl_t);
 	MALLOC_FAIL(parseCtrl);
 	
 	/* Save pointer to pcode header in parse control block */
@@ -299,7 +287,7 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	
 	if(parseCtrl->failReason){
 		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
-		if(exitOnErr){
+		if(Globals->exitOnErr){
 			exit(-1);
 		}
 	}
@@ -315,7 +303,7 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 		res = ParserExecPcode(ph);
 		if(res == FAIL){
 			debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
-			if(exitOnErr){
+			if(Globals->exitOnErr){
 				exit(-1);
 			}
 		}
@@ -339,11 +327,14 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHe
 	
 	/* Initialize pcode header */
 	
-	*ph = talloc_zero(masterCTX, pcodeHeader_t);
+	*ph = talloc_zero(Globals->masterCTX, pcodeHeader_t);
 	MALLOC_FAIL(*ph);
 	
 	/* Set the pointer to the service */
-	(*ph)->xplServicePtr = xpleventService;
+	(*ph)->xplServicePtr = Globals->xplEventService;
+	
+	/* Set the pointer to the database */
+	(*ph)->DB = Globals->db;
 
 	res = parseAndExec(*ph, triggerMessage, script);
 		
@@ -415,11 +406,11 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 		return;
 	}
 	
-	MALLOC_FAIL(ctx = talloc_new(masterCTX))
+	MALLOC_FAIL(ctx = talloc_new(Globals->masterCTX))
 	
 
 	/* Get any preprocessing script */
-	pScript = DBFetchScript(ctx, myDB, "preprocess");
+	pScript = DBFetchScript(ctx, Globals->db, "preprocess");
 	
 	if(!pScript){
 		debug(DEBUG_EXPECTED,"Preprocess script not found, using canned subaddress handling");
@@ -462,7 +453,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	}
 	
 	if(sourceDevice){ /* Store a copy of the source device tag if so requested */
-		*sourceDevice = talloc_strdup(masterCTX, source);
+		*sourceDevice = talloc_strdup(Globals->masterCTX, source);
 		ASSERT_FAIL(*sourceDevice);
 	}
 	
@@ -475,7 +466,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
  
 	/* Fetch the script by source tag and sub-address */
 	
-	script = DBFetchScriptByTag(ctx, myDB, source);
+	script = DBFetchScriptByTag(ctx, Globals->db, source);
 
 		
 	/* Execute the script if it exists */ 
@@ -508,7 +499,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 
 	/* Allocate a dedicated context off of master */
 	
-	logctx = talloc_new(masterCTX);
+	logctx = talloc_new(Globals->masterCTX);
 	MALLOC_FAIL(logctx);
 
 	/* Allocate space for nvpairs */
@@ -556,7 +547,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 		nvpairs[0] = 0;
 	}
 	
-	DBUpdateTrigLog(logctx, myDB, sourceDevice, schema, nvpairs);
+	DBUpdateTrigLog(logctx, Globals->db, sourceDevice, schema, nvpairs);
 	
 	
 	talloc_free(logctx);
@@ -602,21 +593,22 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 	ticks++;
 	if(noBackground && (ticks >= 30)){
 		ticks = 0;
-		talloc_report(masterCTX, stdout);
+		talloc_report(Globals->masterCTX, stdout);
 	}
 	
 	
 	/* Terminate if requested to do so */
-	if(exitRequest){
-		xPL_setServiceEnabled(xpleventService, FALSE);
-		xPL_releaseService(xpleventService);
+	if(Globals->exitRequest){
+		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
+		xPL_releaseService(Globals->xplEventService);
 		xPL_shutdown();
-		DBClose(myDB);
+		DBClose(Globals->db);
 	
 		/* Unlink the pid file if we can. */
 		(void) unlink(pidFile);
-		if(masterCTX){
-			talloc_free(masterCTX);
+		if(Globals->masterCTX){
+			TALLOC_CTX *m = Globals->masterCTX;
+			talloc_free(m);
 		}
 		exit(0);
 	}
@@ -628,14 +620,14 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 
 void showHelp(void)
 {
-	printf("'%s' is a daemon that XXXXXXXXXX\n", progName);
+	printf("'%s' is a daemon that XXXXXXXXXX\n", Globals->progName);
 	printf("via XXXXXXXXXXX\n");
 	printf("\n");
-	printf("Usage: %s [OPTION]...\n", progName);
+	printf("Usage: %s [OPTION]...\n", Globals->progName);
 	printf("\n");
 	printf("  -c, --config-file PATH  Set the path to the config file\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
-	printf("                          compiled-in default is %d and the max\n", debugLvl);
+	printf("                          compiled-in default is %d and the max\n", Globals->debugLvl);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -f, --pid-file PATH     Set new pid file path, default is: %s\n", pidFile);
@@ -690,13 +682,23 @@ int main(int argc, char *argv[])
 	int longindex;
 	int optchar;
 	String p;
+	TALLOC_CTX *m;
 	
-	masterCTX = talloc_new(NULL);
-	MALLOC_FAIL(masterCTX);
-
-
-	/* Set the program name */
-	progName=argv[0];
+	if(!(m = talloc_new(NULL))){
+		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
+		exit(1);
+	}
+	
+	if(!(Globals = talloc_zero(m, XPLEvGlobals_t))){
+		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
+		exit(1);
+	}
+	Globals->masterCTX = m;
+	
+	Globals->progName = argv[0];
+	
+	
+	
 
 	/* Parse the arguments. */
 	while((optchar=getopt_long(argc, argv, SHORT_OPTIONS, longOptions, &longindex)) != EOF) {
@@ -724,15 +726,15 @@ int main(int argc, char *argv[])
 			case 'd':
 
 				/* Save the value. */
-				debugLvl=atoi(optarg);
-				if(debugLvl < 0 || debugLvl > DEBUG_MAX) {
+				Globals->debugLvl=atoi(optarg);
+				if(Globals->debugLvl < 0 || Globals->debugLvl > DEBUG_MAX) {
 					fatal("Invalid debug level");
 				}
 
 				break;
 				
 			case 'e':
-				exitOnErr = TRUE;
+				Globals->exitOnErr = TRUE;
 				break;
 
 			/* Was it a pid file switch? */
@@ -804,26 +806,26 @@ int main(int argc, char *argv[])
 
 	/* Attempt to read a config file */
 	
-	if((configEntry = ConfReadScan(masterCTX, configFile, confDefErrorHandler))){
+	if((Globals->configEntry = ConfReadScan(Globals->masterCTX, configFile, confDefErrorHandler))){
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
-		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configEntry, "general", "instance-id")))
+		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "instance-id")))
 			ConfReadStringCopy(instanceID, p, sizeof(instanceID));
 		
 		/* Interface */
-		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configEntry, "general", "interface")))
+		if((!clOverride.interface) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "interface")))
 			ConfReadStringCopy(interface, p, sizeof(interface));
 			
 		/* pid file */
-		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(configEntry, "general", "pid-file")))
+		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "pid-file")))
 			ConfReadStringCopy(pidFile, p, sizeof(pidFile));	
 						
 		/* log path */
-		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configEntry, "general", "log-path")))
+		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "log-path")))
 			ConfReadStringCopy(logPath, p, sizeof(logPath));
 		
 		/* db-file */
-		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configEntry, "general", "db-file")))
+		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "db-file")))
 			ConfReadStringCopy(dbFile, p, sizeof(dbFile));
 		
 	}
@@ -834,11 +836,11 @@ int main(int argc, char *argv[])
 	xPL_setBroadcastInterface(interface);
 		
 	/* Turn on library debugging for level 5 */
-	if(debugLvl >= 5)
+	if(Globals->debugLvl >= 5)
 		xPL_setDebugging(TRUE);
 		
 	
-	if(!(myDB = DBOpen(dbFile))){
+	if(!(Globals->db = DBOpen(dbFile))){
 			fatal("Database file does not exist or is not writeble: %s", dbFile);
 	}
 		
@@ -848,7 +850,7 @@ int main(int argc, char *argv[])
 		
 	    /* Make sure we are not already running (.pid file check). */
 		if(pid_read(pidFile) != -1) 
-			fatal("%s is already running", progName);
+			fatal("%s is already running", Globals->progName);
 			
 		debug(DEBUG_STATUS, "Forking into background");
 
@@ -857,7 +859,7 @@ int main(int argc, char *argv[])
     	* the path to the logfile is defined
 		*/
 
-		if((debugLvl) && (logPath[0]))                          
+		if((Globals->debugLvl) && (logPath[0]))                          
 			notify_logpath(logPath);
 			
 	
@@ -922,14 +924,14 @@ int main(int argc, char *argv[])
 	}
 	
 	/* Create a service and set our application version */
-	xpleventService = xPL_createService("hwstar", "xplevent", instanceID);
-  	xPL_setServiceVersion(xpleventService, VERSION);
+	Globals->xplEventService = xPL_createService("hwstar", "xplevent", instanceID);
+  	xPL_setServiceVersion(Globals->xplEventService, VERSION);
 
 	/*
 	* Create trigger message object
 	*/
 
-	xpleventTriggerMessage = xPL_createBroadcastMessage(xpleventService, xPL_MESSAGE_TRIGGER);
+	xpleventTriggerMessage = xPL_createBroadcastMessage(Globals->xplEventService, xPL_MESSAGE_TRIGGER);
 	xPL_setSchema(xpleventTriggerMessage, "x10", "basic");
 
 
@@ -946,7 +948,7 @@ int main(int argc, char *argv[])
 
 
  	/* Enable the service */
-  	xPL_setServiceEnabled(xpleventService, TRUE);
+  	xPL_setServiceEnabled(Globals->xplEventService, TRUE);
 
 	if(!noBackground && (pid_write(pidFile, getpid()) != 0)) {
 		debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", pidFile);

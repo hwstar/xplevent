@@ -30,6 +30,7 @@
 #include "parser.h"
 #include "notify.h"
 #include "grammar.h"
+#include "xplevent.h"
 
 
 #define yyterminate() return(0)
