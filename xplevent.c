@@ -259,18 +259,20 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 
 }
 
+/* 
+ * Shutdown and exit
+ */ 
 
-void XPLEventExit(int returnCode)
+static void shutdown(void)
 {
 	DBClose(Globals->db);
 
 	/* Unlink the pid file if we can. */
-	(void) unlink(Globals->pidFile);
+	(void) unlink(pidFile);
 	if(Globals->masterCTX){
 		TALLOC_CTX *m = Globals->masterCTX;
 		talloc_free(m);
 	}
-	exit(returnCode);
 }
 
 /*
@@ -522,6 +524,7 @@ int main(int argc, char *argv[])
  	signal(SIGINT, shutdownHandler);
  	signal(SIGCHLD, reaper);
 
+	atexit(shutdown);
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");
 	

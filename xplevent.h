@@ -18,8 +18,6 @@ typedef XPLEvGlobals_t * XPLEvGlobalsPtr_t;
 extern XPLEvGlobalsPtr_t Globals;
 
 
-void XPLEventExit(int returnCode);
-
 #endif
 
 

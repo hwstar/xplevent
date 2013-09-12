@@ -428,6 +428,12 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 	}
 }
 
+static void shutdown(void)
+{
+		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
+		xPL_releaseService(Globals->xplEventService);
+		xPL_shutdown();
+}
 
 
 /*
@@ -449,11 +455,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 	
 	/* Terminate if requested to do so */
 	if(Globals->exitRequest){
-		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
-		xPL_releaseService(Globals->xplEventService);
-		xPL_shutdown();
-		void XPLEventExit(0);
-
+		exit(0);
 	}
 }
 
@@ -492,7 +494,7 @@ void MonitorRun(void)
  	/* Enable the service */
   	xPL_setServiceEnabled(Globals->xplEventService, TRUE);
 
-
+	atexit(shutdown);
 
  	/** Main Loop **/
 
