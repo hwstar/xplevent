@@ -341,25 +341,6 @@ end:
 
 
 /*
-* Move string from one context to another
-*/
-String ParserMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
-{
-	String newStr;
-	
-	ASSERT_FAIL(newCtx)
-	ASSERT_FAIL(oldStr)
-	
-	ASSERT_FAIL(strlen(oldStr) > offset)
-	
-	if((newStr = talloc_strdup(newCtx, oldStr + offset))){
-		talloc_free(oldStr);
-	}
-	
-	return newStr;
-}
-
-/*
  * Split an xPL tag into its constituent parts.
  * 
  * Check parts for length
