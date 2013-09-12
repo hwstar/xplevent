@@ -31,7 +31,7 @@ PTEST_OBJS = ptest.o $(OBJS)
 
 all: $(PACKAGE) ptest
 
-ptest.o:	Makefile ptest.c notify.h confread.h parser.h types.h defs.h xplevent.h
+ptest.o:	Makefile ptest.c notify.h confread.h parser.h types.h defs.h xplevent.h util.h
 
 $(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h
 
