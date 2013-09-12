@@ -36,6 +36,7 @@
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
+#include "util.h"
 #include "grammar.h"
 #include "parser.h"
 #include "parse.h"
@@ -58,36 +59,6 @@
 
 static ParseCtrlPtr_t parseCtrl; /* Not re-entrant because of this */
 
-
-
-/*
-* Hash a string
-*/
-
-static uint32_t hash(const String key)
-{
-	int len;
-	register uint32_t hash, i;
-	
-	ASSERT_FAIL(key)
-	
-	len = strlen(key);
-
-	if(!key)
-		return 0;
-
-	for(hash = i = 0; i < len; ++i){
-		hash += key[i];
-		hash += (hash << 10);
-		hash ^= (hash >> 6);
- 	}
-	hash += (hash << 3);
-	hash ^= (hash >> 11);
-	hash += (hash << 15);
-	return hash;
-}
-
-			
 
 
 /*
@@ -221,7 +192,7 @@ static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, Pa
 	if(!ph->steHead){
 		return NULL; /* Empty symbol table */
 	}
-	hashVal = hash(hashName);
+	hashVal = UtilHash(hashName);
 	
 	for(se = ph->steHead; (se); se = se->next){
 		p = se;
@@ -260,7 +231,7 @@ void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
 	hNew->magic = SE_MAGIC;
 	hNew->name = talloc_strdup(hNew, name);
 	MALLOC_FAIL(hNew->name)
-	hNew->hash = hash(name);
+	hNew->hash = UtilHash(name);
 	hNew->writable = TRUE;
 
 	*ptail = hNew;
@@ -506,7 +477,7 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const Stri
 			return NULL;
 		
 		/* Hash the section string passed in */
-		kh = hash(key);
+		kh = UtilHash(key);
 		for(ke = h->head; (ke); ke = ke->next){ /* Traverse key list */
 			ASSERT_FAIL(KE_MAGIC == ke->magic)
 			/* Compare hashes, and if they match, compare strings */
