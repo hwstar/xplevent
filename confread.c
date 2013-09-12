@@ -218,21 +218,6 @@ static int linescan(String *lp, String tokstring){
 
 /* Global functions */
 
-/*
-* Safer string copy
-*/
-
-String ConfReadStringCopy(String dest, const String src, int charsToCopy)
-{
-	if((!dest) || (!src))
-		return NULL;
-
-	strncpy(dest, src, charsToCopy);
-	dest[charsToCopy - 1] = 0;
-	return dest;
-}
-
-
 
 /*
 * Retrieve a section structure by name. If it doesn't exist, return NULL
