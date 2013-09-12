@@ -52,6 +52,7 @@
 #include "db.h"
 #include "parser.h"
 #include "monitor.h"
+#include "util.h"
 #include "xplevent.h"
 
 
