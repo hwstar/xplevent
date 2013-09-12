@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sqlite3.h>
 #include <talloc.h>
+#include <time.h>
 #include  "defs.h"
 #include "types.h"
 #include "notify.h"
@@ -239,11 +240,14 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	static const String id = "DBWriteNVState";
 	String sql = NULL;
 	String p;
+	time_t now;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(key)
 	ASSERT_FAIL(value)
+	
+	time(&now);
 		
 	/* Transaction begin */
 	
@@ -260,8 +264,8 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s',DATETIME())",
-		"nvstate", key, value);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s','%ld')",
+		"nvstate", key, value, (long) now);
 	
 		MALLOC_FAIL(sql)
 	
@@ -356,12 +360,15 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	static const String id = "DBUpdateTrigLog";
 	String sql = NULL;
 	String p;
+	time_t now;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(source)
 	ASSERT_FAIL(schema)
 	ASSERT_FAIL(nvpairs)
+	
+	time(&now);
 		
 	/* Transaction begin */
 	
@@ -378,8 +385,8 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s',DATETIME())",
-		"triglog", source, schema, nvpairs);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s','%ld'))",
+		"triglog", source, schema, nvpairs, (long) now);
 	
 		MALLOC_FAIL(sql)
 	
@@ -416,12 +423,14 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	static const String id = "DBUpdateTrigLog";
 	String sql = NULL;
 	String p;
+	time_t now;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(source)
 
-		
+	time(&now);
+	
 	/* Transaction begin */
 	
 	if(dbTxBegin(db, id) != PASS){
@@ -435,8 +444,8 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s',DATETIME())",
-		"hbeatlog", source);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s','%ld')",
+		"hbeatlog", source, (long) now);
 	
 		ASSERT_FAIL(sql)
 	
@@ -473,6 +482,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	static const String id = "DBUpdateScript";
 	String sql = NULL;
 	String p;
+
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
