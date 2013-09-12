@@ -264,8 +264,8 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s','%ld')",
-		"nvstate", key, value, (long) now);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s','%lld')",
+		"nvstate", key, value, (long long) now);
 	
 		MALLOC_FAIL(sql)
 	
@@ -385,8 +385,8 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s','%ld'))",
-		"triglog", source, schema, nvpairs, (long) now);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s','%lld'))",
+		"triglog", source, schema, nvpairs, (long long) now);
 	
 		MALLOC_FAIL(sql)
 	
@@ -444,8 +444,8 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s','%ld')",
-		"hbeatlog", source, (long) now);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s','%lld')",
+		"hbeatlog", source, (long long) now);
 	
 		ASSERT_FAIL(sql)
 	
