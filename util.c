@@ -93,7 +93,7 @@ Bool UtilFileWriteString(String filename, String str)
 * Hash a string
 */
 
-static uint32_t UtilHash(const String key)
+uint32_t UtilHash(const String key)
 {
   int len;
   register uint32_t hash, i;
