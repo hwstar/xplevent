@@ -18,39 +18,40 @@
 
 String *UtilFileReadString(TALLOC_CTX *ctx, String filename)
 {
-  int fd; 
-  struct stat s;
+  FILE *file
+  long size;
+  int arraylen;
+  
   void *buf;
   String str = NULL;
   
   ASSERT_FAIL(filename);
   
-  if((fd = open(filename, O_RDONLY)) < 0){
-    debug(DEBUG_UNEXPECTED,"File open error on %s: %s", filename, strerror(errno))
+  file = fopen(filename, "r");
+  if(!file) {
+    debug(DEBUG_UNEXPECTED, "can't open file %s for reading");
     return NULL;
   }
   
-  if(fstat(fd, &s) < 0){
-    debug(DEBUG_UNEXPECTED,"File stat error on %s", filename)
-    return NULL;
-  }
+  fseek(file, 0L, SEEK_END);
+  size = ftell(fp);
+  fseek(file, 0L, SEEK_SET);
   
-  
-  if((buf = mmap(0, s.st_size, PROT_READ, MAP_PRIVATE, fd, 0)) == (void *) -1){
-    debug(DEBUG_UNEXPECTED,"mmap error")
-    return NULL;
-  }
-   
-  str = talloc_array(ctx, char, s.st_size + 1);
+
+  arraylen = ((int) size) + 1; 
+ 
+  str = talloc_array(ctx, char, arraylen);
   
   MALLOC_FAIL(str);
   
-  memcpy(s, buf, s.st_size);
-  str[s.st_size] = 0;
+  if(size != fread(str, sizeof(char), (int) size, file)){
+    talloc_free(str);
+    return NULL;
+  }
   
-  munmap(buf);
+  str[arraylen - 1] = 0;
   
-  close(fd);
+  fclose(file);
   
   return str;
   
@@ -60,34 +61,26 @@ String *UtilFileReadString(TALLOC_CTX *ctx, String filename)
 * Write a string to a file
 */
 
-int UtilFileWriteString(String filename, String str)
+Bool UtilFileWriteString(String filename, String str)
 {
-  int len, bw;
+  int len;
+  FILE *file;
   
   ASSERT_FAIL(filename)
   ASSERT_FAIL(str)
   
+  file = fopen(filename, "w");
+  if(!file) {
+    debug(DEBUG_UNEXPECTED, "can't open file %s for writing");
+    return NULL;
+  }
+  
   len = strlen(str);
   
-  if((fd = open(filename, O_WRONLY | O_TRUNC)) < 0){
-    debug(DEBUG_UNEXPECTED,"File open error on %s: %s", filename, strerror(errno));
+  if(len != fwrite(str, sizeof(char), len, file)){
     return FAIL;
   }
-  
-  for(;;){
-    if((bw = write(fd, str, len)) < 0){
-      if(bw == EINTR){
-        continue;
-      }
-      debug(DEBUG_UNEXPECTED,"File write error on %s: %s", filename, strerror(errno));
-      return FAIL;
-    }
-    if(bw != len){
-      debug(DEBUG_UNEXPECTED, "File could not be written to disk");
-      return FAIL;
-    }
-    break;
-  }
+    
   return PASS;
 }
 
@@ -199,7 +192,7 @@ pid_t UtilPIDRead(String filename) {
 * otherwise.
 */
 
-int UtilPidWrite(String filename, pid_t pid) {
+int UtilPIDWrite(String filename, pid_t pid) {
   FILE *file;
 
   /* Create the file. */
