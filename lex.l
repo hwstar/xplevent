@@ -27,6 +27,7 @@
 #include <talloc.h>
 #include "defs.h"
 #include "types.h"
+#include "util.h"
 #include "parser.h"
 #include "notify.h"
 #include "grammar.h"
