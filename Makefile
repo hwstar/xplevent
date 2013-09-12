@@ -21,7 +21,7 @@ DAEMONDIR = /usr/local/bin
 
 # Object file lists
 
-OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o
+OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o util.o
 
 PACKAGE_OBJS = $(PACKAGE).o $(OBJS)
 
@@ -33,7 +33,7 @@ all: $(PACKAGE) ptest
 
 ptest.o:	Makefile ptest.c notify.h confread.h parser.h types.h defs.h xplevent.h
 
-$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h
+$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h
 
 
 #Rules
@@ -47,7 +47,7 @@ lex.c:	lex.l lex.h grammar.c grammar.y parse.h parser.h types.h defs.h notify.h 
 	
 parser.o:	parser.c grammar.c lex.c lex.l grammar.y parser.h parse.h defs.h types.h notify.h db.h xplevent.h
 
-ptest: $(PTEST_OBJS) parser.h parse.h grammar.c lex.c defs.h types.h notify.h xplevent.h
+ptest: $(PTEST_OBJS) parser.h parse.h grammar.c lex.c defs.h types.h notify.h xplevent.h util.h
 	$(CC) $(CFLAGS) -o ptest $(PTEST_OBJS) $(LIBS)
 
 $(PACKAGE): $(PACKAGE_OBJS)
