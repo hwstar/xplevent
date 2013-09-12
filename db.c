@@ -237,7 +237,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	Bool res = PASS;
 	String errorMessage;
 	static const String id = "DBWriteNVState";
-	String sql;
+	String sql = NULL;
 	String p;
 	
 	ASSERT_FAIL(ctx)
@@ -274,8 +274,10 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		}
 	}
 	
+	if(sql){
+		talloc_free(sql);
+	}
 	
-	talloc_free(sql);
 
 	/* Transaction end */
 	
@@ -352,7 +354,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	Bool res = PASS;
 	String errorMessage;
 	static const String id = "DBUpdateTrigLog";
-	String sql;
+	String sql = NULL;
 	String p;
 	
 	ASSERT_FAIL(ctx)
@@ -390,8 +392,10 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 		}
 	}
 	
-	
-	talloc_free(sql);
+	if(sql){
+		talloc_free(sql);
+	}	
+
 
 	/* Transaction end */
 	
@@ -410,7 +414,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	Bool res = PASS;
 	String errorMessage;
 	static const String id = "DBUpdateTrigLog";
-	String sql;
+	String sql = NULL;
 	String p;
 	
 	ASSERT_FAIL(ctx)
@@ -445,8 +449,67 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 		}
 	}
 	
+	if(sql){
+		talloc_free(sql);
+	}	
+
+	/* Transaction end */
 	
-	talloc_free(sql);
+	dbTxEnd(db, id, res);
+
+	return res;
+	
+}
+
+
+/*
+* Insert or replace script by script name
+*/
+
+Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String script)
+{
+	Bool res = PASS;
+	String errorMessage;
+	static const String id = "DBUpdateScript";
+	String sql = NULL;
+	String p;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(name)
+	ASSERT_FAIL(script)
+
+		
+	/* Transaction begin */
+	
+	if(dbTxBegin(db, id) != PASS){
+		return FAIL;
+	}
+	
+	p = dbReadField(db, ctx, id, "scripts", "scriptname", name, "scriptcode");
+	if(p){
+		talloc_free(p);
+		res = dbDeleteRow(db, ctx, id, "scripts", "scriptname", name);
+	}
+	
+	if(res == PASS){
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (scriptname,scriptcode) VALUES ('%s','%s')",
+		"scripts", script);
+	
+		ASSERT_FAIL(sql)
+	
+		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			sqlite3_free(errorMessage);
+			res = FAIL;
+		}
+	}
+	
+	if(sql){
+		talloc_free(sql);
+	}
 
 	/* Transaction end */
 	
