@@ -191,8 +191,9 @@ void *DBOpen(String file)
 
 void DBClose(void *db)
 {
-	ASSERT_FAIL(db)
-	sqlite3_close((sqlite3 *) db);
+	if(db){
+		sqlite3_close((sqlite3 *) db);
+	}
 }
 
 

@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	Globals->masterCTX = top;
+	Globals->debugLvl = 4;
 	
 	/* Set the program name */
 	Globals->progName = argv[0];

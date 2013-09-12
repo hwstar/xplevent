@@ -50,13 +50,15 @@
 #include "notify.h"
 #include "confread.h"
 #include "db.h"
+#include "parser.h"
 #include "monitor.h"
 #include "xplevent.h"
 
 
+enum {UC_CHECK_SYNTAX = 1};
 
 
-#define SHORT_OPTIONS "c:d:ef:hi:l:ns:v"
+#define SHORT_OPTIONS "C:c:d:ef:hi:l:ns:v"
 
 #define WS_SIZE 256
 
@@ -99,7 +101,8 @@ static char dbFile[WS_SIZE] = DEF_DB_FILE;
 /* Commandline options. */
 
 static struct option longOptions[] = {
-	{"config-file", 1, 0, 'c'},
+	{"check",1 ,0 ,'c'},
+	{"config-file", 1, 0, 'C'},
 	{"debug", 1, 0, 'd'},
 	{"exitonerr",0, 0, 'e'},
 	{"pid-file", 0, 0, 'f'},
@@ -212,7 +215,8 @@ void showHelp(void)
 	printf("\n");
 	printf("Usage: %s [OPTION]...\n", Globals->progName);
 	printf("\n");
-	printf("  -c, --config-file PATH  Set the path to the config file\n");
+	printf("  -C, --config-file PATH  Set the path to the config file\n");
+	printf("  -c, --check PATH        Check script file syntax\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
 	printf("                          compiled-in default is %d and the max\n", Globals->debugLvl);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
@@ -266,14 +270,44 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 static void shutdown(void)
 {
 	DBClose(Globals->db);
-
-	/* Unlink the pid file if we can. */
-	(void) unlink(pidFile);
+	if(!Globals->noBackground){
+		/* Unlink the pid file if we can. */
+		(void) unlink(pidFile);
+	}
 	if(Globals->masterCTX){
 		TALLOC_CTX *m = Globals->masterCTX;
 		talloc_free(m);
 	}
 }
+
+
+/*
+ * Do utility command and exit
+ */
+void doUtilityCommand(int utilityCommand, String utilityArg, String utilityExtra)
+{
+	int res = 0;
+	String s;
+	
+	
+	debug(DEBUG_ACTION, "Util cmd: %d, arg: %s, extra: %s", utilityCommand,
+	(utilityArg)? utilityArg : "(nil)",
+	(utilityExtra)? utilityExtra : "(nil)");
+	
+	switch(utilityCommand){
+		case UC_CHECK_SYNTAX:
+			s = ParserCheckSyntax(Globals->masterCTX, utilityArg);
+			if(s){
+				fatal("%s", s);
+			}
+			break;
+	
+		default:
+			ASSERT_FAIL(0);
+	}
+	exit(res);
+}
+
 
 /*
 * main
@@ -286,6 +320,10 @@ int main(int argc, char *argv[])
 	int optchar;
 	String p;
 	TALLOC_CTX *m;
+	int utilityCommand = 0;
+	String utilityArg = NULL;
+	String utilityExtra = NULL;
+
 	
 	if(!(m = talloc_new(NULL))){
 		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
@@ -300,7 +338,7 @@ int main(int argc, char *argv[])
 	
 	Globals->progName = argv[0];
 	
-	
+	atexit(shutdown);
 	
 
 	/* Parse the arguments. */
@@ -320,9 +358,14 @@ int main(int argc, char *argv[])
 				exit(1);
 		
 				/* Was it a config file switch? */
-			case 'c':
+			case 'C':
 				ConfReadStringCopy(configFile, optarg, WS_SIZE - 1);
 				debug(DEBUG_ACTION,"New config file path is: %s", configFile);
+				break;
+				
+			case 'c': /* Check syntax of a script file */
+				utilityCommand = UC_CHECK_SYNTAX;
+				MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
 				break;
 				
 				/* Was it a debug level set? */
@@ -401,10 +444,15 @@ int main(int argc, char *argv[])
 	}
 
 	
-	/* If there were any extra arguments, we should complain. */
+	/* If there were any extra arguments, we may complain. */
 
 	if(optind < argc) {
-		fatal("Extra argument on commandline, '%s'", argv[optind]);
+		if(utilityCommand){
+			MALLOC_FAIL(utilityExtra = talloc_strdup(Globals->masterCTX, argv[optind]));
+		}
+		else{
+			fatal("Extra argument on command line: %s", argv[optind]);
+		}
 	}
 
 	/* Attempt to read a config file */
@@ -432,27 +480,49 @@ int main(int argc, char *argv[])
 			ConfReadStringCopy(dbFile, p, sizeof(dbFile));
 		
 	}
-	else
-		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
+	else{
+		warn("Config file %s not found or not readable", configFile);
+	}
 	
+	/* Install signal traps for proper shutdown */
+ 	signal(SIGTERM, shutdownHandler);
+ 	signal(SIGINT, shutdownHandler);
+ 	signal(SIGCHLD, reaper);
 
-	/* Set the broadcast interface */
-	
-	MonitorPreForkSetup(interface, instanceID);	
 		
-	
+	/* Open the database */
 	if(!(Globals->db = DBOpen(dbFile))){
 			fatal("Database file does not exist or is not writeble: %s", dbFile);
 	}
+	
+
+	/* Check for utility commands */
+	if(utilityCommand){
+		if(Globals->noBackground){
+			fatal("-n switch not valid with utility command");
+		}
+		if(Globals->exitOnErr){
+			fatal("-e switch not valid with utility command");
+		}		
+		doUtilityCommand(utilityCommand, utilityArg, utilityExtra);
+	}
+	
+	
+
+	/* Make sure we are not already running (.pid file check). */
+	if(pid_read(pidFile) != -1){
+		fatal("%s is already running", Globals->progName);
+	}
+	
+	/* Set the broadcast interface */
+	
+	MonitorPreForkSetup(interface, instanceID);	
+
 
 	/* Fork into the background. */	
 	if(!Globals->noBackground) {
 		int retval;
 		
-		/* Make sure we are not already running (.pid file check). */
-		if(pid_read(pidFile) != -1) 
-			fatal("%s is already running", Globals->progName);
-			
 		debug(DEBUG_STATUS, "Forking into background");
 
     	/* 
@@ -518,13 +588,8 @@ int main(int argc, char *argv[])
 		close(2);
  
 	}
-	
-	/* Install signal traps for proper shutdown */
- 	signal(SIGTERM, shutdownHandler);
- 	signal(SIGINT, shutdownHandler);
- 	signal(SIGCHLD, reaper);
 
-	atexit(shutdown);
+
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");
 	

@@ -180,10 +180,15 @@ static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
 	
 	ASSERT_FAIL(ph)
 	ASSERT_FAIL(var)
-	
+
 	res = talloc_asprintf(ph, "Variable '%s' undefined on line number %d", var, lineNo);
 	MALLOC_FAIL(res);
-	ph->failReason = res;
+	if(!ph->ignoreAssignErrors){
+		ph->failReason = res;
+	}
+	else{
+		warn("%s", res); /* Warn about variable being undefined, but keep going */
+	}
 }
 
 /*
@@ -800,6 +805,8 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	
 	if(tokenID == TOK_ELSE){
 		debug(DEBUG_ACTION,"Set Jumps TOK_ELSE");
+		/* Skip back before the current block close instruction */
+		ASSERT_FAIL(p = p->prev)
 		/* Now, go back in the pcode and find the prior close block instr */
 		for(; (p) ; p = p->prev){
 			ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC)
@@ -807,12 +814,13 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 			if((p->ctrlStructRefCount == myCBRC) && (p->opcode == OP_BLOCK) && (p->operand == OPRB_END)){
 				p->skip = tail; /* Install jump over second block */
 				elseblock = p->next; /* Note the beginning of the else block */
+				ASSERT_FAIL(elseblock)
 				debug(DEBUG_ACTION, "tail seq = %d, elseblock seq = %d", tail->seq, elseblock->seq);
 				break;
 			}
 		}
 		ASSERT_FAIL(p)
-		ASSERT_FAIL(elseblock)
+	
 		
 	}
 	/* Look for test or exists instruction */		
@@ -922,7 +930,7 @@ int ParserExecPcode(pcodeHeaderPtr_t ph)
 				MALLOC_FAIL(value)
 				p = pe->prev->prev;
 			    if(ParserPcodePutValue(ctx, ph, p, value)){
-					undefVar(ph, p->data1, pe->lineNo); 
+					undefVar(ph, p->data1, pe->lineNo);
 					break;
 				}	
 				debug(DEBUG_ACTION,"Assign successful on line %d", pe->lineNo);
@@ -1098,5 +1106,48 @@ int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str)
 	ParseFree(pParser, parserFree);
 	
 	return res;
+}
+
+
+String ParserCheckSyntax(TALLOC_CTX *ctx, String file)
+{
+	ParseCtrlPtr_t parseCtrl;
+	pcodeHeaderPtr_t ph;
+	String s = NULL;
+	
+	/* Allocate memory */
+	MALLOC_FAIL(parseCtrl = talloc(ctx, ParseCtrl_t))
+	MALLOC_FAIL(ph = talloc(ctx, pcodeHeader_t))
+	parseCtrl->pcodeHeader = ph;
+	
+	/* Parse user code */
+	
+	ParserParseHCL(parseCtrl, TRUE, file);
+	
+	/* Dump pcode list if debug level >= 4 */
+	if(Globals->debugLvl >= 4){
+			ParserPcodeDumpList(ph);
+	}
+		
+	if(parseCtrl->failReason){
+		MALLOC_FAIL(s = talloc_asprintf(ctx, "Parse error: %s", parseCtrl->failReason))
+		talloc_free(parseCtrl);
+		return s;
+	}
+	
+	talloc_free(parseCtrl);
+	
+	if(Globals->debugLvl >= 3 ){
+		ph->tracePcode = TRUE;
+	}
+	
+	ph->ignoreAssignErrors = TRUE;
+	ParserExecPcode(ph);
+	if(ph->failReason){
+		MALLOC_FAIL(s = talloc_asprintf(ctx, "Pcode execution error: %s", ph->failReason))
+	}
+	talloc_free(ph);
+	
+	return s;
 }
 
