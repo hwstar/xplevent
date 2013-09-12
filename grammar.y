@@ -30,6 +30,7 @@
 #include <talloc.h>
 #include "defs.h"
 #include "types.h"
+#include "util.h"
 #include "notify.h"
 #include "grammar.h"
 #include "parser.h"
@@ -203,7 +204,7 @@ argument ::= rvalue .
 
 argument ::= BACKSLASH HASH(A) .
 {
-	A->stringVal = ParserMoveString(A, A->stringVal, 1); /* Chop off percent */
+	A->stringVal = UtilMoveString(A, A->stringVal, 1); /* Chop off percent */
 	MALLOC_FAIL(A->stringVal);
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHREF, A->stringVal, NULL); 
 }
@@ -311,7 +312,7 @@ testop(A) ::= SEQ . /* String Equality */
 
 hash ::= SCALAR(B) OBRACE BAREWORD(A) CBRACE .
 {
-	B->stringVal = ParserMoveString(B, B->stringVal, 1); /* Chop off dollar sign */
+	B->stringVal = UtilMoveString(B, B->stringVal, 1); /* Chop off dollar sign */
 	MALLOC_FAIL(B->stringVal);
 	
 	ParserPcodeEmit(parseCtrl, OP_PUSH, OPRD_HASHKV, B->stringVal, A->stringVal);
@@ -347,7 +348,7 @@ rvalue ::= STRINGLIT(A) .
 	/* Strip off double quotes */
 	
 	A->stringVal[strlen(A->stringVal) - 1] = 0;
-	A->stringVal = ParserMoveString(A, A->stringVal, 1);
+	A->stringVal = UtilMoveString(A, A->stringVal, 1);
 	MALLOC_FAIL(A->stringVal);
 	
 	
