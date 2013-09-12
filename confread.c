@@ -32,9 +32,10 @@
 
 #include "defs.h"
 #include "types.h"
+#include "util.h"
 #include "confread.h"
 #include "notify.h"
-#include "util.h"
+
 
 /* Definitions */
 
@@ -61,30 +62,6 @@ static int linescan(String *lp, String tokstring);
 static String removespctab(String line);
 static char copyuntil(String dest, String *srcp, int max_dest_len,  String stopchrs);
 
-
-
-/*
-* Hash a string
-*/
-
-static unsigned confreadHash(const String key)
-{
-	int len = strlen(key);
-	register unsigned hash, i;
-
-	if(!key)
-		return 0;
-
-	for(hash = i = 0; i < len; ++i){
-		hash += key[i];
-		hash += (hash << 10);
-		hash ^= (hash >> 6);
- 	}
-	hash += (hash << 3);
-	hash ^= (hash >> 11);
-	hash += (hash << 15);
-	return hash;
-}
 
 
 /*
@@ -271,7 +248,7 @@ SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const String section)
 		return NULL;
 
 	/* Hash the section string passed in */
-	sh = confreadHash(section);
+	sh = UtilHash(section);
 	for(se = ce->head; (se); se = se->next){ /* Traverse section list */
 		/* Compare hashes, and if they match, compare strings */
 		if((sh == se->hash) && (!strcmp(se->section, section))){
@@ -341,7 +318,7 @@ KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key)
 		return NULL;
 
 	/* Hash the section string passed in */
-	kh = confreadHash(key);
+	kh = UtilHash(key);
 	for(ke = se->key_head; (ke); ke = ke->next){ /* Traverse key list */
 		/* Compare hashes, and if they match, compare strings */
 		if((kh == ke->hash) && (!strcmp(ke->key, key)))
@@ -654,7 +631,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 				MALLOC_FAIL(se->section);
 			
 				/* Hash the section */
-				se->hash = confreadHash(se->section);
+				se->hash = UtilHash(se->section);
 
 				/* Record the line number */
 				se->linenum = linenum;
@@ -701,7 +678,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 				
 
 					/* Hash the key */
-					kv->hash = confreadHash(kv->key);
+					kv->hash = UtilHash(kv->key);
 
 					/* Record the line number */
 					kv->linenum = linenum;
