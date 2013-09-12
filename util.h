@@ -2,6 +2,6 @@
 #define UTIL_H
 
 String *UtilFileReadString(TALLOC_CTX *ctx, String filename);
-int UtilFileReadString(String filename, String str);
+int UtilFileWriteString(String filename, String str);
 
 #endif
