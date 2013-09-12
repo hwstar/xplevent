@@ -13,7 +13,7 @@
 
 
 /*
-* Memory map a file
+* Read a file into a string
 */
 
 String *UtilFileReadString(TALLOC_CTX *ctx, String filename)
@@ -26,7 +26,7 @@ String *UtilFileReadString(TALLOC_CTX *ctx, String filename)
   ASSERT_FAIL(filename);
   
   if((fd = open(filename, O_RDONLY)) < 0){
-    debug(DEBUG_UNEXPECTED,"File open error on %s", filename)
+    debug(DEBUG_UNEXPECTED,"File open error on %s: %s", filename, strerror(errno))
     return NULL;
   }
   
@@ -54,4 +54,39 @@ String *UtilFileReadString(TALLOC_CTX *ctx, String filename)
   
   return str;
   
+}
+
+/*
+* Write a string to a file
+*/
+
+int UtilFileWriteString(String filename, String str)
+{
+  int len, bw;
+  
+  ASSERT_FAIL(filename)
+  ASSERT_FAIL(str)
+  
+  len = strlen(str);
+  
+  if((fd = open(filename, O_WRONLY | O_TRUNC)) < 0){
+    debug(DEBUG_UNEXPECTED,"File open error on %s: %s", filename, strerror(errno));
+    return FAIL;
+  }
+  
+  for(;;){
+    if((bw = write(fd, str, len)) < 0){
+      if(bw == EINTR){
+        continue;
+      }
+      debug(DEBUG_UNEXPECTED,"File write error on %s: %s", filename, strerror(errno));
+      return FAIL;
+    }
+    if(bw != len){
+      debug(DEBUG_UNEXPECTED, "File could not be written to disk");
+      return FAIL;
+    }
+    break;
+  }
+  return PASS;
 }
