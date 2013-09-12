@@ -92,7 +92,7 @@ int UtilFileWriteString(String filename, String str)
 }
 
 
-*
+/*
 * Hash a string
 */
 
