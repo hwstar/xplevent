@@ -134,7 +134,6 @@ Bool ParserPcodeGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr,
 Bool ParserPcodePutValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String value);
 int ParserExecPcode(pcodeHeaderPtr_t ph);
 int ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str);
-String ParserMoveString(TALLOC_CTX *newCtx, String oldStr, int offset);
 String ParserCheckSyntax(TALLOC_CTX *ctx, String file);
 
 
