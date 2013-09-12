@@ -159,5 +159,71 @@ String UtilStringCopy(String dest, const String src, int charsToCopy)
 }
 
 
+/*
+* Get the pid from a pidfile. Returns the pid or -1 if it couldn't get the
+* pid (either not there, stale, or not accesible).
+*/
+
+pid_t UtilPIDRead(String filename) {
+  FILE *file;
+  pid_t pid;
+
+  /* Get the pid from the file. */
+  file=fopen(filename, "r");
+  if(!file) {
+    return -1;
+  }
+  if(fscanf(file, "%d", &pid) != 1) {
+    fclose(file);
+    return -1;
+  }
+  if(fclose(file) != 0) {
+    return -1;
+  }
+
+  /* Check that a process is running on this pid. */
+  if(kill(pid, 0) != 0) {
+
+    /* It might just be bad permissions, check to be sure. */
+    if(errno == ESRCH) {
+    return -1 ;
+    }
+  }
+
+  /* Return this pid. */
+  return(pid);
+}
+
+/*
+* Write the pid into a pid file. Returns zero if it worked, non-zero
+* otherwise.
+*/
+
+int UtilPidWrite(String filename, pid_t pid) {
+  FILE *file;
+
+  /* Create the file. */
+  file=fopen(filename, "w");
+  if(!file) {
+  return -1;
+  }
+
+  /* Write the pid into the file. */
+  (void) fprintf(file, "%d\n", pid);
+  if(ferror(file) != 0) {
+    (void) fclose(file);
+    return -1;
+  }
+
+  /* Close the file. */
+  if(fclose(file) != 0) {
+    return -1;
+  }
+
+  /* We finished ok. */
+  return 0;
+}
+
+
 
 
