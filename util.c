@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -43,7 +42,7 @@ String *UtilFileReadString(TALLOC_CTX *ctx, String filename)
    
   str = talloc_array(ctx, char, s.st_size + 1);
   
-  MALLOC_FAIL(buf);
+  MALLOC_FAIL(str);
   
   memcpy(s, buf, s.st_size);
   str[s.st_size] = 0;
