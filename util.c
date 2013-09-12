@@ -90,3 +90,34 @@ int UtilFileWriteString(String filename, String str)
   }
   return PASS;
 }
+
+
+*
+* Hash a string
+*/
+
+static uint32_t UtilHash(const String key)
+{
+  int len;
+  register uint32_t hash, i;
+
+  ASSERT_FAIL(key)
+
+  len = strlen(key);
+
+  if(!key){
+    return 0;
+  }
+
+  for(hash = i = 0; i < len; ++i){
+    hash += key[i];
+    hash += (hash << 10);
+    hash ^= (hash >> 6);
+  }
+  hash += (hash << 3);
+  hash ^= (hash >> 11);
+  hash += (hash << 15);
+  return hash;
+}
+
+
