@@ -1,4 +1,3 @@
-
 /*
  * confread.h
  * 
@@ -95,10 +94,6 @@ const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key);
 /* Default error handler */
 void ConfReadDefErrorHandler( int etype, int linenum, const String info);
 
-/* Utility Functions */
-
-String ConfReadStringCopy(String dest, const String src, int charsToCopy);
-unsigned ConfReadHash(const String key);
 
 /* Debugging functions */
 void ConfReadDebugDump(ConfigEntryPtr_t ce);
