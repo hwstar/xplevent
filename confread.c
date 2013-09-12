@@ -34,6 +34,7 @@
 #include "types.h"
 #include "confread.h"
 #include "notify.h"
+#include "util.h"
 
 /* Definitions */
 
