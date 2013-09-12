@@ -72,7 +72,7 @@ Bool UtilFileWriteString(String filename, String str)
   file = fopen(filename, "w");
   if(!file) {
     debug(DEBUG_UNEXPECTED, "can't open file %s for writing");
-    return NULL;
+    return FAIL;
   }
   
   len = strlen(str);
@@ -80,7 +80,11 @@ Bool UtilFileWriteString(String filename, String str)
   if(len != fwrite(str, sizeof(char), len, file)){
     return FAIL;
   }
-    
+  
+  if(fclose(file)){
+    return FAIL;
+  }
+  
   return PASS;
 }
 
