@@ -141,3 +141,23 @@ String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
   return newStr;
 }
 
+
+/*
+* Safer string copy
+*/
+
+String UtilStringCopy(String dest, const String src, int charsToCopy)
+{
+  ASSERT_FAIL(dest)
+  ASSERT_FAIL(src)
+ 
+
+  strncpy(dest, src, charsToCopy);
+  dest[charsToCopy - 1] = 0;
+  return dest;
+  
+}
+
+
+
+
