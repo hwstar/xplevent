@@ -34,6 +34,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <signal.h>
 #include <ctype.h>
 #include <getopt.h>
@@ -274,7 +275,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 					fatal("Could not fetch script: %s", utilityArg);
 				}
 				if(UtilFileWriteString(utilityFile, script) == FAIL){
-					fatal("Could not write file: %s", utilityFile);
+					fatal_with_reason(errno, "Could not write file: %s", utilityFile);
 				}
 				
 			}
@@ -292,7 +293,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 					fatal("%s: script not added to database", s);
 				}
 				if(!(script = UtilFileReadString(Globals->masterCTX, utilityFile))){
-					fatal("Could not read file: %s", utilityFile);
+					fatal_with_reason(errno, "Could not read file: %s", utilityFile);
 				}
 				if(DBIRScript(Globals->masterCTX, Globals->db, utilityArg, script) == FAIL){
 					fatal("Script %s could not be stored in the database");
@@ -528,7 +529,7 @@ int main(int argc, char *argv[])
 		
 	/* Open the database */
 	if(!(Globals->db = DBOpen(dbFile))){
-			fatal("Database file does not exist or is not writeble: %s", dbFile);
+		fatal("Database file does not exist or is not writeble: %s", dbFile);
 	}
 	
 
