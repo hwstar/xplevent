@@ -524,7 +524,7 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
 		MALLOC_FAIL(keNew->key)
 		keNew->value = talloc_strdup(keNew, value);
 		MALLOC_FAIL(keNew->value);
-		keNew->hash = hash(key);
+		keNew->hash = UtilHash(key);
 	
 		/* add the key/value to the hash, replacing any existing identical key */
 		

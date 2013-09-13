@@ -120,70 +120,6 @@ static struct option longOptions[] = {
 
 
 
-/* 
- * Get the pid from a pidfile.  Returns the pid or -1 if it couldn't get the
- * pid (either not there, stale, or not accesible).
- */
-static pid_t pid_read(char *filename) {
-	FILE *file;
-	pid_t pid;
-	
-	/* Get the pid from the file. */
-	file=fopen(filename, "r");
-	if(!file) {
-		return(-1);
-	}
-	if(fscanf(file, "%d", &pid) != 1) {
-		fclose(file);
-		return(-1);
-	}
-	if(fclose(file) != 0) {
-		return(-1);
-	}
-	
-	/* Check that a process is running on this pid. */
-	if(kill(pid, 0) != 0) {
-		
-		/* It might just be bad permissions, check to be sure. */
-		if(errno == ESRCH) {
-			return(-1);
-		}
-	}
-	
-	/* Return this pid. */
-	return(pid);
-}
-
-
-/* 
- * Write the pid into a pid file.  Returns zero if it worked, non-zero
- * otherwise.
- */
-static int pid_write(char *filename, pid_t pid) {
-	FILE *file;
-	
-	/* Create the file. */
-	file=fopen(filename, "w");
-	if(!file) {
-		return -1;
-	}
-	
-	/* Write the pid into the file. */
-	(void) fprintf(file, "%d\n", pid);
-	if(ferror(file) != 0) {
-		(void) fclose(file);
-		return -1;
-	}
-	
-	/* Close the file. */
-	if(fclose(file) != 0) {
-		return -1;
-	}
-	
-	/* We finished ok. */
-	return 0;
-}
-
 
 /*
 * When the user hits ^C, logically shutdown
@@ -360,7 +296,7 @@ int main(int argc, char *argv[])
 		
 				/* Was it a config file switch? */
 			case 'C':
-				ConfReadStringCopy(configFile, optarg, WS_SIZE - 1);
+				UtilStringCopy(configFile, optarg, WS_SIZE - 1);
 				debug(DEBUG_ACTION,"New config file path is: %s", configFile);
 				break;
 				
@@ -386,7 +322,7 @@ int main(int argc, char *argv[])
 
 			/* Was it a pid file switch? */
 			case 'f':
-				ConfReadStringCopy(pidFile, optarg, WS_SIZE - 1);
+				UtilStringCopy(pidFile, optarg, WS_SIZE - 1);
 				clOverride.pid_file = 1;
 				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
 				break;
@@ -398,13 +334,13 @@ int main(int argc, char *argv[])
 
 				/* Specify interface to broadcast on */
 			case 'i': 
-				ConfReadStringCopy(interface, optarg, WS_SIZE -1);
+				UtilStringCopy(interface, optarg, WS_SIZE -1);
 				clOverride.interface = 1;
 				break;
 
 			case 'l':
 				/* Override log path*/
-				ConfReadStringCopy(logPath, optarg, WS_SIZE - 1);
+				UtilStringCopy(logPath, optarg, WS_SIZE - 1);
 				clOverride.log_path = 1;
 				debug(DEBUG_ACTION,"New log path is: %s",
 				logPath);
@@ -419,14 +355,14 @@ int main(int argc, char *argv[])
 
 			
 			case 'o': /* Database file */
-				ConfReadStringCopy(dbFile, optarg, WS_SIZE);
+				UtilStringCopy(dbFile, optarg, WS_SIZE);
 				clOverride.dbfile = 1;
 				debug(DEBUG_ACTION,"New db file is: %s", dbFile);
 				break;			
 			
 			
 			case 's': /* Instance ID */
-				ConfReadStringCopy(instanceID, optarg, WS_SIZE);
+				UtilStringCopy(instanceID, optarg, WS_SIZE);
 				clOverride.instance_id = 1;
 				debug(DEBUG_ACTION,"New instance ID is: %s", instanceID);
 				break;
@@ -462,23 +398,23 @@ int main(int argc, char *argv[])
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
 		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "instance-id")))
-			ConfReadStringCopy(instanceID, p, sizeof(instanceID));
+			UtilStringCopy(instanceID, p, sizeof(instanceID));
 		
 		/* Interface */
 		if((!clOverride.interface) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "interface")))
-			ConfReadStringCopy(interface, p, sizeof(interface));
+			UtilStringCopy(interface, p, sizeof(interface));
 			
 		/* pid file */
 		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "pid-file")))
-			ConfReadStringCopy(pidFile, p, sizeof(pidFile));	
+			UtilStringCopy(pidFile, p, sizeof(pidFile));	
 						
 		/* log path */
 		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "log-path")))
-			ConfReadStringCopy(logPath, p, sizeof(logPath));
+			UtilStringCopy(logPath, p, sizeof(logPath));
 		
 		/* db-file */
 		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "db-file")))
-			ConfReadStringCopy(dbFile, p, sizeof(dbFile));
+			UtilStringCopy(dbFile, p, sizeof(dbFile));
 		
 	}
 	else{
@@ -511,7 +447,7 @@ int main(int argc, char *argv[])
 	
 
 	/* Make sure we are not already running (.pid file check). */
-	if(pid_read(pidFile) != -1){
+	if(UtilPIDRead(pidFile) != -1){
 		fatal("%s is already running", Globals->progName);
 	}
 	
@@ -544,7 +480,7 @@ int main(int argc, char *argv[])
 				fatal_with_reason(errno, "parent fork");
     		}
 	
-		if(!Globals->noBackground && (pid_write(pidFile, getpid()) != 0)) {
+		if(!Globals->noBackground && (UtilPIDWrite(pidFile, getpid()) != 0)) {
 			debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", pidFile);
 		}
 

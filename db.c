@@ -385,7 +385,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s','%lld'))",
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s','%lld')",
 		"triglog", source, schema, nvpairs, (long long) now);
 	
 		MALLOC_FAIL(sql)
@@ -504,7 +504,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	
 	if(res == PASS){
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (scriptname,scriptcode) VALUES ('%s','%s')",
-		"scripts", script);
+		"scripts", name, script);
 	
 		ASSERT_FAIL(sql)
 	
