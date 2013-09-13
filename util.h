@@ -8,6 +8,7 @@ String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset);
 String UtilStringCopy(String dest, const String src, int charsToCopy);
 pid_t UtilPIDRead(char *filename);
 int UtilPIDWrite(String filename, pid_t pid);
+Bool UtilSpawn(String command, pid_t *pid);
 
 
 #endif
