@@ -56,10 +56,10 @@
 #include "xplevent.h"
 
 
-enum {UC_CHECK_SYNTAX = 1};
+enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
 
 
-#define SHORT_OPTIONS "C:c:d:ef:hi:l:ns:v"
+#define SHORT_OPTIONS "C:c:d:ef:g:Hi:L:no:p:s:V"
 
 #define WS_SIZE 256
 
@@ -107,13 +107,15 @@ static struct option longOptions[] = {
 	{"debug", 1, 0, 'd'},
 	{"exitonerr",0, 0, 'e'},
 	{"pid-file", 0, 0, 'f'},
-	{"help", 0, 0, 'h'},
+	{"get", 1, 0, 'g'},
+	{"help", 0, 0, 'H'},
 	{"interface", 1, 0, 'i'},
-	{"log", 1, 0, 'l'},
+	{"log", 1, 0, 'L'},
 	{"no-background", 0, 0, 'n'},	
 	{"db-file", 1, 0, 'o'},
+	{"put", 1, 0, 'p'},
 	{"instance", 1, 0, 's'},
-	{"version", 0, 0, 'v'},
+	{"version", 0, 0, 'V'},
 	{0, 0, 0, 0}
 };
 
@@ -159,13 +161,15 @@ void showHelp(void)
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -f, --pid-file PATH     Set new pid file path, default is: %s\n", pidFile);
+	printf("  -g, --get script file   Get script name from database and write to file");
 	printf("  -h, --help              Shows this\n");
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
-	printf("  -l, --log  PATH         Path name to debug log file when daemonized\n");
+	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
 	printf("  -o, --db-file           Database file");
+	printf("  -p, --put file script   Put file in script name");
 	printf("  -s, --instance ID       Set instance id. Default is %s", instanceID);
-	printf("  -v, --version           Display program version\n");
+	printf("  -V, --version           Display program version\n");
 	printf("\n");
  	printf("Report bugs to <%s>\n\n", EMAIL);
 	return;
@@ -326,6 +330,12 @@ int main(int argc, char *argv[])
 				clOverride.pid_file = 1;
 				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
 				break;
+				
+			case 'g': /* Get script */
+				utilityCommand = UC_GET_SCRIPT;
+				MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				break;
+			
 			
 				/* Was it a help request? */
 			case 'h':
@@ -338,7 +348,7 @@ int main(int argc, char *argv[])
 				clOverride.interface = 1;
 				break;
 
-			case 'l':
+			case 'L':
 				/* Override log path*/
 				UtilStringCopy(logPath, optarg, WS_SIZE - 1);
 				clOverride.log_path = 1;
@@ -358,7 +368,13 @@ int main(int argc, char *argv[])
 				UtilStringCopy(dbFile, optarg, WS_SIZE);
 				clOverride.dbfile = 1;
 				debug(DEBUG_ACTION,"New db file is: %s", dbFile);
-				break;			
+				break;		
+				
+				
+			case 'p': /* Put Script */
+				utilityCommand = UC_PUT_SCRIPT;
+				MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				break;
 			
 			
 			case 's': /* Instance ID */
@@ -369,7 +385,7 @@ int main(int argc, char *argv[])
 
 
 				/* Was it a version request? */
-			case 'v':
+			case 'V':
 				printf("Version: %s\n", VERSION);
 				exit(0);
 	
@@ -384,8 +400,13 @@ int main(int argc, char *argv[])
 	/* If there were any extra arguments, we may complain. */
 
 	if(optind < argc) {
-		if(utilityCommand){
-			MALLOC_FAIL(utilityExtra = talloc_strdup(Globals->masterCTX, argv[optind]));
+		if((utilityCommand == UC_PUT_SCRIPT)||(utilityCommand == UC_GET_SCRIPT)){
+			if(argv[optind]){
+				MALLOC_FAIL(utilityExtra = talloc_strdup(Globals->masterCTX, argv[optind]));
+			}
+			else{
+				fatal("Missing second parameter for utility command");
+			}
 		}
 		else{
 			fatal("Extra argument on command line: %s", argv[optind]);
