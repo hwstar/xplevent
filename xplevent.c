@@ -480,15 +480,9 @@ int main(int argc, char *argv[])
 
 	/* Check for utility commands */
 	if(utilityCommand){
-		if((unsigned) clOverride.all){
-			fatal("-i -L -o -P or -s are not valid with utility command")l
+		if(clOverride.all || Globals->noBackground || Globals->exitOnErr){
+			fatal("Switches: -n -e -i -L -o -P or -s are not valid with utility command");
 		}
-		if(Globals->noBackground){
-			fatal("-n switch not valid with utility command");
-		}
-		if(Globals->exitOnErr){
-			fatal("-e switch not valid with utility command");
-		}		
 		doUtilityCommand(utilityCommand, utilityArg, utilityFile);
 	}
 	
