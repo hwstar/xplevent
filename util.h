@@ -1,14 +1,14 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-String UtilFileReadString(TALLOC_CTX *ctx, String filename);
-Bool UtilFileWriteString(String filename, String str);
+String UtilFileReadString(TALLOC_CTX *ctx, const String filename);
+Bool UtilFileWriteString(const String filename, String str);
 uint32_t UtilHash(const String key);
 String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset);
 String UtilStringCopy(String dest, const String src, int charsToCopy);
-pid_t UtilPIDRead(String filename);
-int UtilPIDWrite(String filename, pid_t pid);
-Bool UtilSpawn(String command, pid_t *pid);
+pid_t UtilPIDRead(const String filename);
+int UtilPIDWrite(const String filename, pid_t pid);
+Bool UtilSpawn(const String command, pid_t *pid);
 
 
 #endif
