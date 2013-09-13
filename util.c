@@ -236,7 +236,7 @@ int UtilPIDWrite(String filename, pid_t pid) {
 * Fork and execute a command 
 */
 
-int UtilSpawn(String command, pid_t *pid)
+Bool UtilSpawn(String command, pid_t *pid)
 {
 	String id = "UtilForkAndExec";
 	pid_t retval;
