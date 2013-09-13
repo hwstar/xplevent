@@ -74,21 +74,22 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
 
 
  
-typedef struct cloverrides {
-	unsigned pid_file : 1;
-	unsigned instance_id : 1;
-	unsigned log_path : 1;
-	unsigned interface : 1;
-	unsigned dbfile : 1;
+typedef union cloverrides{
+	struct {
+		unsigned pid_file : 1;
+		unsigned instance_id : 1;
+		unsigned log_path : 1;
+		unsigned interface : 1;
+		unsigned dbfile : 1;
+	}
+	unsigned all;
+	
 } clOverride_t;
-
-
-
 
 
 XPLEvGlobalsPtr_t Globals = NULL;
 
-static clOverride_t clOverride = {0,0,0,0,0};
+static clOverride_t clOverride;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
 static char interface[WS_SIZE] = DEF_INTERFACE;
@@ -238,9 +239,14 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 	
 	switch(utilityCommand){
 		case UC_CHECK_SYNTAX:
-			s = ParserCheckSyntax(Globals->masterCTX, utilityArg);
-			if(s){
-				fatal("%s", s);
+			if(utilityFile){
+				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
+				if(s){
+					fatal("%s", s);
+				}
+			}
+			else{
+				fatal("-f switch is required for utility function check syntax");
 			}
 			break;
 	
@@ -257,7 +263,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 
 void oneUtilCommandOnly(void)
 {
-	fatal("Only one of -c -p -s may be specified on the command line. These switches are mutually exclusive")
+	fatal("Only one of -c -p -s may be specified on the command line. These switches are mutually exclusive");
 }
 
 /*
@@ -474,6 +480,9 @@ int main(int argc, char *argv[])
 
 	/* Check for utility commands */
 	if(utilityCommand){
+		if((unsigned) clOverride.all){
+			fatal("-i -L -o -P or -s are not valid with utility command")l
+		}
 		if(Globals->noBackground){
 			fatal("-n switch not valid with utility command");
 		}
