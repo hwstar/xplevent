@@ -176,6 +176,8 @@ String UtilStringCopy(String dest, const String src, int charsToCopy)
 pid_t UtilPIDRead(String filename) {
 	FILE *file;
 	pid_t pid;
+	
+	ASSERT_FAIL(filename)
 
 	/* Get the pid from the file. */
 	file=fopen(filename, "r");
@@ -209,6 +211,8 @@ pid_t UtilPIDRead(String filename) {
 
 int UtilPIDWrite(String filename, pid_t pid) {
 	FILE *file;
+	
+	ASSERT_FAIL(filename)
 
 	/* Create the file. */
 	file=fopen(filename, "w");
@@ -236,10 +240,12 @@ int UtilPIDWrite(String filename, pid_t pid) {
 * Fork and execute a command 
 */
 
-Bool UtilSpawn(String command, pid_t *pid)
+Bool UtilSpawn(const String command, pid_t *pid)
 {
 	String id = "UtilForkAndExec";
 	pid_t retval;
+	
+	ASSERT_FAIL(command)
 	
 	if((retval = fork())){
 		if(retval > 0){
