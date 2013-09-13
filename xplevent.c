@@ -59,7 +59,7 @@
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
 
 
-#define SHORT_OPTIONS "C:c:d:ef:g:Hi:L:no:p:s:V"
+#define SHORT_OPTIONS "C:c:d:ef:g:Hi:L:no:P:p:s:V"
 
 #define WS_SIZE 256
 
@@ -102,11 +102,11 @@ static char dbFile[WS_SIZE] = DEF_DB_FILE;
 /* Commandline options. */
 
 static struct option longOptions[] = {
-	{"check",1 ,0 ,'c'},
+	{"check",0 ,0 ,'c'},
 	{"config-file", 1, 0, 'C'},
 	{"debug", 1, 0, 'd'},
 	{"exitonerr",0, 0, 'e'},
-	{"pid-file", 0, 0, 'f'},
+	{"file", 0, 0, 'f'},
 	{"get", 1, 0, 'g'},
 	{"help", 0, 0, 'H'},
 	{"interface", 1, 0, 'i'},
@@ -114,6 +114,7 @@ static struct option longOptions[] = {
 	{"no-background", 0, 0, 'n'},	
 	{"db-file", 1, 0, 'o'},
 	{"put", 1, 0, 'p'},
+	{"pidfile", 1, 0, 'P'},
 	{"instance", 1, 0, 's'},
 	{"version", 0, 0, 'V'},
 	{0, 0, 0, 0}
@@ -149,25 +150,25 @@ static void reaper(int onSignal)
 
 void showHelp(void)
 {
-	printf("'%s' is a daemon that XXXXXXXXXX\n", Globals->progName);
-	printf("via XXXXXXXXXXX\n");
+	printf("'%s' is a daemon that responds to xPL trigger messages\n", Globals->progName);
 	printf("\n");
 	printf("Usage: %s [OPTION]...\n", Globals->progName);
 	printf("\n");
 	printf("  -C, --config-file PATH  Set the path to the config file\n");
-	printf("  -c, --check PATH        Check script file syntax\n");
+	printf("  -c, --check             Utility Function: Check script file syntax\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
 	printf("                          compiled-in default is %d and the max\n", Globals->debugLvl);
-	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("                          level allowed is %d\n", DEBUG_MAX);
-	printf("  -f, --pid-file PATH     Set new pid file path, default is: %s\n", pidFile);
-	printf("  -g, --get script file   Get script name from database and write to file");
+	printf("  -e --exitonerr          Exit on parse or execution error\n");
+	printf("  -f, --file PATH         Set file path for utility functions");
+	printf("  -g, --get script        Utility function: Get script name from database and write to file");
 	printf("  -h, --help              Shows this\n");
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
 	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
 	printf("  -o, --db-file           Database file");
-	printf("  -p, --put file script   Put file in script name");
+	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", pidFile);
+	printf("  -p, --put script        Utility function: Put file in script name");
 	printf("  -s, --instance ID       Set instance id. Default is %s", instanceID);
 	printf("  -V, --version           Display program version\n");
 	printf("\n");
@@ -225,7 +226,7 @@ static void shutdown(void)
 /*
  * Do utility command and exit
  */
-void doUtilityCommand(int utilityCommand, String utilityArg, String utilityExtra)
+void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 {
 	int res = 0;
 	String s;
@@ -233,7 +234,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityExtra
 	
 	debug(DEBUG_ACTION, "Util cmd: %d, arg: %s, extra: %s", utilityCommand,
 	(utilityArg)? utilityArg : "(nil)",
-	(utilityExtra)? utilityExtra : "(nil)");
+	(utilityFile)? utilityFile : "(nil)");
 	
 	switch(utilityCommand){
 		case UC_CHECK_SYNTAX:
@@ -249,6 +250,15 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityExtra
 	exit(res);
 }
 
+/*
+* Print error message stating that only one utility command may be on the command line at 
+* a given invokation.
+*/
+
+void oneUtilCommandOnly(void)
+{
+	fatal("Only one of -c -p -s may be specified on the command line. These switches are mutually exclusive")
+}
 
 /*
 * main
@@ -263,7 +273,7 @@ int main(int argc, char *argv[])
 	TALLOC_CTX *m;
 	int utilityCommand = 0;
 	String utilityArg = NULL;
-	String utilityExtra = NULL;
+	String utilityFile = NULL;
 
 	
 	if(!(m = talloc_new(NULL))){
@@ -305,8 +315,12 @@ int main(int argc, char *argv[])
 				break;
 				
 			case 'c': /* Check syntax of a script file */
-				utilityCommand = UC_CHECK_SYNTAX;
-				MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				if(!utilityCommand){
+					utilityCommand = UC_CHECK_SYNTAX;
+				}
+				else{
+					oneUtilCommandOnly();
+				}
 				break;
 				
 				/* Was it a debug level set? */
@@ -324,16 +338,20 @@ int main(int argc, char *argv[])
 				Globals->exitOnErr = TRUE;
 				break;
 
-			/* Was it a pid file switch? */
+			/* Was it a utility file switch? */
 			case 'f':
-				UtilStringCopy(pidFile, optarg, WS_SIZE - 1);
-				clOverride.pid_file = 1;
-				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
+				utilityFile = talloc_strncpy(masterCTX, optarg, WS_SIZE);
+				debug(DEBUG_ACTION,"New utility file path is: %s", utilityFile);
 				break;
 				
 			case 'g': /* Get script */
-				utilityCommand = UC_GET_SCRIPT;
-				MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				if(!utilityCommand){
+					utilityCommand = UC_GET_SCRIPT;
+					MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				}
+				else{
+					oneUtilCommandOnly();
+				}
 				break;
 			
 			
@@ -372,10 +390,20 @@ int main(int argc, char *argv[])
 				
 				
 			case 'p': /* Put Script */
-				utilityCommand = UC_PUT_SCRIPT;
-				MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				if(!utilityCommand){
+					utilityCommand = UC_PUT_SCRIPT;
+					MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+				}
+				else{
+					oneUtilCommandOnly();
+				}
 				break;
 			
+			case 'P': /* PID file */
+				UtilStringCopy(pidFile, optarg, WS_SIZE - 1);
+				clOverride.pidfile = 1;
+				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
+				break;
 			
 			case 's': /* Instance ID */
 				UtilStringCopy(instanceID, optarg, WS_SIZE);
@@ -400,17 +428,7 @@ int main(int argc, char *argv[])
 	/* If there were any extra arguments, we may complain. */
 
 	if(optind < argc) {
-		if((utilityCommand == UC_PUT_SCRIPT)||(utilityCommand == UC_GET_SCRIPT)){
-			if(argv[optind]){
-				MALLOC_FAIL(utilityExtra = talloc_strdup(Globals->masterCTX, argv[optind]));
-			}
-			else{
-				fatal("Missing second parameter for utility command");
-			}
-		}
-		else{
-			fatal("Extra argument on command line: %s", argv[optind]);
-		}
+		fatal("Extra argument on command line: %s", argv[optind]);
 	}
 
 	/* Attempt to read a config file */
@@ -462,7 +480,7 @@ int main(int argc, char *argv[])
 		if(Globals->exitOnErr){
 			fatal("-e switch not valid with utility command");
 		}		
-		doUtilityCommand(utilityCommand, utilityArg, utilityExtra);
+		doUtilityCommand(utilityCommand, utilityArg, utilityFile);
 	}
 	
 	
