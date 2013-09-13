@@ -232,6 +232,36 @@ int UtilPIDWrite(String filename, pid_t pid) {
 	return 0;
 }
 
+/*
+* Fork and execute a command 
+*/
+
+int UtilSpawn(String command, pid_t *pid)
+{
+	String id = "UtilForkAndExec";
+	pid_t retval;
+	
+	if((retval = fork())){
+		if(retval > 0){
+			if(pid){
+				*pid = retval;
+			}
+			/*  Parent */
+			return PASS;
+		}
+		else{
+			/* Error */
+			debug(DEBUG_UNEXPECTED, "%s: Fork failure: %s", strerror(errno));
+			return FAIL;
+		}
+	}
+	else{ /* Child */
+		execlp("sh -c", command);
+		exit(1);
+	}
+	return FAIL;
+}
+
 
 
 
