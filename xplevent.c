@@ -223,6 +223,17 @@ static void shutdown(void)
 	}
 }
 
+/*
+* Print -f switch reqired error and exit
+*/
+
+
+void noFileSwitch(void)
+{
+	fatal("-f switch is required for this utility function");
+}
+
+
 
 /*
  * Do utility command and exit
@@ -238,7 +249,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 	(utilityFile)? utilityFile : "(nil)");
 	
 	switch(utilityCommand){
-		case UC_CHECK_SYNTAX:
+		case UC_CHECK_SYNTAX: /* Check script syntax */
 			if(utilityFile){
 				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
 				if(s){
@@ -246,9 +257,46 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 				}
 			}
 			else{
-				fatal("-f switch is required for utility function check syntax");
+				noFileSwitch();
 			}
 			break;
+			
+		case UC_GET_SCRIPT: /* Fetch a script from the database */
+			if(utilityFile){
+				String script;
+				if(!(script = DBFetchScript(Globals->masterCTX, Globals->db, utilityArg))){
+					fatal("Could not fetch script: %s", utilityArg);
+				}
+				if(UtilFileWriteString(utilityFile, script) == FAIL){
+					fatal("Could not write file: %s", utilityFile)
+				}
+				
+			}
+			else{
+				noFileSwitch();
+			}
+			break;		
+			
+			
+		case UC_PUT_SCRIPT: /* Check syntax, and if good, place a script in the database */
+			if(utilityFile){
+				String script, s;
+				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
+				if(s){
+					fatal("%s: script not added to database", s);
+				}
+				if(!(script = UtilFileReadString(Globals->masterCTX, utilityFile))){
+					fatal("Could not read file: %s", utilityFile);
+				}
+				if(DBIRScript(Globals->masterCTX, Globals->db, utilityArg, script) == FAIL){
+					fatal("Script %s could not be stored in the database");
+				}
+			}
+			else{
+				noFileSwitch();
+			}
+			break;		
+			
 	
 		default:
 			ASSERT_FAIL(0);
