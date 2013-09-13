@@ -213,11 +213,17 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 static void shutdown(void)
 {
 	DBClose(Globals->db);
-	if(!Globals->noBackground){
+	if(!Globals->noBackground){ /* If running in the background */
 		/* Unlink the pid file if we can. */
 		(void) unlink(pidFile);
 	}
-	if(Globals->masterCTX){
+	
+	/* If running in the foreground and the debug level is 4, print talloc report on exit */
+	if(Globals->noBackground && (Globals->debugLvl == 4)){
+		talloc_report(Globals->masterCTX, stdout);
+	}
+	
+	if(Globals->masterCTX){ /* Free the master context */
 		TALLOC_CTX *m = Globals->masterCTX;
 		talloc_free(m);
 	}
@@ -268,7 +274,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 					fatal("Could not fetch script: %s", utilityArg);
 				}
 				if(UtilFileWriteString(utilityFile, script) == FAIL){
-					fatal("Could not write file: %s", utilityFile)
+					fatal("Could not write file: %s", utilityFile);
 				}
 				
 			}
@@ -299,7 +305,7 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 			
 	
 		default:
-			ASSERT_FAIL(0);
+			ASSERT_FAIL(0)
 	}
 	exit(res);
 }
