@@ -16,7 +16,7 @@
 * Read a file into a string
 */
 
-String UtilFileReadString(TALLOC_CTX *ctx, String filename)
+String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
 {
 	FILE *file;
 	String id = "UtilFileReadString";
@@ -71,7 +71,7 @@ String UtilFileReadString(TALLOC_CTX *ctx, String filename)
 * Write a string to a file
 */
 
-Bool UtilFileWriteString(String filename, String str)
+Bool UtilFileWriteString(const String filename, const String str)
 {
 	int len;
 	FILE *file;
@@ -173,7 +173,7 @@ String UtilStringCopy(String dest, const String src, int charsToCopy)
 * pid (either not there, stale, or not accesible).
 */
 
-pid_t UtilPIDRead(String filename) {
+pid_t UtilPIDRead(const String filename) {
 	FILE *file;
 	pid_t pid;
 	
@@ -209,7 +209,7 @@ pid_t UtilPIDRead(String filename) {
 * otherwise.
 */
 
-int UtilPIDWrite(String filename, pid_t pid) {
+int UtilPIDWrite(const String filename, pid_t pid) {
 	FILE *file;
 	
 	ASSERT_FAIL(filename)
