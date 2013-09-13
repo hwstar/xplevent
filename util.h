@@ -2,7 +2,7 @@
 #define UTIL_H
 
 String UtilFileReadString(TALLOC_CTX *ctx, const String filename);
-Bool UtilFileWriteString(const String filename, String str);
+Bool UtilFileWriteString(const String filename, const String str);
 uint32_t UtilHash(const String key);
 String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset);
 String UtilStringCopy(String dest, const String src, int charsToCopy);
