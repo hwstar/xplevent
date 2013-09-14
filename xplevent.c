@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
 #include <signal.h>
 #include <ctype.h>
 #include <getopt.h>
@@ -60,7 +61,7 @@
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
 
 
-#define SHORT_OPTIONS "C:c:d:ef:g:Hi:L:no:P:p:s:V"
+#define SHORT_OPTIONS "C:cd:ef:g:Hi:L:no:P:p:s:V"
 
 #define WS_SIZE 256
 
@@ -82,14 +83,14 @@ typedef union cloverrides{
 		unsigned log_path : 1;
 		unsigned interface : 1;
 		unsigned dbfile : 1;
-	}
+	};
 	unsigned all;
 	
 } clOverride_t;
 
 
 XPLEvGlobalsPtr_t Globals = NULL;
-
+static int reapCount;
 static clOverride_t clOverride;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
@@ -105,7 +106,7 @@ static char dbFile[WS_SIZE] = DEF_DB_FILE;
 
 static struct option longOptions[] = {
 	{"check",0 ,0 ,'c'},
-	{"config-file", 1, 0, 'C'},
+	{"config-file", 0, 0, 'C'},
 	{"debug", 1, 0, 'd'},
 	{"exitonerr",0, 0, 'e'},
 	{"file", 0, 0, 'f'},
@@ -144,6 +145,7 @@ static void reaper(int onSignal)
 {
 	int status;
 	while (waitpid(-1, &status, WNOHANG) > 0);
+	reapCount++;
 }
 
 /*
@@ -163,14 +165,14 @@ void showHelp(void)
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("  -f, --file PATH         Set file path for utility functions");
-	printf("  -g, --get script        Utility function: Get script name from database and write to file");
+	printf("  -g, --get scriptname    Utility function: Get script name from database and write to file");
 	printf("  -h, --help              Shows this\n");
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
 	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
 	printf("  -o, --db-file           Database file");
 	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", pidFile);
-	printf("  -p, --put script        Utility function: Put file in script name");
+	printf("  -p, --put scriptname    Utility function: Put file in script name");
 	printf("  -s, --instance ID       Set instance id. Default is %s", instanceID);
 	printf("  -V, --version           Display program version\n");
 	printf("\n");
@@ -258,6 +260,9 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 	switch(utilityCommand){
 		case UC_CHECK_SYNTAX: /* Check script syntax */
 			if(utilityFile){
+				if(access(utilityFile, R_OK | F_OK)){
+					fatal("Can't open %s for reading", utilityFile);
+				}
 				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
 				if(s){
 					fatal("%s", s);
@@ -288,6 +293,9 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 		case UC_PUT_SCRIPT: /* Check syntax, and if good, place a script in the database */
 			if(utilityFile){
 				String script, s;
+				if(access(utilityFile, R_OK | F_OK)){
+					fatal("Can't open %s for reading", utilityFile);
+				}
 				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
 				if(s){
 					fatal("%s: script not added to database", s);
@@ -350,6 +358,7 @@ int main(int argc, char *argv[])
 	
 	Globals->progName = argv[0];
 	
+	
 	atexit(shutdown);
 	
 
@@ -401,7 +410,7 @@ int main(int argc, char *argv[])
 
 			/* Was it a utility file switch? */
 			case 'f':
-				utilityFile = talloc_strncpy(masterCTX, optarg, WS_SIZE);
+				utilityFile = talloc_strndup(Globals->masterCTX, optarg, WS_SIZE);
 				debug(DEBUG_ACTION,"New utility file path is: %s", utilityFile);
 				break;
 				
@@ -435,6 +444,7 @@ int main(int argc, char *argv[])
 				logPath);
 
 				break;
+				
 
 				/* Was it a no-backgrounding request? */
 			case 'n':
@@ -462,7 +472,7 @@ int main(int argc, char *argv[])
 			
 			case 'P': /* PID file */
 				UtilStringCopy(pidFile, optarg, WS_SIZE - 1);
-				clOverride.pidfile = 1;
+				clOverride.pid_file = 1;
 				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
 				break;
 			
@@ -518,14 +528,14 @@ int main(int argc, char *argv[])
 		
 	}
 	else{
-		warn("Config file %s not found or not readable", configFile);
+		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
 	}
 	
 	/* Install signal traps for proper shutdown */
  	signal(SIGTERM, shutdownHandler);
  	signal(SIGINT, shutdownHandler);
  	signal(SIGCHLD, reaper);
-
+ 	
 		
 	/* Open the database */
 	if(!(Globals->db = DBOpen(dbFile))){
@@ -535,8 +545,13 @@ int main(int argc, char *argv[])
 
 	/* Check for utility commands */
 	if(utilityCommand){
-		if(clOverride.all || Globals->noBackground || Globals->exitOnErr){
-			fatal("Switches: -n -e -i -L -o -P or -s are not valid with utility command");
+		if((clOverride.instance_id) ||
+		(clOverride.interface) ||
+		(clOverride.log_path) ||
+		(clOverride.pid_file) || 
+		(Globals->noBackground) || 
+		(Globals->exitOnErr)){
+			fatal("Switches: -n -e -i -L -P or -s are not valid with utility command");
 		}
 		doUtilityCommand(utilityCommand, utilityArg, utilityFile);
 	}

@@ -257,12 +257,12 @@ Bool UtilSpawn(const String command, pid_t *pid)
 		}
 		else{
 			/* Error */
-			debug(DEBUG_UNEXPECTED, "%s: Fork failure: %s", strerror(errno));
+			debug(DEBUG_UNEXPECTED, "%s: Fork failure: %s", id, strerror(errno));
 			return FAIL;
 		}
 	}
 	else{ /* Child */
-		execlp("sh -c", command);
+		execlp("sh","sh","-c", command, (String) NULL);
 		exit(1);
 	}
 	return FAIL;
