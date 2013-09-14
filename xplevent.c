@@ -90,7 +90,8 @@ typedef union cloverrides{
 
 
 XPLEvGlobalsPtr_t Globals = NULL;
-static int reapCount;
+static volatile sig_atomic_t reapCount;
+static volatile sig_atomic_t exitRequest;
 static clOverride_t clOverride;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
@@ -134,7 +135,7 @@ static struct option longOptions[] = {
 
 static void shutdownHandler(int onSignal)
 {
-	Globals->exitRequest = TRUE;
+	exitRequest = TRUE;
 }
 
 /*
@@ -152,7 +153,7 @@ static void reaper(int onSignal)
 * Show help
 */
 
-void showHelp(void)
+static void showHelp(void)
 {
 	printf("'%s' is a daemon that responds to xPL trigger messages\n", Globals->progName);
 	printf("\n");
@@ -237,7 +238,7 @@ static void shutdown(void)
 */
 
 
-void noFileSwitch(void)
+static void noFileSwitch(void)
 {
 	fatal("-f switch is required for this utility function");
 }
@@ -247,7 +248,7 @@ void noFileSwitch(void)
 /*
  * Do utility command and exit
  */
-void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
+static void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 {
 	int res = 0;
 	String s;
@@ -324,10 +325,17 @@ void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 * a given invokation.
 */
 
-void oneUtilCommandOnly(void)
+static void oneUtilCommandOnly(void)
 {
 	fatal("Only one of -c -p -s may be specified on the command line. These switches are mutually exclusive");
 }
+
+
+Bool XpleventCheckExit(void)
+{
+	return (int) exitRequest;
+}
+
 
 /*
 * main

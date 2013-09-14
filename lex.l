@@ -72,6 +72,7 @@ comment		#.*\n
 "<"						{return (TOK_NLT);}
 "eq"					{return (TOK_SEQ);}
 "xplcmd"				{return (TOK_XPLCMD);}
+"spawn"					{return (TOK_SPAWN);}
 "if"					{return (TOK_IF);}
 "else"					{return (TOK_ELSE);}
 "exists"				{return (TOK_EXISTS);}

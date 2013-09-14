@@ -454,7 +454,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 	
 	
 	/* Terminate if requested to do so */
-	if(Globals->exitRequest){
+	if(XpleventCheckExit()){
 		exit(0);
 	}
 }

@@ -3,7 +3,6 @@
 
 typedef struct XPLEvGlobals_s {
 	Bool exitOnErr;
-	Bool exitRequest;
 	Bool noBackground;
 	int debugLvl;
 	String progName;
@@ -17,6 +16,7 @@ typedef XPLEvGlobals_t * XPLEvGlobalsPtr_t;
 	
 extern XPLEvGlobalsPtr_t Globals;
 
+Bool XpleventCheckExit(void);
 
 #endif
 

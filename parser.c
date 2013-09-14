@@ -237,6 +237,44 @@ void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
 	*ptail = hNew;
 }
 
+/*
+ * Spawn another program
+ */
+ 
+static void spawn(pcodeHeaderPtr_t ph, pcodePtr_t pi)
+{
+	pcodePtr_t pa;
+	String command;
+	TALLOC_CTX *ctx;
+	
+	ASSERT_FAIL(ph)
+	ASSERT_FAIL(pi)
+	
+	/* Make dedicated context */
+	ctx = talloc_new(ph);
+	MALLOC_FAIL(ctx)
+	
+	/* Check for correct argument count */
+	if(ph->pushCount != 1){
+		ph->failReason = talloc_asprintf(ph, "Incorrect number of arguments passed to spawn, requires 1, got %d",
+		ph->pushCount);
+		goto end;
+	}
+	
+	/* Retrieve parameter */
+	pa = pi->prev;
+	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &command) == PASS)
+	if(/* ph->xplServicePtr */ 1){ /* Make sure this isn't a dry run */
+		debug(DEBUG_ACTION, "Spawning command: %s", command);
+		if(UtilSpawn(command, NULL) == FAIL){
+			ph->failReason = talloc_asprintf(ph, "Spawn %s failed", command);
+		}
+	}
+	
+end:
+	talloc_free(ctx);
+
+}
 
 
 /*
@@ -809,7 +847,11 @@ void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 	switch(pi->operand){
 		case TOK_XPLCMD:
 			sendXPLCommand(ph, pi); 
-		break;
+			break;
+			
+		case TOK_SPAWN:
+			spawn(ph, pi);
+			break;
 		
 		default:
 			ASSERT_FAIL(FALSE);

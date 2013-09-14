@@ -172,6 +172,14 @@ builtinFunction(A) ::= XPLCMD(B) .
 	A = B;
 }
 
+/*
+* Builtin command spawn another program
+*/
+
+builtinFunction(A) ::= SPAWN(B) .
+{
+	A = B;
+}
 
 /*
 * Argument to argument list (sucessive)
