@@ -90,8 +90,7 @@ typedef union cloverrides{
 
 
 XPLEvGlobalsPtr_t Globals = NULL;
-static volatile sig_atomic_t reapCount;
-static volatile sig_atomic_t exitRequest;
+static volatile sig_atomic_t exitRequest, gotHup;
 static clOverride_t clOverride;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
@@ -133,21 +132,17 @@ static struct option longOptions[] = {
 * (including telling the network the service is ending)
 */
 
-static void shutdownHandler(int onSignal)
+static void shutdownHandler(int signal, siginfo_t *info, void *ucontext)
 {
 	exitRequest = TRUE;
 }
 
-/*
-* Reap zombie child processes
-*/
 
-static void reaper(int onSignal)
+static void hupHandler(int signal, siginfo_t *info, void *ucontext)
 {
-	int status;
-	while (waitpid(-1, &status, WNOHANG) > 0);
-	reapCount++;
+	gotHup = TRUE;
 }
+
 
 /*
 * Show help
@@ -351,6 +346,7 @@ int main(int argc, char *argv[])
 	int utilityCommand = 0;
 	String utilityArg = NULL;
 	String utilityFile = NULL;
+	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
 	
 	if(!(m = talloc_new(NULL))){
@@ -538,18 +534,39 @@ int main(int argc, char *argv[])
 	else{
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
 	}
-	
 	/* Install signal traps for proper shutdown */
- 	signal(SIGTERM, shutdownHandler);
- 	signal(SIGINT, shutdownHandler);
- 	signal(SIGCHLD, reaper);
+	sigemptyset(&sa_term.sa_mask);
+	sigaddset(&sa_term.sa_mask, SIGINT);
+	sigaddset(&sa_term.sa_mask, SIGHUP);
+	sa_term.sa_sigaction = shutdownHandler;
+	sa_term.sa_flags = SA_SIGINFO;
+	sigaction(SIGTERM, &sa_term, NULL);
+
+	sigemptyset(&sa_int.sa_mask);
+	sigaddset(&sa_int.sa_mask, SIGTERM);
+	sigaddset(&sa_int.sa_mask, SIGHUP);
+	sa_int.sa_sigaction = shutdownHandler;
+	sa_int.sa_flags = SA_SIGINFO;
+	sigaction(SIGINT, &sa_int, NULL);
+	
+	if(!Globals->noBackground){
+		sigemptyset(&sa_hup.sa_mask);
+		sigaddset(&sa_hup.sa_mask, SIGTERM);
+		sigaddset(&sa_hup.sa_mask, SIGINT);
+		sa_hup.sa_sigaction = hupHandler;
+		sa_hup.sa_flags = SA_SIGINFO;
+		sigaction(SIGHUP, &sa_hup, NULL);
+	}
+	
+	sigemptyset(&sa_chld.sa_mask);
+	sa_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
+	sigaction(SIGCHLD, &sa_chld, NULL);
+
  	
-		
 	/* Open the database */
 	if(!(Globals->db = DBOpen(dbFile))){
 		fatal("Database file does not exist or is not writeble: %s", dbFile);
 	}
-	
 
 	/* Check for utility commands */
 	if(utilityCommand){
