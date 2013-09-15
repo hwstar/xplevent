@@ -505,6 +505,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 	if(!(processClientCommand(userSock))){
 		/* EOF or ERROR */
 		/* Remove the socket from the polling list and close it */
+		debug(DEBUG_ACTION, "Removing socket from poll list, and closing the socket");
 		xPL_removeIODevice(userSock);
 		close(userSock);
 	}
