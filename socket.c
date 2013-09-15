@@ -28,9 +28,106 @@
 #include "notify.h"
 #include "socket.h"
 
-#define TRUE 1
-#define FALSE 0
-#define ERROR -1;
+/*
+* Figure out the offset to the address field and return a pointer to it.
+*/
+
+void *SocketFixAddrPointer(void *p)
+{
+	struct sockaddr *q = p;
+
+	if (q->sa_family == AF_INET) 
+        	return &((( struct sockaddr_in* ) p )->sin_addr);
+
+	return &(((struct sockaddr_in6* ) p )->sin6_addr);
+
+}
+
+
+
+/* Create a listening socket list. */
+	
+int SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
+	int (*addsock)(int sock, void *addr, int family, int socktype)) {
+	struct addrinfo hints, *list, *p;
+	int sock = -1, res;
+	int sockcount = 0;
+	static String id = "SocketCreateListenList";
+
+	
+	ASSERT_FAIL(service)
+	ASSERT_FAIL(addsock);
+
+
+	memset(&hints, 0, sizeof hints);
+
+	// Init the hints struct for getaddrinfo
+
+	hints.ai_family = family;
+	hints.ai_socktype = socktype;
+	if(bindaddr == NULL)	
+		hints.ai_flags = AI_PASSIVE;
+
+	// Get the address list
+	if((res = getaddrinfo(bindaddr, service, &hints, &list)) == -1){
+		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", id, gai_strerror(res));
+		return FAIL;
+	}
+
+	for(p = list; p != NULL; p = p->ai_next){ // Traverse the list
+		int sockopt = 1;
+	
+		if((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...",id, strerror(errno));
+			continue;
+		}		
+
+		// If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket
+		// This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound.
+
+		if(p->ai_family == PF_INET6){
+			setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
+			debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", id);
+		}
+			
+		/* Set to reuse socket address when program exits */
+
+		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt));
+
+
+		if(bind(sock, p->ai_addr, p->ai_addrlen) == -1){
+			debug(DEBUG_EXPECTED,"%s: Bind failed with %s, continuing...", id, strerror(errno));
+			close(sock);
+			continue;
+		}
+
+		if(listen(sock, SOMAXCONN) == -1){
+			debug(DEBUG_EXPECTED, "%s: Listen failed with %s, continuing...", id, strerror(errno));
+			close(sock);
+			continue;
+			}
+
+		/* Callback to have caller do something with the socket */
+
+		sockcount++;
+
+		if((*addsock)(sock, p->ai_addr, p->ai_family, p->ai_socktype) == FALSE)
+			break;
+	}
+
+	freeaddrinfo(list);
+
+	if(!sockcount){
+		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket", id);
+		return FAIL;
+	}
+
+	return PASS;
+}
+
+
+
+
 
 /*
  * Connect to the daemon socket.
@@ -105,7 +202,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
  *
  */
  
-int SocketReadLineNonBlocking(int socket, Bool *rcvdFlag, unsigned *pos, String line, int maxline) {
+int SocketReadLine(int socket, Bool *rcvdFlag, unsigned *pos, String line, int maxline) {
 	char c;
 	int res;
 	
@@ -114,6 +211,7 @@ int SocketReadLineNonBlocking(int socket, Bool *rcvdFlag, unsigned *pos, String 
 	ASSERT_FAIL(rcvdFlag)
 	
 	*rcvdFlag = FALSE;
+	*pos = 0;
 	
 	for(;;){
 		res = read(socket, &c, 1);	
@@ -146,16 +244,16 @@ int SocketReadLineNonBlocking(int socket, Bool *rcvdFlag, unsigned *pos, String 
 			}
 			else{
 				line[*pos] = 0;
-				*pos = 0;
 				*rcvdFlag = TRUE;
 				return PASS;
 			}
 		}
 		else{ /* EOF */
+			debug(DEBUG_ACTION,"EOF on line");
 			*pos = 0;
 			line[0] = 0;
 			*rcvdFlag = TRUE;
-			return TRUE;
+			return PASS;
 		}
 	}
 

@@ -28,20 +28,29 @@
 #include <getopt.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <sys/fcntl.h>
 #include <xPL.h>
 #include <sqlite3.h>
 #include <talloc.h>
 #include  "defs.h"
 #include "types.h"
 #include "notify.h"
+#include "socket.h"
 #include "parser.h"
 #include "db.h"
 #include "xplevent.h"
 
 
 static String instanceID;
+int socketFD = -1;
 
 /*
  * Heartbeat logger
@@ -428,7 +437,7 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 	}
 }
 
-static void shutdown(void)
+static void xplShutdown(void)
 {
 		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
 		xPL_releaseService(Globals->xplEventService);
@@ -458,6 +467,91 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 		exit(0);
 	}
 }
+
+/*
+ * Client command data is ready
+ */
+
+int processClientCommand(int userSock)
+{
+	Bool rcvdFlag;
+	unsigned pos = 0;
+	String line;
+	
+	line = talloc_zero_array(Globals->masterCTX, char, 80);
+	MALLOC_FAIL(line);
+	
+	if(SocketReadLine(userSock, &rcvdFlag, &pos, line, 79) == FAIL){
+		debug(DEBUG_UNEXPECTED, "Could not read socket");
+		pos = 0;
+	}
+	else{
+		if(rcvdFlag){
+			debug(DEBUG_ACTION, "Line read from socket: %s", line); 
+		}
+	}
+	talloc_free(line);
+	return pos;
+	
+}
+
+/*
+ * Read client command data from an accepted socket
+ */
+ 
+
+static void clientCommandListener(int userSock, int revents, int uservalue)
+{
+	if(!(processClientCommand(userSock))){
+		/* EOF or ERROR */
+		/* Remove the socket from the polling list and close it */
+		xPL_removeIODevice(userSock);
+		close(userSock);
+	}
+}
+
+
+/*
+ * Read data ready on one of the command sockets
+ */
+ 
+static void commandSocketListener(int fd, int revents, int uservalue)
+{
+	int userSock;
+	
+	debug(DEBUG_ACTION, "Accepting socket connection");
+	/* Accept the user connection. */
+	userSock = accept(fd, NULL, NULL);
+	if(userSock == -1) {
+		debug(DEBUG_UNEXPECTED, "Could not accept socket");
+		return;
+	}
+	/* The socket needs to be non-blocking. */
+	if(fcntl(userSock, F_SETFL, O_NONBLOCK) == -1) {
+		fatal_with_reason(errno, "Could not set user socket to non-blocking");
+	}
+	/* Add the accepted socket to the polling list */
+	xPL_addIODevice(clientCommandListener, 0, userSock, TRUE, FALSE, FALSE);
+}
+
+/*
+ * Call back to add command sockets 
+ */
+ 
+static int addIPSocket(int sock, void *addr, int family, int socktype)
+{
+	void *p;
+	char addrstr[INET6_ADDRSTRLEN];
+
+	if(Globals->debugLvl > 1){
+		p = SocketFixAddrPointer(addr);
+		inet_ntop(family, p, addrstr, sizeof(addrstr));
+		debug(DEBUG_EXPECTED, "Monitor Socket listen ip address: %s", addrstr);
+	}
+	return xPL_addIODevice(commandSocketListener, 0, sock, TRUE, FALSE, FALSE);
+
+}
+
 
 void MonitorPreForkSetup(String interface, String instance_id)
 {
@@ -489,12 +583,18 @@ void MonitorRun(void)
 
   	/* And a listener for all xPL messages */
   	xPL_addMessageListener(xPLListener, NULL);
+  	
 
+	/* Add a listener for the command socket */
+	if(SocketCreateListenList(NULL, "1234", AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
+		fatal("Can't create listening socket(s)");
+	}	
+	
 
  	/* Enable the service */
   	xPL_setServiceEnabled(Globals->xplEventService, TRUE);
 
-	atexit(shutdown);
+	atexit(xplShutdown);
 
  	/** Main Loop **/
 

@@ -21,7 +21,7 @@ DAEMONDIR = /usr/local/bin
 
 # Object file lists
 
-OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o util.o
+OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o util.o socket.o
 
 PACKAGE_OBJS = $(PACKAGE).o $(OBJS)
 
@@ -32,7 +32,7 @@ all: $(PACKAGE)
 
 
 
-$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h
+$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h socket.h
 
 
 #Rules
@@ -52,7 +52,7 @@ $(PACKAGE): $(PACKAGE_OBJS)
 	
 
 clean:
-	-rm -f $(PACKAGE)  ptest *.o lex.c grammar.c grammar.h grammar.out core
+	-rm -f $(PACKAGE)  *.o lex.c grammar.c grammar.h grammar.out core
 
 install:
 	cp $(PACKAGE) $(DAEMONDIR)
