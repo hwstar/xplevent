@@ -7,6 +7,7 @@ typedef struct XPLEvGlobals_s {
 	int debugLvl;
 	String progName;
 	String cmdBindAddress;
+	String cmdHostName;
 	String cmdService;
 	void *masterCTX;
 	void *xplEventService;

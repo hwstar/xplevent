@@ -565,6 +565,7 @@ void MonitorPreForkSetup(String interface, String instance_id)
 void MonitorRun(void)
 {
 	
+	
 	/* Start xPL up */
 	if (!xPL_initialize(xPL_getParsedConnectionType())) {
 		fatal("Unable to start xPL lib");

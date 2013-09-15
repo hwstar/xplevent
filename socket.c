@@ -118,7 +118,7 @@ int SocketCreateListenList(String bindaddr, String service, int family, int sock
 	freeaddrinfo(list);
 
 	if(!sockcount){
-		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket", id);
+		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s", id, bindaddr, service);
 		return FAIL;
 	}
 
@@ -139,6 +139,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 	struct addrinfo hints, *list = NULL, *p = NULL, *ipv6 = NULL, *ipv4 = NULL;
 	int sock, res;
+	static String id = "SocketConnectIP";
 
 	ASSERT_FAIL(host)
 	ASSERT_FAIL(service)
@@ -150,7 +151,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	
 	// Get the address list
 	if((res = getaddrinfo(host, service, &hints, &list)) == -1){
-		debug(DEBUG_ACTION, "socket_connect_ip(): getaddrinfo failed: %s", gai_strerror(res));
+		debug(DEBUG_ACTION, "%s: getaddrinfo failed: %s", id, gai_strerror(res));
 		return -1;
 	}
 	for(p = list; p ; p = p->ai_next){
@@ -161,7 +162,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	}
 
 	if(!ipv4 && !ipv6){
-		debug(DEBUG_ACTION,"socket_connect_ip(): Could not find a suitable IP address to connect to");
+		debug(DEBUG_ACTION,"%s: Could not find a suitable IP address to connect to", id);
 		return -1;
 	}
 	
@@ -172,7 +173,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	sock = socket(p->ai_family, p->ai_socktype,p->ai_protocol );
 	if(sock == -1) {
 		freeaddrinfo(list);
-		debug(DEBUG_ACTION, "socket_connect_ip(): Could not create ip socket: %s", strerror(errno));
+		debug(DEBUG_ACTION, "%s: Could not create ip socket: %s", id, strerror(errno));
 		return -1;
 	}
 	
@@ -180,7 +181,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 	if(connect(sock, (struct sockaddr *) p->ai_addr, p->ai_addrlen)) {
 		freeaddrinfo(list);
-		debug(DEBUG_ACTION, "socket_connect_ip(): Could not connect to inet host:port '%s:%s'.", host, service);
+		debug(DEBUG_ACTION, "%s: Could not connect to inet host:port '%s:%s'.", id, host, service);
 		return -1;
 	}
 	
@@ -188,9 +189,9 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	
 	/* We don't want to block reads. */
 	if(fcntl(sock, F_SETFL, O_NONBLOCK) == -1) {
-		debug(DEBUG_UNEXPECTED,"Could not set socket to nonblocking");
+		debug(DEBUG_UNEXPECTED,"%s: Could not set socket to nonblocking", id);
 		close(sock);
-		return FALSE;
+		return -1;
 	}
 
 	/* Return this socket. */

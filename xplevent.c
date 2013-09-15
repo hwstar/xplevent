@@ -55,13 +55,14 @@
 #include "parser.h"
 #include "monitor.h"
 #include "util.h"
+#include "socket.h"
 #include "xplevent.h"
 
 
-enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
+enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD};
 
 
-#define SHORT_OPTIONS "b:C:cd:ef:g:hi:L:no:P:p:s:S:V"
+#define SHORT_OPTIONS "b:C:cd:ef:g:Hh:i:L:no:P:p:s:S:Vx:"
 
 #define WS_SIZE 256
 
@@ -86,6 +87,7 @@ typedef union cloverrides{
 		unsigned interface : 1;
 		unsigned dbfile : 1;
 		unsigned bindaddress : 1;
+		unsigned hostname : 1;
 		unsigned service : 1;
 	};
 	unsigned all;
@@ -96,6 +98,9 @@ typedef union cloverrides{
 XPLEvGlobalsPtr_t Globals = NULL;
 static volatile sig_atomic_t exitRequest, gotHup;
 static clOverride_t clOverride;
+static int utilityCommand = 0;
+static String utilityArg = NULL;
+static String utilityFile = NULL;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
 static char interface[WS_SIZE] = DEF_INTERFACE;
@@ -116,7 +121,8 @@ static struct option longOptions[] = {
 	{"exitonerr",0, 0, 'e'},
 	{"file", 0, 0, 'f'},
 	{"get", 1, 0, 'g'},
-	{"help", 0, 0, 'h'},
+	{"help", 0, 0, 'H'},
+	{"host", 1, 0, 'h'},
 	{"interface", 1, 0, 'i'},
 	{"log", 1, 0, 'L'},
 	{"no-background", 0, 0, 'n'},	
@@ -126,6 +132,7 @@ static struct option longOptions[] = {
 	{"service", 1, 0, 'S'},
 	{"instance", 1, 0, 's'},
 	{"version", 0, 0, 'V'},
+	{"command", 1, 0, 'x'},
 	{0, 0, 0, 0}
 };
 
@@ -169,16 +176,18 @@ static void showHelp(void)
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("  -f, --file PATH         Set file path for utility functions\n");
 	printf("  -g, --get scriptname    Utility function: Get script name from database and write to file\n");
-	printf("  -h, --help              Shows this\n");
+	printf("  -H, --help              Shows this\n");
+	printf("  -h, --host HOST         Set host name for utility client mode\n");
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
 	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
-	printf("  -o, --db-file           Database file");
+	printf("  -o, --db-file           Database file\n");
 	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", pidFile);
 	printf("  -p, --put scriptname    Utility function: Put file in script name\n");
-	printf("  -s, --instance ID       Set instance id. Default is %s", instanceID);
+	printf("  -s, --instance ID       Set instance id. Default is %s\n", instanceID);
 	printf("  -S, --service SERVICE   Set service name or port number for command listener\n");
 	printf("  -V, --version           Display program version\n");
+	printf("  -x, --command COMMAND   Execute command on daemon from client\n");
 	printf("\n");
  	printf("Report bugs to <%s>\n\n", EMAIL);
 	return;
@@ -217,7 +226,7 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
  * Shutdown and exit
  */ 
 
-static void shutdown(void)
+static void xpleventShutdown(void)
 {
 	DBClose(Globals->db);
 	(void) unlink(pidFile);
@@ -242,6 +251,21 @@ static void shutdown(void)
 static void noFileSwitch(void)
 {
 	fatal("-f switch is required for this utility function");
+}
+
+/*
+ * Send a command line to the daemon
+ */
+
+static void utilitySendCmd(String utilityArg)
+{
+	int daemonSock;
+	/* Try and connect to daemon */
+	if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
+		fatal("Could not connect to daemon at address: %s", Globals->cmdHostName);
+	}	
+		
+	close(daemonSock); /* Done */
 }
 
 
@@ -312,9 +336,12 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 			else{
 				noFileSwitch();
 			}
-			break;		
+			break;	
 			
-	
+		case UC_SEND_CMD:
+			utilitySendCmd(utilityArg);
+			break;
+
 		default:
 			ASSERT_FAIL(0)
 	}
@@ -322,13 +349,21 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 }
 
 /*
-* Print error message stating that only one utility command may be on the command line at 
-* a given invokation.
+* Set up a utility command. If a command has already been specified, exit with an error message.
+* 
 */
 
-static void oneUtilCommandOnly(void)
+static void prepareUtilityCommand(int command, String optarg)
 {
-	fatal("Only one of -c -p -s may be specified on the command line. These switches are mutually exclusive");
+	if(!utilityCommand){
+		utilityCommand = command;
+		if(optarg){
+			MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+		}
+	}
+	else{
+		fatal("Only one of -c -p -s -x may be specified on the command line. These switches are mutually exclusive");
+	}
 }
 
 
@@ -349,12 +384,9 @@ int main(int argc, char *argv[])
 	int optchar;
 	String p;
 	TALLOC_CTX *m;
-	int utilityCommand = 0;
-	String utilityArg = NULL;
-	String utilityFile = NULL;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
-	
+	/* Set up before notify functions can be used */
 	if(!(m = talloc_new(NULL))){
 		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
 		exit(1);
@@ -364,12 +396,15 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
 		exit(1);
 	}
+	
 	Globals->masterCTX = m;
+	
+	/* Notify functions can now be used */
 	
 	Globals->progName = argv[0];
 	Globals->cmdService = DEF_CMD_SERVICE_NAME;
 	
-	atexit(shutdown);
+	atexit(xpleventShutdown);
 	
 
 	/* Parse the arguments. */
@@ -400,12 +435,7 @@ int main(int argc, char *argv[])
 				break;
 				
 			case 'c': /* Check syntax of a script file */
-				if(!utilityCommand){
-					utilityCommand = UC_CHECK_SYNTAX;
-				}
-				else{
-					oneUtilCommandOnly();
-				}
+				prepareUtilityCommand(UC_CHECK_SYNTAX, NULL);
 				break;
 				
 				/* Was it a debug level set? */
@@ -430,20 +460,20 @@ int main(int argc, char *argv[])
 				break;
 				
 			case 'g': /* Get script */
-				if(!utilityCommand){
-					utilityCommand = UC_GET_SCRIPT;
-					MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
-				}
-				else{
-					oneUtilCommandOnly();
-				}
+				prepareUtilityCommand(UC_GET_SCRIPT, optarg);
 				break;
 			
 			
 				/* Was it a help request? */
-			case 'h':
+			case 'H':
 				showHelp();
 				exit(0);
+				
+				/* Was it a host name request */
+			case 'h':
+				MALLOC_FAIL(Globals->cmdHostName = talloc_strdup(Globals, optarg));
+				clOverride.hostname = 1;
+				break;
 
 				/* Specify interface to broadcast on */
 			case 'i': 
@@ -476,13 +506,7 @@ int main(int argc, char *argv[])
 				
 				
 			case 'p': /* Put Script */
-				if(!utilityCommand){
-					utilityCommand = UC_PUT_SCRIPT;
-					MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
-				}
-				else{
-					oneUtilCommandOnly();
-				}
+				prepareUtilityCommand(UC_PUT_SCRIPT, optarg);
 				break;
 			
 			case 'P': /* PID file */
@@ -508,7 +532,10 @@ int main(int argc, char *argv[])
 				printf("Version: %s\n", VERSION);
 				exit(0);
 	
-			
+			case 'x': /* Execute a command */
+				prepareUtilityCommand(UC_SEND_CMD, optarg);
+				break;
+						
 				/* It was something weird.. */
 			default:
 				fatal("Unhandled getopt return value %d", optchar);
@@ -539,6 +566,11 @@ int main(int argc, char *argv[])
 			MALLOC_FAIL(Globals->cmdBindAddress = talloc_strdup(Globals, p));
 		}
 		
+		/* Host name */
+		if((!clOverride.hostname) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "host"))){
+			MALLOC_FAIL(Globals->cmdHostName = talloc_strdup(Globals, p));
+		}
+		
 		/* Service name or port */
 		if((!clOverride.service) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "service"))){
 			MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, p));
@@ -560,6 +592,9 @@ int main(int argc, char *argv[])
 	else{
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
 	}
+	
+	
+	
 	/* Install signal traps for proper shutdown */
 	sigemptyset(&sa_term.sa_mask);
 	sigaddset(&sa_term.sa_mask, SIGINT);
