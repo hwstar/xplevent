@@ -178,7 +178,6 @@ pid_t UtilPIDRead(const String filename) {
 	pid_t pid;
 	
 	ASSERT_FAIL(filename)
-
 	/* Get the pid from the file. */
 	file=fopen(filename, "r");
 	if(!file) {
@@ -191,7 +190,6 @@ pid_t UtilPIDRead(const String filename) {
 	if(fclose(file) != 0) {
 		return -1;
 	}
-
 	/* Check that a process is running on this pid. */
 	if(kill(pid, 0) != 0) {
 		/* It might just be bad permissions, check to be sure. */
@@ -199,7 +197,6 @@ pid_t UtilPIDRead(const String filename) {
 			return -1 ;
 		}
 	}
-
 	/* Return this pid. */
 	return(pid);
 }
@@ -219,19 +216,16 @@ int UtilPIDWrite(const String filename, pid_t pid) {
 	if(!file) {
 		return -1;
 	}
-
 	/* Write the pid into the file. */
 	(void) fprintf(file, "%d\n", pid);
 	if(ferror(file) != 0) {
 		(void) fclose(file);
 		return -1;
 	}
-
 	/* Close the file. */
 	if(fclose(file) != 0) {
 		return -1;
 	}
-
 	/* We finished ok. */
 	return 0;
 }

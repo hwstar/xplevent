@@ -61,7 +61,7 @@
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
 
 
-#define SHORT_OPTIONS "C:cd:ef:g:Hi:L:no:P:p:s:V"
+#define SHORT_OPTIONS "b:C:cd:ef:g:hi:L:no:P:p:s:S:V"
 
 #define WS_SIZE 256
 
@@ -74,6 +74,8 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT};
 
 #define DEF_INSTANCE_ID		"main"
 
+#define DEF_CMD_SERVICE_NAME "1130"
+
 
  
 typedef union cloverrides{
@@ -83,6 +85,8 @@ typedef union cloverrides{
 		unsigned log_path : 1;
 		unsigned interface : 1;
 		unsigned dbfile : 1;
+		unsigned bindaddress : 1;
+		unsigned service : 1;
 	};
 	unsigned all;
 	
@@ -95,7 +99,7 @@ static clOverride_t clOverride;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
 static char interface[WS_SIZE] = DEF_INTERFACE;
-static char logPath[WS_SIZE] = "";
+static char logPath[WS_SIZE] = "/tmp/xplevent.log";
 static char instanceID[WS_SIZE] = DEF_INSTANCE_ID;
 static char pidFile[WS_SIZE] = DEF_PID_FILE;
 static char dbFile[WS_SIZE] = DEF_DB_FILE;
@@ -105,19 +109,21 @@ static char dbFile[WS_SIZE] = DEF_DB_FILE;
 /* Commandline options. */
 
 static struct option longOptions[] = {
+	{"bindaddr", 1, 0, 'b'},
 	{"check",0 ,0 ,'c'},
 	{"config-file", 0, 0, 'C'},
 	{"debug", 1, 0, 'd'},
 	{"exitonerr",0, 0, 'e'},
 	{"file", 0, 0, 'f'},
 	{"get", 1, 0, 'g'},
-	{"help", 0, 0, 'H'},
+	{"help", 0, 0, 'h'},
 	{"interface", 1, 0, 'i'},
 	{"log", 1, 0, 'L'},
 	{"no-background", 0, 0, 'n'},	
 	{"db-file", 1, 0, 'o'},
 	{"put", 1, 0, 'p'},
 	{"pidfile", 1, 0, 'P'},
+	{"service", 1, 0, 'S'},
 	{"instance", 1, 0, 's'},
 	{"version", 0, 0, 'V'},
 	{0, 0, 0, 0}
@@ -154,22 +160,24 @@ static void showHelp(void)
 	printf("\n");
 	printf("Usage: %s [OPTION]...\n", Globals->progName);
 	printf("\n");
+	printf("  -b  --bindaddress	ADDR  Set bind address for command socket listener\n");
 	printf("  -C, --config-file PATH  Set the path to the config file\n");
 	printf("  -c, --check             Utility Function: Check script file syntax\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
 	printf("                          compiled-in default is %d and the max\n", Globals->debugLvl);
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
-	printf("  -f, --file PATH         Set file path for utility functions");
-	printf("  -g, --get scriptname    Utility function: Get script name from database and write to file");
+	printf("  -f, --file PATH         Set file path for utility functions\n");
+	printf("  -g, --get scriptname    Utility function: Get script name from database and write to file\n");
 	printf("  -h, --help              Shows this\n");
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
 	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
 	printf("  -o, --db-file           Database file");
 	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", pidFile);
-	printf("  -p, --put scriptname    Utility function: Put file in script name");
+	printf("  -p, --put scriptname    Utility function: Put file in script name\n");
 	printf("  -s, --instance ID       Set instance id. Default is %s", instanceID);
+	printf("  -S, --service SERVICE   Set service name or port number for command listener\n");
 	printf("  -V, --version           Display program version\n");
 	printf("\n");
  	printf("Report bugs to <%s>\n\n", EMAIL);
@@ -212,10 +220,8 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 static void shutdown(void)
 {
 	DBClose(Globals->db);
-	if(!Globals->noBackground){ /* If running in the background */
-		/* Unlink the pid file if we can. */
-		(void) unlink(pidFile);
-	}
+	(void) unlink(pidFile);
+	
 	
 	/* If running in the foreground and the debug level is 4, print talloc report on exit */
 	if(Globals->noBackground && (Globals->debugLvl == 4)){
@@ -361,7 +367,7 @@ int main(int argc, char *argv[])
 	Globals->masterCTX = m;
 	
 	Globals->progName = argv[0];
-	
+	Globals->cmdService = DEF_CMD_SERVICE_NAME;
 	
 	atexit(shutdown);
 	
@@ -381,6 +387,11 @@ int main(int argc, char *argv[])
 				/* If it was an error, exit right here. */
 			case '?':
 				exit(1);
+				
+			case 'b': /* Bind address */
+				clOverride.bindaddress = 1;
+				MALLOC_FAIL(Globals->cmdBindAddress = talloc_strdup(Globals, optarg));
+				break;
 		
 				/* Was it a config file switch? */
 			case 'C':
@@ -479,6 +490,11 @@ int main(int argc, char *argv[])
 				clOverride.pid_file = 1;
 				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
 				break;
+				
+			case 'S': /* Service port name or number */
+				MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, optarg));
+				clOverride.service = 1;
+				break;
 			
 			case 's': /* Instance ID */
 				UtilStringCopy(instanceID, optarg, WS_SIZE);
@@ -517,6 +533,16 @@ int main(int argc, char *argv[])
 		/* Interface */
 		if((!clOverride.interface) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "interface")))
 			UtilStringCopy(interface, p, sizeof(interface));
+			
+		/* Bind Address */
+		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "bind-addr"))){
+			MALLOC_FAIL(Globals->cmdBindAddress = talloc_strdup(Globals, p));
+		}
+		
+		/* Service name or port */
+		if((!clOverride.service) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "service"))){
+			MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, p));
+		}
 			
 		/* pid file */
 		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "pid-file")))
@@ -588,6 +614,7 @@ int main(int argc, char *argv[])
 		fatal("%s is already running", Globals->progName);
 	}
 	
+
 	/* Set the broadcast interface */
 	
 	MonitorPreForkSetup(interface, instanceID);	
@@ -662,7 +689,11 @@ int main(int argc, char *argv[])
 		close(2);
  
 	}
-
+	/* Create the pid file */
+	if(UtilPIDWrite(pidFile, getpid())){
+		fatal("pid file write error");
+	}
+	
 
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");

@@ -587,7 +587,7 @@ void MonitorRun(void)
   	
 
 	/* Add a listener for the command socket */
-	if(SocketCreateListenList(NULL, "1234", AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
+	if(SocketCreateListenList(Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
 		fatal("Can't create listening socket(s)");
 	}	
 	
