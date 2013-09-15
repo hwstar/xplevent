@@ -1,0 +1,18 @@
+# Code to tack on a subaddress if a device key is present
+if(exists($xplnvin{device})){
+	#Sub address for sensors 
+	if($xplin{classtype} eq "sensor.basic"){
+		$result{subaddress}=$xplnvin{device};
+	}
+
+	# Sub address for hvac
+	if($xplin{classtype} eq "hvac.zone"){
+		$result{subaddress}=$xplnvin{zone};
+	}
+
+	#Sub address for security
+	if($xplin{classtype} eq "security.gateway"){
+		$result{subaddress}=$xplnvin{zone};
+	}
+}
+

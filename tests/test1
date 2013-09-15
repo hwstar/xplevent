@@ -1,0 +1,7 @@
+# Test parse file
+$xplout{command} = "request";
+$xplout{param}=1;
+$xplout{data}= $xplnvin{current};
+xplcmd("hwstar-test.unit0", "x10", "basic", \%xplout); # do it!
+
+# end
