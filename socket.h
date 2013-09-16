@@ -15,6 +15,7 @@ int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...);
 void *SocketFixAddrPointer(void *p);
 int SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
 	int (*addsock)(int sock, void *addr, int family, int socktype));
+Bool SocketWaitReadReady(int socket, int msTimeout);
 
 
 #endif
