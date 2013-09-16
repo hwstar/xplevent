@@ -314,7 +314,7 @@ void DBClose(void *db)
 *
 * 1. A talloc context to hang the result off of.
 * 2. A generic pointer to the database
-* 3. A string containing the search key.
+* 3. A String containing the search key.
 *
 * Return value:
 *
@@ -349,6 +349,19 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 
 /*
 * Write a value to the nvstate table
+*
+* If the value already exists, it will be overwritten.
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A String containing the search key.
+* 4. A String containing the value to be written.
+*
+* Return value:
+*
+* Boolean. PASS = success, FAIL = failure.
 */
 
 Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String value)
@@ -411,6 +424,19 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 /*
 * Fetch a script from the script table
+*
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A String containing the script name
+*
+* Return value:
+*
+* A string containing the value, or NULL if not found.
+* Result must be talloc_free'd when no longer required
+*
 */
 
 
@@ -437,6 +463,18 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 
 /*
 * Fetch script given trigger tag/subaddress
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A String containing the tag/subaddress.
+*
+* Return value:
+*
+* A string containing the value, or NULL if not found.
+* Result must be talloc_free'd when no longer required
+*
 */
 
 const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *db, const String tagSubAddr)
@@ -469,6 +507,22 @@ const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *db, const String tagSubAd
 
 /*
 * Update the trigger log
+*
+* If the source already exists, it will be overwritten.
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A String containing the source to be updated
+* 4. A string containing the schema to be written
+* 5. A String containing the nvpairs to be written
+*
+* Return value:
+*
+* Boolean. PASS = success, FAIL = failure.
+*
+* 
 */
 
 Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const String schema, const String nvpairs)
@@ -532,6 +586,20 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 
 /*
 * Update the heartbeat log
+*
+* 
+* If the source already exists, it will be overwritten.
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A String containing the source to be updated
+*
+* Return value:
+*
+* Boolean. PASS = success, FAIL = failure.
+*
 */
 
 Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
@@ -591,6 +659,20 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 
 /*
 * Insert or replace script by script name
+*
+* If the source already exists, it will be overwritten.
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A String containing the name of the script to be updated.
+* 4. A string containing the script to be updated.
+*
+* Return value:
+*
+* Boolean. PASS = success, FAIL = failure.
+*
 */
 
 Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String script)
