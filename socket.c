@@ -1,7 +1,7 @@
 /*
 * socket.c
 *
-* Copyright (C) 22013 Stephen Rodgers
+* Copyright (C) 2013 Stephen Rodgers
 *
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -234,9 +234,20 @@ int SocketCreateListenList(String bindaddr, String service, int family, int sock
 
 
 /*
- * Connect to the daemon socket.
+ * Connect to a socket on another host. 
+ * Used by clients.
  *
- * Returns the fd of the socket or -1 if error
+ * Arguments:
+ *
+ * 1. String. Host name or IP address to connect to.
+ * 2. String. Service name or port number.
+ * 3. Address family. (Usually AF_UNSPEC).
+ * 4. Socket type. Use SOCK_STREAM for TCP connections.
+ *
+ *
+ * Return value:
+ *
+ * The FD of the socket or -1 if error
  */
  
 int SocketConnectIP(const String host, const String service, int family, int socktype)
@@ -254,7 +265,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	hints.ai_family = family;
 	hints.ai_socktype = socktype;
 	
-	// Get the address list
+	/* Get the address list */
 	if((res = getaddrinfo(host, service, &hints, &list)) == -1){
 		debug(DEBUG_ACTION, "%s: getaddrinfo failed: %s", id, gai_strerror(res));
 		return -1;
@@ -271,7 +282,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 		return -1;
 	}
 	
-	p = (ipv6) ? ipv6 : ipv4; // Prefer IPV6 over IPV4
+	p = (ipv6) ? ipv6 : ipv4; /* Prefer IPV6 over IPV4 */
 
 	/* Create a socket for talking to the daemon program. */
 
