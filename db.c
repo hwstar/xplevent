@@ -156,6 +156,21 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
 
 /*
  * Return a single result from a select.
+ *
+ * Arguments:
+ *
+ * 1. Generic pointer to database
+ * 2. Talloc context to hang the result off of.
+ * 3. ID String for debugging purposes
+ * 4. String containing the name of the table to access
+ * 5. String containing the name of the column for the key
+ * 6. A String containing the key to look up
+ * 7. The name of the column of the return value.
+ *
+ * Return Value:
+ *
+ * The value in the column referenced argument 7 as a String.
+ * A NULL indicates the record was not found.
  * Result must be talloc_free'd when no longer required
  */
 
@@ -171,6 +186,9 @@ String colName, String key, String valueName)
 	ASSERT_FAIL(colName)
 	ASSERT_FAIL(key)
 	ASSERT_FAIL(valueName)
+	ASSERT_FAIL(id)
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
 	
 	cbd.valueName = valueName;
 	cbd.res = NULL;
@@ -192,6 +210,19 @@ String colName, String key, String valueName)
 
 /*
  * Delete a row from a table
+ *
+ * Arguments:
+ *
+ * 1. Generic pointer to the database
+ * 2. Talloc context to use for internal strings
+ * 3. ID string for debugging purposes
+ * 4. Name of the table as a string
+ * 5. Name of the column to use with the key
+ * 6. The key to be used to search for the record to delete.
+ *
+ * Return value:
+ *
+ * Boolean. PASS indicates success,  FAIL indicates failure.
  */
  
 static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, String id, String table, String colName, String key)
@@ -200,10 +231,13 @@ static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, String id, String table, Stri
 	String errorMessage;
 	Bool res = PASS;
 	
-	ASSERT_FAIL(id);
+	ASSERT_FAIL(id)
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(colName)
 	ASSERT_FAIL(key)
+	ASSERT_FAIL(db)
+	
 	
 	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s='%s'", table, colName, key);
 	MALLOC_FAIL(sql)
@@ -223,6 +257,14 @@ static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, String id, String table, Stri
 
 /*
 * Open the database
+*
+* Arguments:
+*
+* 1. The path to the database file to open
+*
+* Return value:
+*
+* A generic pointer as the database handle, or NULL if there was an error.
 */
 
 void *DBOpen(String file)
@@ -247,6 +289,14 @@ void *DBOpen(String file)
 
 /* 
 * Close the database
+*
+* Arguments:
+*
+* 1. A generic pointer to the database handle opened previously.
+*
+* Return Value:
+*
+* None
 */
 
 void DBClose(void *db)
