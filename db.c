@@ -309,6 +309,16 @@ void DBClose(void *db)
 
 /*
 * Read a value from the nvstate table
+*
+* Arguments
+*
+* 1. A talloc context to hang the result off of.
+* 2. A generic pointer to the database
+* 3. A string containing the search key.
+*
+* Return value:
+*
+* A string containing the value, or NULL if not found.
 * Result must be talloc_free'd when no longer required
 */
 
@@ -316,7 +326,7 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 {
 
 
-	String p;
+	String p = NULL;
 	static const String id = "DBReadNVState";
 	
 	ASSERT_FAIL(ctx)
@@ -329,8 +339,7 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 	}
 		
 	p = dbReadField(db, ctx, id, "nvstate", "key", key, "value");
-
-
+	
 	/* Transaction commit */
 	
 	dbTxEnd(db, id, PASS);
