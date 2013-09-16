@@ -316,6 +316,20 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 /*
  * Read a line of text from a socket.
+ * This function is used to get a line of text from the other host.
+ * There is a 5 second time out on waiting for data to arrive.
+ *
+ * Parameters:
+ *
+ * 1. The talloc context to hang the result off of.
+ * 2. The socket to read from.
+ * 3. A flag indicating if there was something received or not.
+ * 4. The length of the line received.
+ *
+ * Return Value:
+ *
+ * Success: A string containing the line of text NUL terminated. This must be freed when no longer required.
+ * Failure: NULL
  *
  */
 String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *length)
@@ -355,7 +369,8 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 			}
 			if(errno == EAGAIN){
 				if(SocketWaitReadReady(socket, 5000) == FAIL){
-					debug(DEBUG_UNEXPECTED, "%s: Read error time out on socket", id);
+					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", id);
+					talloc_free(line);
 					return NULL;
 				}
 				continue;
