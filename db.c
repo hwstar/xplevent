@@ -112,6 +112,21 @@ static void dbTxEnd(void *db, String id, Bool type)
 
 /*
  * DBReadField callback function
+ *
+ * This is a standard SQLITE callback funcion used with an dbReadField function which
+ * stores the selected result in a data structure for use by the caller of dBReadField.
+ * This function looks for a field name match, and if found, allocates a String to hold
+ * the value of the field and inserts it into the data structure passed in.
+ * 
+ * Arguments:
+ *
+ * 1. Generic pointer to callback data structure filled in by dbReadField.
+ * 2. Number of fields.
+ * 3. An array of field value strings filled in by SQLite.
+ * 4. An array of column names filled in by SQLite. NULL-terminated.
+ *
+ * Return value:
+ * Integer. Always 0.
  */
 
 static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *colnames)
