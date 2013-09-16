@@ -1,3 +1,28 @@
+/*
+* db.c
+*
+* Copyright (C) 2013 Stephen Rodgers
+*
+* This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* as published by the Free Software Foundation; either version 3
+* of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* Stephen "Steve" Rodgers <hwstar@rodgers.sdcoxmail.com>
+*
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +46,16 @@ typedef callbackData_t * callbackDataPtr_t;
 
 
 /*
-* Transaction begin
+* Begin a database transaction
+*
+* Arguments:
+*
+* 1. Pointer to the database handle
+* 2. Text string for logging debug information.
+*
+* Returns:
+*
+* Boolean. Returns PASS if successful, FAIL if otherwise.
 */
 
 static Bool dbTxBegin(void *db, String id)
@@ -39,7 +73,17 @@ static Bool dbTxBegin(void *db, String id)
 }
 
 /*
-* Transaction end
+* Commit or rollback a database transaction
+*
+* Arguments:
+*
+* 1. Pointer to the database handle
+* 2. Text string for logging debug information.
+* 3. Flag to indicate commit or rollback. PASS = commit, FAIL = rollback.
+*
+* Returns:
+*
+* None
 */
 
 static void dbTxEnd(void *db, String id, Bool type)
