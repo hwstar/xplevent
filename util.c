@@ -18,6 +18,16 @@
  * Return an array of strings, NULL terminated. Individual strings are allocated referenced to the array of strings.
  * Freeing the array of strings is required to avoid memory leaks. Doing so automatically frees the underlying
  * strings as well.
+ *
+ * Arguments:
+ *
+ * 1. Talloc Context to hang the result off of.
+ * 2. The Input string to split into sub-strings
+ * 3. The separator character.
+ *
+ * Return value:
+ *
+ * An array of NUL terminated Strings NULL terminated.
  */
  
 String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep)
@@ -83,6 +93,16 @@ String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep)
 
 /*
 * Read a file into a string
+*
+* Arguments:
+*
+* 1. Talloc context to hang the result off of.
+* 2. Path to the file name.
+*
+* Return Value:
+*
+* File contents as a NUL terminated string or NULL if an error occured. 
+* String must be freed when no longer required.
 */
 
 String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
@@ -139,6 +159,15 @@ String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
 
 /*
 * Write a string to a file
+*
+* Arguments:
+*
+* 1. Path to location to write the file
+* 2. String data to write into the file (NUL terminated)
+*
+* Return Value:
+*
+* Boolean. PASS indicates success, FAIL indicates there was some type of error.
 */
 
 Bool UtilFileWriteString(const String filename, const String str)
@@ -173,7 +202,15 @@ Bool UtilFileWriteString(const String filename, const String str)
 
 
 /*
-* Hash a string
+* Hash a string.
+* 
+* Arguments:
+* 
+* 1. Nul terminated string to hash.
+*
+* Return Value:
+*
+* 32 bit unsigned integer containing the hash.
 */
 
 uint32_t UtilHash(const String key)
@@ -202,7 +239,17 @@ uint32_t UtilHash(const String key)
 
 
 /*
-* Move string from one context to another
+* Move a string or the right hand portion of a string from one context to another, freeing the old context.
+*
+* Arguments:
+*
+* 1. The new talloc context to hang the result off of.
+* 2. The old string to move and free.
+* 3. The offset to be applied to the left hand side of the old string.
+*
+* Return value:
+*
+* A pointer to the new string, or NULL if the memory allocation failed. 
 */
 
 String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
@@ -212,7 +259,7 @@ String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
 	ASSERT_FAIL(newCtx)
 	ASSERT_FAIL(oldStr)
 
-	ASSERT_FAIL(strlen(oldStr) > offset)
+	ASSERT_FAIL(strlen(oldStr) > offset) /* Offset must not be larger than the old string */
 
 	if((newStr = talloc_strdup(newCtx, oldStr + offset))){
 		talloc_free(oldStr);
