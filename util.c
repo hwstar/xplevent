@@ -222,9 +222,6 @@ uint32_t UtilHash(const String key)
 
 	len = strlen(key);
 
-	if(!key){
-		return 0;
-	}
 
 	for(hash = i = 0; i < len; ++i){
 		hash += key[i];
@@ -270,7 +267,19 @@ String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset)
 
 
 /*
-* Safer string copy
+* Copy N characters of one string to another, and gaurantee that the destination
+* string is always NUL-terminated.
+*
+* Arguments:
+*
+* 1. Destination String
+* 2. Source String
+* 3. Characters to copy
+*
+* Return value:
+*
+* The destination string.
+*
 */
 
 String UtilStringCopy(String dest, const String src, int charsToCopy)
@@ -286,8 +295,18 @@ String UtilStringCopy(String dest, const String src, int charsToCopy)
 
 
 /*
-* Get the pid from a pidfile. Returns the pid or -1 if it couldn't get the
+* Get the pid from a pidfile. 
+*
+* Arguments:
+*
+* 1. The full path to the .pid file 
+* 
+* Return value:
+*
+* Returns the pid or -1 if it couldn't get the
 * pid (either not there, stale, or not accesible).
+*
+*
 */
 
 pid_t UtilPIDRead(const String filename) {
