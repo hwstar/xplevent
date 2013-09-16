@@ -405,7 +405,22 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 }
 
 /* 
- * Print to a socket
+ * Print to a socket.
+ * This function has a printf-like interface, and allows text to be formatted and
+ * written to a socket.
+ *
+ * Arguments:
+ *
+ * 1. Talloc context for internal string generation. All internal strings will be
+ *    freed upon return from this function.
+ *
+ * 2. Printf-like format string
+ * 3. Variadic argments.
+ *
+ * Return value:
+ *
+ * Number of characters sent.
+ * 
  */
  
 int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
