@@ -338,7 +338,16 @@ pid_t UtilPIDRead(const String filename) {
 }
 
 /*
-* Write the pid into a pid file. Returns zero if it worked, non-zero
+* Write the pid into a pid file. 
+*
+* Arguments:
+*
+* 1. Full path to the file name to create.
+* 2. The process id to store in the file.
+* 
+* Return value
+*
+* Returns zero if it worked, non-zero
 * otherwise.
 */
 
@@ -367,7 +376,16 @@ int UtilPIDWrite(const String filename, pid_t pid) {
 }
 
 /*
-* Fork and execute a command 
+* Fork and execute a command by invoking the shell and passing the command to it. 
+*
+* Arguments:
+*
+* 1. The command to execute.
+* 2. A pointer to a pid_t where the process id of the child process will be stored, or NULL if don't care.
+*
+* Return value:
+*
+* Boolean: PASS indicates success, FAIL indicates failure.
 */
 
 Bool UtilSpawn(const String command, pid_t *pid)
