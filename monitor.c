@@ -46,11 +46,19 @@
 #include "socket.h"
 #include "parser.h"
 #include "db.h"
+#include "util.h"
 #include "xplevent.h"
 
+enum {CC_EXEC = 0 };
+
+static String clientCommands[]  = {
+	"exec",
+	"NULL"
+};
 
 static String instanceID;
-int socketFD = -1;
+
+
 
 /*
  * Heartbeat logger
@@ -458,7 +466,9 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 	ticks++;
 	if(Globals->noBackground && (ticks >= 30)){
 		ticks = 0;
-		talloc_report(Globals->masterCTX, stdout);
+		if(Globals->debugLvl >= 4){
+			talloc_report(Globals->masterCTX, stdout);
+		}
 	}
 	
 	
@@ -469,29 +479,73 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 }
 
 /*
+ * Interpret a client command
+ */
+ 
+void interpretClientCommand(int userSock, String cl)
+{
+	String *argv = UtilSplitString(Globals->masterCTX, cl, ' ');
+	int i;
+	int res = PASS;
+	
+	for(i = 0; clientCommands[i]; i++){
+		if(!strcmp(clientCommands[i], argv[0])){
+			break;
+		}
+	}
+	if(clientCommands[i]){
+		switch(i){
+			case CC_EXEC:
+				if(argv[1]){
+					debug(DEBUG_EXPECTED, "Exec: %s", argv[1]);
+				}
+				else{
+					res = FAIL;
+				}	
+				break;
+				
+			default:
+				ASSERT_FAIL(0);
+		}
+		
+	}
+	else{
+		debug(DEBUG_UNEXPECTED, "Wacky client command: %s", cl);
+		res = FAIL;
+	}
+
+	SocketPrintf(argv, userSock,"%s:\n", (res == PASS) ? "ok" : "er");
+
+	talloc_free(argv);
+}
+
+
+/*
  * Client command data is ready
  */
 
 int processClientCommand(int userSock)
 {
 	Bool rcvdFlag;
-	unsigned pos = 0;
+	unsigned length = 0;
 	String line;
 	
-	line = talloc_zero_array(Globals->masterCTX, char, 80);
-	MALLOC_FAIL(line);
-	
-	if(SocketReadLine(userSock, &rcvdFlag, &pos, line, 79) == FAIL){
+	if((line = SocketReadLine(Globals->masterCTX, userSock, &rcvdFlag, &length)) == NULL){
 		debug(DEBUG_UNEXPECTED, "Could not read socket");
-		pos = 0;
 	}
 	else{
-		if(rcvdFlag){
+		if(rcvdFlag && length){
 			debug(DEBUG_ACTION, "Line read from socket: %s", line); 
+			if(!strncmp("cl:", line, 3)){
+				interpretClientCommand(userSock, line + 3);
+			}
 		}
 	}
-	talloc_free(line);
-	return pos;
+	
+	if(line){
+		talloc_free(line);
+	}
+	return length;
 	
 }
 
@@ -591,6 +645,7 @@ void MonitorRun(void)
 	if(SocketCreateListenList(Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
 		fatal("Can't create listening socket(s)");
 	}	
+
 	
 
  	/* Enable the service */

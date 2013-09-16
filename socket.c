@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/fcntl.h>
+#include <talloc.h>
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
@@ -48,7 +49,8 @@ void *SocketFixAddrPointer(void *p)
 /* Create a listening socket list. */
 	
 int SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
-	int (*addsock)(int sock, void *addr, int family, int socktype)) {
+	int (*addsock)(int sock, void *addr, int family, int socktype))
+{
 	struct addrinfo hints, *list, *p;
 	int sock = -1, res;
 	int sockcount = 0;
@@ -135,7 +137,8 @@ int SocketCreateListenList(String bindaddr, String service, int family, int sock
  * Returns the fd of the socket or -1 if error
  */
  
-int SocketConnectIP(const String host, const String service, int family, int socktype) {
+int SocketConnectIP(const String host, const String service, int family, int socktype)
+{
 
 	struct addrinfo hints, *list = NULL, *p = NULL, *ipv6 = NULL, *ipv4 = NULL;
 	int sock, res;
@@ -202,31 +205,44 @@ int SocketConnectIP(const String host, const String service, int family, int soc
  * Read a line of text from a socket.
  *
  */
- 
-int SocketReadLine(int socket, Bool *rcvdFlag, unsigned *pos, String line, int maxline) {
-	char c;
+String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *length)
+{
+	int lsize = 80;
 	int res;
+	char c;
+	String line;
+	static String id = "SocketReadLine";
 	
-	ASSERT_FAIL(pos)
-	ASSERT_FAIL(line)
+	ASSERT_FAIL(length)
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(rcvdFlag)
+
+	
+	MALLOC_FAIL(line = talloc_zero_array(ctx, char, lsize))
+	
 	
 	*rcvdFlag = FALSE;
-	*pos = 0;
+	*length = 0;
+	
 	
 	for(;;){
-		res = read(socket, &c, 1);	
+		if(*length >= (lsize - 2)){
+			/* Double the buffer size and re-allocate */
+			lsize <<= 1;
+			debug(DEBUG_ACTION, "%s: Doubling the line buffer to %d", id, lsize);
+			MALLOC_FAIL(line = talloc_realloc(ctx, line, char, lsize))
+		}
+		
+		res = read(socket, &c, 1);
+			
 
 		if(res < 0){
 			if(errno == EINTR){
 				continue;
 			}
-			if(errno != EWOULDBLOCK){
-				debug(DEBUG_UNEXPECTED, "Read error on fd %d: %s", socket, strerror(errno));
-				*pos = 0;
-				break;
-			}
-			return PASS;
+			debug(DEBUG_UNEXPECTED, "%s: Read error on fd %d: %s", id, socket, strerror(errno));
+			talloc_free(line);
+			return NULL;
 			
 		}
 		else if(res == 1){
@@ -234,52 +250,43 @@ int SocketReadLine(int socket, Bool *rcvdFlag, unsigned *pos, String line, int m
 				continue;
 			}
 			if(c != '\n'){
-				if(*pos < (maxline - 1)){
-					line[*pos] = c;
-					(*pos)++;
-				}
-				else{
-					debug(DEBUG_UNEXPECTED,"End of line buffer reached!");
-				}
-
+				line[*length] = c;
+				(*length)++;
 			}
 			else{
-				line[*pos] = 0;
+				line[*length] = 0;
 				*rcvdFlag = TRUE;
-				return PASS;
+				return line;
 			}
 		}
 		else{ /* EOF */
-			debug(DEBUG_ACTION,"EOF on line");
-			*pos = 0;
+			debug(DEBUG_ACTION,"%s: EOF on line", id);
+			*length = 0;
 			line[0] = 0;
 			*rcvdFlag = TRUE;
-			return PASS;
+			return line;
 		}
-	}
-
-	return FAIL;
-	
+	}	
 }
 
 /* 
  * Print to a socket
  */
  
-int SocketPrintf(int socket, const String format, ...){
+int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
+{
 	va_list ap;
 	int res = 0;
 	int len;
-	char string[48];
-	char *sp = string;
-	
+	String string, sp;
+
 	ASSERT_FAIL(format)
-    
+	ASSERT_FAIL(ctx)
+
 	va_start(ap, format);
 
 	if(socket >= 0){
-		vsnprintf(string, 48, format, ap);
-		
+		MALLOC_FAIL(sp = string = talloc_vasprintf(ctx, format, ap))
 		for(;;){
 			len = strlen(sp);
 			res = write(socket, sp, len);
@@ -287,9 +294,10 @@ int SocketPrintf(int socket, const String format, ...){
 				if(errno == EINTR){
 					continue;
 				}
-				if(errno != EWOULDBLOCK)
+				if(errno != EWOULDBLOCK){
 					break;
 				}
+			}
 			else{
 				if(res == len){
 					res = 0;
@@ -300,6 +308,8 @@ int SocketPrintf(int socket, const String format, ...){
 			}
 		}
 	}
+	
+	talloc_free(string);
 
 	va_end(ap);
 

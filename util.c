@@ -10,7 +10,76 @@
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
+#include "util.h"
 
+
+/*
+ * Split a string into a array of substrings.
+ * Return an array of strings, NULL terminated. Individual strings are allocated referenced to the array of strings.
+ * Freeing the array of strings is required to avoid memory leaks. Doing so automatically frees the underlying
+ * strings as well.
+ */
+ 
+String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep)
+{
+	String start,p;
+	String *strings;
+	int len;
+	int count = 0;
+	int apsize = 8;
+	int state = 0;
+	Bool done;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(input)
+	
+	/* Allocate an initial array of strings */
+	MALLOC_FAIL(strings = talloc_array(ctx, String, apsize))
+	
+	
+	for(done = FALSE, p = input, strings[0] = NULL; !done ; p++){
+		if(count >= apsize - 2){ /* Extend array of pointers if close to top of current allocation */
+			apsize <<= 1;
+			MALLOC_FAIL(strings = talloc_realloc(ctx, strings, String , apsize))
+		}
+		
+		switch(state){
+			case 0: /* Search for first non sep char */
+				if(!*p){
+					done = TRUE; /* End of string detected */
+					break;
+				}				
+				if(*p == sep){
+					break; /* Sep char detected, continue scanning */
+				}
+				else{
+					start = p; /* First non-sep character detected, note its position */
+					len = 1;  /* Set initial length */
+					state++; /* Start looking for sep characters */
+				}
+				break;
+				
+			case 1: /* skip characters till next sep */
+				if((*p == sep) || (!*p)){
+					/* Allocate a string of the correct length */
+					MALLOC_FAIL(strings[count] = talloc_zero_array(strings, char, len + 1)) 
+					/* Copy the string into the newly allocated area */
+					strncpy(strings[count++], start, len);
+					/* Mark the new end of list */
+					strings[count] = NULL;
+					/* Go back to looking for non sep characters */
+					state--;
+					if(!*p){ /* End of string detected */
+						done = TRUE;
+					}	
+				}
+				else{
+					len++;
+				}
+		}	
+	}
+	return strings;	
+}
 
 /*
 * Read a file into a string
@@ -25,6 +94,7 @@ String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
   
 	String str = NULL;
   
+	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(filename)
   
 	file = fopen(filename, "r");

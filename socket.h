@@ -10,8 +10,8 @@
 /* Prototypes. */
 
 int SocketConnectIP(const String host, const String service, int family, int socktype);
-int SocketReadLine(int socket, Bool *rcvdFlag, unsigned *pos, String line, int maxline);
-int SocketPrintf(int socket, const String format, ...);
+String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *pos);
+int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...);
 void *SocketFixAddrPointer(void *p);
 int SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
 	int (*addsock)(int sock, void *addr, int family, int socktype));

@@ -44,8 +44,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <xPL.h>
-#include <sqlite3.h>
 #include <talloc.h>
 #include  "defs.h"
 #include "types.h"
@@ -260,11 +258,19 @@ static void noFileSwitch(void)
 static void utilitySendCmd(String utilityArg)
 {
 	int daemonSock;
+	unsigned length;
+	Bool recv;
+	String line;
 	/* Try and connect to daemon */
 	if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
 		fatal("Could not connect to daemon at address: %s", Globals->cmdHostName);
 	}	
-		
+	SocketPrintf(Globals->masterCTX, daemonSock, "cl:%s\n", utilityArg);
+	line = SocketReadLine(Globals->masterCTX, daemonSock, &recv, &length);	
+	if(line && length){
+		printf("Result = %s\n", line);
+	}
+	
 	close(daemonSock); /* Done */
 }
 
