@@ -1,12 +1,26 @@
 /*
- * Code to handle the daemon and client's socket needs.
- *
- 
- *
- * $Id$
- */
- 
-
+* socket.c
+*
+* Copyright (C) 22013 Stephen Rodgers
+*
+* This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* as published by the Free Software Foundation; either version 3
+* of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* Stephen "Steve" Rodgers <hwstar@rodgers.sdcoxmail.com>
+*
+*/
 
 #include <stdio.h>
 #include <errno.h>
@@ -30,15 +44,21 @@
 #include "socket.h"
 
 
-
-
 /* 
  * Wait for a read data to become readable.
  *
- * If it didn't become readable in the ammount of time given, return PASS,
+ * Arguments:
+ * 
+ * 1. The socket to wait on.
+ * 2. The time out value in milliseconds. If set to -1, the time out will be infinite.
+ *
+ *
+ * Return value:
+ * 
+ * Boolean. Return PASS if sucessful,
  * otherwise FAIL.
  *
- * The timeout given is in milliseconds.  If it is -1, it is infinite.
+ *
  */
  
 Bool SocketWaitReadReady(int socket, int msTimeout)
@@ -73,7 +93,15 @@ Bool SocketWaitReadReady(int socket, int msTimeout)
 
 
 /*
-* Figure out the offset to the address field and return a pointer to it.
+* Helper to figure out the offset to the address field depending upon the address family
+*
+* Parameters:
+*
+* 1. A void pointer to the socket address structure to check.
+*
+* Return value:
+*
+* A void pointer to the address family specific part of the socket address structure passed in.
 */
 
 void *SocketFixAddrPointer(void *p)
@@ -89,7 +117,38 @@ void *SocketFixAddrPointer(void *p)
 
 
 
-/* Create a listening socket list. */
+/* 
+*
+* Helper to create a listening socket list.
+* Supports both IPV4 and IPV6 sockets.
+* 
+* 
+* Parameters:
+*
+* 1. Bind address string. If NULL is passed in, all interfaces will be bound 
+* 2. Service name string. Can be either a service name or a port number.
+* 3. Address family. Usually set to AF_UNSPEC.
+* 4. Socket type. Set to SOCK_STREAM for a TCP connection.
+* 5. Callback function (see below)
+*
+* Return value:
+*
+* PASS indicates success. FAIL indicates failure.
+*
+*************** Callback Function ***************
+*
+* Parameters:
+*
+* 1. Socket FD
+* 2. Socket address as a void pointer
+* 3. Socket family
+* 4. Socket type.
+*
+* Return Value:
+*
+* PASS if list creation is to continue, FAIL if list creation is to be aborted.
+*
+*/
 	
 int SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
 	int (*addsock)(int sock, void *addr, int family, int socktype))
@@ -106,14 +165,14 @@ int SocketCreateListenList(String bindaddr, String service, int family, int sock
 
 	memset(&hints, 0, sizeof hints);
 
-	// Init the hints struct for getaddrinfo
+	/* Init the hints struct for getaddrinfo */
 
 	hints.ai_family = family;
 	hints.ai_socktype = socktype;
 	if(bindaddr == NULL)	
 		hints.ai_flags = AI_PASSIVE;
 
-	// Get the address list
+	/* Get the address list */
 	if((res = getaddrinfo(bindaddr, service, &hints, &list)) == -1){
 		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", id, gai_strerror(res));
 		return FAIL;
@@ -127,8 +186,8 @@ int SocketCreateListenList(String bindaddr, String service, int family, int sock
 			continue;
 		}		
 
-		// If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket
-		// This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound.
+		/* If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket */
+		/* This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound. */
 
 		if(p->ai_family == PF_INET6){
 			setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
