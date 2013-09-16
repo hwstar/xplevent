@@ -419,7 +419,7 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
  *
  * Return value:
  *
- * Number of characters sent.
+ * 0 if successful, -1 if error.
  * 
  */
  
