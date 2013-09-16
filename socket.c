@@ -29,6 +29,49 @@
 #include "notify.h"
 #include "socket.h"
 
+
+
+
+/* 
+ * Wait for a read data to become readable.
+ *
+ * If it didn't become readable in the ammount of time given, return PASS,
+ * otherwise FAIL.
+ *
+ * The timeout given is in milliseconds.  If it is -1, it is infinite.
+ */
+ 
+Bool SocketWaitReadReady(int socket, int msTimeout)
+{
+	fd_set read_fd_set;
+	struct timeval tv;
+	struct timeval *tvp;
+	
+	/* If the timeout is -1, we have no timeout. */
+	if(msTimeout == -1) {
+		tvp=NULL;
+	}
+	else {
+		tvp=&tv;
+	}
+	
+	/* Wait for data to be readable. */
+	FD_ZERO(&read_fd_set);
+	FD_SET(socket, &read_fd_set);
+	tv.tv_sec=msTimeout / 1000;
+	tv.tv_usec=(msTimeout % 1000) * 1000;
+	if(select(socket+1, &read_fd_set, NULL, NULL, tvp)) {
+		/* We got some data, return ok. */
+		return PASS;
+	}
+	else {
+		/* We didn't get any data, this is a fail. */
+		return FAIL;
+	}
+}
+
+
+
 /*
 * Figure out the offset to the address field and return a pointer to it.
 */
@@ -238,6 +281,13 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 
 		if(res < 0){
 			if(errno == EINTR){
+				continue;
+			}
+			if(errno == EAGAIN){
+				if(SocketWaitReadReady(socket, 5000) == FAIL){
+					debug(DEBUG_UNEXPECTED, "%s: Read error time out on socket", id);
+					return NULL;
+				}
 				continue;
 			}
 			debug(DEBUG_UNEXPECTED, "%s: Read error on fd %d: %s", id, socket, strerror(errno));

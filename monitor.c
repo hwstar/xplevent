@@ -97,6 +97,70 @@ static void kvDump(const String key, const String value)
 	debug(DEBUG_EXPECTED, "Key = %s, Value = %s", key, value);
 }
 
+
+/*
+ * Parse and execute script
+ */
+ 
+static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
+{
+	ParseCtrlPtr_t parseCtrl;
+	pcodeHeaderPtr_t ph;
+
+	Bool res = PASS;
+	
+	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
+
+	parseCtrl = talloc_zero(ctx, ParseCtrl_t);
+	MALLOC_FAIL(parseCtrl);
+	
+	ph = talloc_zero(ctx, pcodeHeader_t);
+	MALLOC_FAIL(ph);
+	
+	/* Add XPL service pointer and database handle */
+	ph->xplServicePtr = Globals->xplEventService;
+	ph->DB = Globals->db;
+	
+	
+	/* Save pointer to pcode header in parse control block */
+	
+	parseCtrl->pcodeHeader = ph;
+	 
+	
+	/* Initialize and fill %xplnvin */
+
+	res = ParserParseHCL(parseCtrl, FALSE, hcl);
+	
+	if(parseCtrl->failReason){
+		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
+		res = FAIL;
+	}
+	
+	talloc_free(parseCtrl);
+	
+
+	debug(DEBUG_ACTION, "***Parsing complete***");
+	
+	/* Execute user code */
+	
+	if(res == PASS){
+		res = ParserExecPcode(ph);
+		if(res == FAIL){
+			debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
+			if(Globals->exitOnErr){
+				exit(-1);
+			}
+		}
+		
+	}
+	
+	talloc_free(ph);
+	
+	return res;
+}
+
+
+
 /*
  * Parse and execute based on contents of trigger message
  */
@@ -487,6 +551,7 @@ void interpretClientCommand(int userSock, String cl)
 	String *argv = UtilSplitString(Globals->masterCTX, cl, ' ');
 	int i;
 	int res = PASS;
+	String script;
 	
 	for(i = 0; clientCommands[i]; i++){
 		if(!strcmp(clientCommands[i], argv[0])){
@@ -498,6 +563,12 @@ void interpretClientCommand(int userSock, String cl)
 			case CC_EXEC:
 				if(argv[1]){
 					debug(DEBUG_EXPECTED, "Exec: %s", argv[1]);
+					if(!(script = DBFetchScript(argv, Globals->db, argv[1]))){
+							res = FAIL;
+					}
+					else{
+						res = parseAndExecScript(argv, script);	
+					}
 				}
 				else{
 					res = FAIL;
