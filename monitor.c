@@ -49,19 +49,35 @@
 #include "util.h"
 #include "xplevent.h"
 
+
+/* Client command codes */
+
 enum {CC_EXEC = 0 };
+
+/*  Client command table */
 
 static String clientCommands[]  = {
 	"exec",
 	"NULL"
 };
 
+/* Instance ID */
+
 static String instanceID;
 
 
 
 /*
- * Heartbeat logger
+ * Heartbeat logger. Updates the heartbeat table in the database.
+ *
+ * Arguments:
+ *
+ * 1. Hertbeat message pointer
+ *
+ * Return value:
+ *
+ * None
+ *
  */
 
 
@@ -86,7 +102,17 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 }
 
 /*
- * Callback for parseHCL for debugging
+ * Callback for parseHCL for debugging. Prints debug message with key and value.
+ *
+ * Arguments:
+ *
+ * 1. Key string
+ * 2. Value string.
+ *
+ * Return value:
+ *
+ * None
+ *
  */
 
 
@@ -99,6 +125,16 @@ static void kvDump(const String key, const String value)
 
 /*
  * Parse HCL and generate pcode
+ *
+ * Arguments:
+ *
+ * 1. Pointer to parse control block
+ * 2. Script to parse as a string
+ *
+ * Return value:
+ *
+ * Boolean. PASS indicates success. FAIL indicaes failure.
+ *
  */
  
 static Bool parseHCL(ParseCtrlPtr_t parseCtrl, String hcl)
@@ -120,8 +156,17 @@ static Bool parseHCL(ParseCtrlPtr_t parseCtrl, String hcl)
 
 
 /*
- * Execute pcode
- */
+* Execute pcode
+*
+* Arguments:
+*
+* 1. Pcode header pointer
+*
+* Return value:
+*
+* Boolean. PASS indicates success, FAIL indicates failure.
+*
+*/
  
 
 static Bool execPcode(pcodeHeaderPtr_t ph)
@@ -142,8 +187,19 @@ static Bool execPcode(pcodeHeaderPtr_t ph)
 
 
 /*
- * Parse and execute script
- */
+* Parse and execute script
+*
+* Arguments:
+*
+* 1. Talloc context to hang result off of.
+* 2. Script to parse and execute.
+*
+* Return value:
+*
+* Boolean. PASS indicates success, FAIL indicates failure.
+*
+*/
+ 
  
 static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 {
@@ -194,8 +250,21 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 
 
 /*
- * Parse and execute based on contents of trigger message
- */
+* Parse and execute based on contents of trigger message.
+*
+* Arguments:
+*
+* 1. Pcode header pointer
+* 2. Trigger message pointer
+* 3. Script to execute.
+*
+* Return value:
+*
+* Boolean. PASS indicates success, FAIL indicates failure.
+*
+*/
+ 
+
  
 static int parseAndExecTrig(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
 {
@@ -264,8 +333,20 @@ static int parseAndExecTrig(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, 
 }
 
 /*
- * Execute a trigger script, and return the pcode header for further processing
- */
+* Execute a trigger script, and return the pcode header using reference provided for further processing
+*
+* Arguments:
+*
+* 1. Trigger message pointer.
+* 2. Script to execute
+* 3. Reference to pcode header pointer
+*
+* Return value:
+*
+* Boolean. PASS indicates success, FAIL indicates failure.
+*
+*/
+ 
 
 static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHeaderPtrPtr_t ph)
 {
@@ -296,10 +377,21 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHe
 
 
 /*
- * We received a message we need to act on.
- * 
- * Parse the string passed in
- */
+* We received a message we need to act on. Parse and exec a script based on the trigger message
+* 
+*
+* Arguments:
+*
+* 1. Pointer to trigger message
+* 2. Script name to execute.
+*
+* Return value:
+*
+* Boolean. PASS indicates success, FAIL indicates failure.
+*
+*/
+ 
+
 
 static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
 {
@@ -322,8 +414,23 @@ static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
 
 
 /*
- * Trigger message check
- */
+* Trigger message check. Run the preprocess script if it exists, then look up the trigger event
+* in the database and see if there is a script associated with it. If there is, then execute the
+* script and return. Return a string through the source device reference of the source address
+* and/or device which sent the trigger message.
+*
+* Arguments:
+*
+* 1. Trigger Message pointer
+* 2. Reference to a String to store the Source device name
+*
+* Return value:
+*
+* None
+*
+*/
+ 
+
 
 
 static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
@@ -431,8 +538,19 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 
 
 /*
- * Trigger message logging
- */
+* Trigger message logging
+*
+* Arguments:
+*
+* 1. Trigger message pointer
+* 2. Source address and device which generated the trigger message
+*
+* Return value:
+*
+* None
+*
+*/
+ 
 
 
 static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
@@ -506,8 +624,20 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 }
 
 /*
- * Our xPL listener
- */
+* Our xPL listener. This is called by xPLLIB when a message is received.
+*
+* Arguments:
+*
+* 1. Message pointer
+* 2. Object pointer (not used here)
+*
+* Return value:
+*
+* None
+*
+*/
+  
+
 
 
 static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
@@ -530,6 +660,20 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 	}
 }
 
+/*
+* At exit callback used to shut down the xPL library.
+*
+* Arguments:
+*
+* None
+*
+* Return value:
+*
+* None
+*
+*/
+ 
+
 static void xplShutdown(void)
 {
 		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
@@ -539,9 +683,20 @@ static void xplShutdown(void)
 
 
 /*
-* Our tick handler. 
-* 
+* Our tick handler. Called by xPL Library once per second.
+* We do exit checking, and logging memory usage here.
+*
+* Arguments:
+*
+* 1. User value (not used)
+* 2. Object pointer (not used)
+*
+* Return value:
+*
+* None
+*
 */
+ 
 
 static void tickHandler(int userVal, xPL_ObjectPtr obj)
 {
@@ -564,8 +719,19 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 }
 
 /*
- * Interpret a client command
- */
+* Interpret a client command
+*
+* Arguments:
+*
+* 1. Socket providing a connection to the client.
+* 2. Command line from the client.
+*
+* Return value:
+*
+* None
+*
+*/
+ 
  
 void interpretClientCommand(int userSock, String cl)
 {
