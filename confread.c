@@ -270,7 +270,11 @@ SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const String section)
 	unsigned sh;
 	SectionEntryPtr_t se;
 
-	if((!ce) || (ce->magic != CE_MAGIC) || (!ce->head))
+	ASSERT_FAIL(ce)
+	ASSERT_FAIL(ce->magic == CE_MAGIC)
+	ASSERT_FAIL(section)
+
+	if(!ce->head)
 		return NULL;
 
 	/* Hash the section string passed in */
@@ -299,8 +303,8 @@ SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const String section)
 
 const String ConfReadGetSection(SectionEntryPtr_t se)
 {
-	if((!se) || (se->magic != KE_MAGIC) || (!se->section))
-		return NULL;
+	ASSERT_FAIL(se)
+	ASSERT_FAIL(se->magic == SE_MAGIC)
 	return se->section;
 }
 
@@ -321,8 +325,8 @@ const String ConfReadGetSection(SectionEntryPtr_t se)
 
 SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce)
 {
-	if((!ce) || (ce->magic != CE_MAGIC) || (!ce->head))
-		return NULL;
+	ASSERT_FAIL(ce)
+	ASSERT_FAIL(ce->magic == CE_MAGIC)
 	return ce->head;
 }
 
@@ -341,8 +345,8 @@ SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce)
 
 SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se)
 {
-	if((!se) || (se->magic != SE_MAGIC) || (!se->next))
-		return NULL;
+	ASSERT_FAIL(se)
+	ASSERT_FAIL(se->magic == SE_MAGIC)
 	return se->next;
 }
 
@@ -356,13 +360,13 @@ SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se)
 *
 * Return value:
 *
-* Line number or 0 if there is an error.
+* Line number
 */
 
 unsigned ConfReadSectionLineNum(SectionEntryPtr_t se)
 {
-	if((!se) || (se->magic != SE_MAGIC))
-		return 0;
+	ASSERT_FAIL(se)
+	ASSERT_FAIL(se->magic == SE_MAGIC)
 	return se->linenum;
 }
 
@@ -378,20 +382,24 @@ unsigned ConfReadSectionLineNum(SectionEntryPtr_t se)
 *
 * Return value:
 *
-* Pointer to the key entry or NULL if it does not exist or there is an error.
+* Pointer to the key entry or NULL if it does not exist.
 */
 
 KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key)
 {
 	unsigned kh;
 	KeyEntryPtr_t ke;
+	
+	ASSERT_FAIL(se)
+	ASSERT_FAIL(se->magic == SE_MAGIC)
 
-	if((!se) || (se->magic != SE_MAGIC) || (!se->key_head))
+	if(!se->key_head)
 		return NULL;
 
 	/* Hash the section string passed in */
 	kh = UtilHash(key);
 	for(ke = se->key_head; (ke); ke = ke->next){ /* Traverse key list */
+		ASSERT_FAIL(ke->magic == KE_MAGIC)
 		/* Compare hashes, and if they match, compare strings */
 		if((kh == ke->hash) && (!strcmp(ke->key, key)))
 			return ke;
@@ -408,13 +416,13 @@ KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key)
 *
 * Return value:
 *
-* String with key entry, or NULL if there is an error.
+* String with key entry
 */
 
 const String ConfReadGetKey(KeyEntryPtr_t ke)
 {
-	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->key))
-		return NULL;
+	ASSERT_FAIL(ke)
+	ASSERT_FAIL(ke->magic == KE_MAGIC)
 	return ke->key;
 }
 
@@ -428,13 +436,13 @@ const String ConfReadGetKey(KeyEntryPtr_t ke)
 *
 * Return value:
 *
-* Line number, or 0 if there was an error.
+* Line number
 */
 
 unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke)
 {
-	if((!ke) || (ke->magic != KE_MAGIC))
-		return 0;
+	ASSERT_FAIL(ke)
+	ASSERT_FAIL(ke->magic == KE_MAGIC)
 	return ke->linenum;
 }
 
@@ -448,15 +456,13 @@ unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke)
 *
 * Return value:
 *
-* Pointer to key entry, or NULL if it does not exist, or there is an error.
+* Pointer to key entry, or NULL if it does not exist.
 */
 
 KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se)
 {
-
-	if((!se) || (se->magic != SE_MAGIC) || (!se->key_head))
-		return NULL;
-
+	ASSERT_FAIL(se)
+	ASSERT_FAIL(se->magic == SE_MAGIC)
 	return se->key_head;
 }
 
@@ -469,13 +475,13 @@ KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se)
 *
 * Return value:
 *
-* Pointer to next key entry or NULL if it does not exist, or there is an error.
+* Pointer to next key entry or NULL if it does not exist.
 */
 
 KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke)
 {
-	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->next))
-		return NULL;
+	ASSERT_FAIL(ke)
+	ASSERT_FAIL(ke->magic == KE_MAGIC)
 	return ke->next;
 }
 
@@ -489,13 +495,13 @@ KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke)
 *
 * Return value:
 *
-* String containing the value, or NULL if it does not exist or there was an error.
+* String containing the value, or NULL if it does not exist.
 */
 
 const String ConfReadGetValue(KeyEntryPtr_t ke)
 {
-	if((!ke) || (ke->magic != KE_MAGIC) || (!ke->value))
-		return NULL;
+	ASSERT_FAIL(ke)
+	ASSERT_FAIL(ke->magic == KE_MAGIC)
 	return ke->value;
 
 }
@@ -516,7 +522,13 @@ const String ConfReadGetValue(KeyEntryPtr_t ke)
 
 const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key)
 {
-	return ConfReadGetValue(ConfReadFindKey(se, key));
+	KeyEntryPtr_t ke;
+	
+	ke = ConfReadFindKey(se, key);
+	if(ke){
+		return ConfReadGetValue(ke);
+	}
+	return NULL;
 }
 
 /*
@@ -539,12 +551,11 @@ KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String sectio
 {
 	SectionEntryPtr_t se;
 
-	if((!section) || (!key))
-		return NULL;
-
  	se = ConfReadFindSection(ce, section);
-	return ConfReadFindKey(se, key);
-
+ 	if(se){
+		return ConfReadFindKey(se, key);
+ 	}
+ 	return NULL;
 }
 
 /*
@@ -563,7 +574,10 @@ KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String sectio
 KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String section)
 {
 	SectionEntryPtr_t se = ConfReadFindSection(ce, section);
-	return ConfReadGetFirstKey(se);
+	if(se){
+		return ConfReadGetFirstKey(se);
+	}
+	return NULL;
 }
 
 /*
@@ -606,7 +620,10 @@ unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section)
 const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key)
 {
 	KeyEntryPtr_t ke = ConfReadKeyEntryBySectKey(ce, section, key);
-	return ConfReadGetValue(ke);
+	if(ke){
+		return ConfReadGetValue(ke);
+	}
+	return NULL;
 
 }
 
@@ -696,7 +713,9 @@ void ConfReadDefErrorHandler( int etype, int linenum, const String info)
 
 void ConfReadFree(ConfigEntryPtr_t ce)
 {
-	talloc_free(ce);
+	if(ce){
+		talloc_free(ce);
+	}
 }
 
 
@@ -717,9 +736,10 @@ void ConfReadDebugDump(ConfigEntryPtr_t ce)
 {
 	SectionEntryPtr_t se;
 	KeyEntryPtr_t kv;
+	
+	ASSERT_FAIL(ce)
+	ASSERT_FAIL(ce->magic == CE_MAGIC)
 
-	if((!ce) || (ce->magic != CE_MAGIC))
-		return;
 
 	se = ce->head; /* Start at beginning of section list and work forward */
 	
@@ -756,7 +776,7 @@ void ConfReadDebugDump(ConfigEntryPtr_t ce)
 *
 * 1. Talloc context to hang the configuration data structures off of.
 * 2. A string with the path name to the configuration file.
-* 3. An error callback (see below)
+* 3. An error callback or NULL if default error handler is to be used (see below)
 *
 * Return value:
 *
@@ -784,6 +804,10 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 	SectionEntryPtr_t se = NULL;
 	KeyEntryPtr_t kv = NULL;
 	int linenum;
+	
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(thePath)
 
 	/* User our built in handler if no error handler is specified */
 
