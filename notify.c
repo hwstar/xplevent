@@ -45,8 +45,17 @@ static Bool timeen = 0;
 
 
 /*
- * Enable/disable time reporting
- */
+* Enable/disable time reporting
+*
+* Arguments:
+* 
+* Emable flag
+*
+* Return value:
+*
+* None
+*
+*/
  
 void notify_timen(Bool ena)
 {
@@ -56,6 +65,14 @@ void notify_timen(Bool ena)
 
 /*
 * Redirect logging and error output
+*
+* Arguments:
+* 
+* String with path to log file
+*
+* Return value:
+*
+* None
 */
 
 void notify_logpath(const String path)
@@ -71,9 +88,22 @@ void notify_logpath(const String path)
 }
 
 
-/* Fatal error handler with strerror(errno) reason */
+/* 
+* Fatal error handler with strerror(errno) reason
+*
+* Arguments:
+* 
+* 1. errno
+* 2. Format string
+* 3. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
 
-void fatal_with_reason(int error, const String message, ...)
+
+void fatal_with_reason(int theErrno, const String message, ...)
 {
     va_list ap;
     
@@ -81,14 +111,25 @@ void fatal_with_reason(int error, const String message, ...)
 
     fprintf(LOGOUT, "%s: ", Globals->progName);
     vfprintf(LOGOUT, message, ap);
-    fprintf(LOGOUT, ": %s\n",strerror(error));
+    fprintf(LOGOUT, ": %s\n",strerror(theErrno));
 
     va_end(ap);
     exit(1);
 }
 
 
-/* Fatal error handler. */
+/*
+* Fatal error handler. 
+* Arguments:
+* 
+* 1. Format string
+* 2. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
+
 void fatal(const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
@@ -103,14 +144,36 @@ void fatal(const String message, ...) {
 	exit(1);
 }
 
-/* Assertion failure handler */
+/* 
+* Assertion failure handler 
+*
+* Arguments:
+* 
+* 1. File name
+* 2. line number
+*
+* Return value:
+*
+* None
+*/
 
 void assertion_failure(const String file, int line)
 {
 	fatal("Assertion failure detected in file: %s, line: %d", file, line);
 }
 
-/* Memory allocation failure handler */
+/* 
+* Memory allocation failure handler
+*
+* Arguments:
+* 
+* 1. File name
+* 2. line number
+*
+* Return value:
+*
+* None
+*/
 
 void malloc_failure(const String file, int line)
 {
@@ -118,7 +181,18 @@ void malloc_failure(const String file, int line)
 }
 
 
-/* Normal error handler. */
+/* 
+* Normal error handler.
+*
+* Arguments:
+* 
+* 1. Format string
+* 2. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
 void error(const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
@@ -133,7 +207,18 @@ void error(const String message, ...) {
 }
 
 
-/* Warning handler. */
+/* 
+* Warning handler
+* Arguments:
+* 
+* 1. Format string
+* 2. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
+
 void warn(const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
@@ -149,7 +234,19 @@ void warn(const String message, ...) {
 
 
 
-/* Debugging error handler. */
+/* 
+* Debugging message handler
+*
+* Arguments:
+* 
+* 1. Debug level
+* 2. Format string
+* 3. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
 void debug(int level, const String message, ...) {
 	va_list ap;
 	va_start(ap, message);
@@ -179,7 +276,20 @@ void debug(int level, const String message, ...) {
 	va_end(ap);
 }
 
-/* Print a debug string with a buffer of bytes to print */
+/* 
+* Print a debug string with a buffer of bytes to print
+*
+* Arguments:
+* 
+* 1. Debug level
+* 2. Buffer to print as hex values
+* 3. Format string
+* 4. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
 
 void debug_hexdump(int level, const void *buf, int buflen, const String message, ...){
 	int i;
