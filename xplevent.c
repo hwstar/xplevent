@@ -99,6 +99,7 @@ static clOverride_t clOverride;
 static int utilityCommand = 0;
 static String utilityArg = NULL;
 static String utilityFile = NULL;
+static void *configInfo = NULL;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
 static char interface[WS_SIZE] = DEF_INTERFACE;
@@ -106,6 +107,7 @@ static char logPath[WS_SIZE] = "/tmp/xplevent.log";
 static char instanceID[WS_SIZE] = DEF_INSTANCE_ID;
 static char pidFile[WS_SIZE] = DEF_PID_FILE;
 static char dbFile[WS_SIZE] = DEF_DB_FILE;
+
 
 
 
@@ -557,7 +559,7 @@ int main(int argc, char *argv[])
 
 	/* Attempt to read a config file */
 	
-	if((Globals->configEntry = ConfReadScan(Globals->masterCTX, configFile, confDefErrorHandler))){
+	if((configInfo = ConfReadScan(Globals->masterCTX, configFile, confDefErrorHandler))){
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
 		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "instance-id")))
@@ -599,9 +601,9 @@ int main(int argc, char *argv[])
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
 	}
 	
-	/* Free the config data */
-	ConfReadFree(Globals->configEntry);
-	Globals->configEntry = NULL;
+	/* Free the config info */
+	ConfReadFree(configInfo);
+	configInfo = NULL;
 	
 	
 	/* Install signal traps for proper shutdown */
