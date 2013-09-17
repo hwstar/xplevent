@@ -99,6 +99,7 @@ static void dbTxEnd(void *db, String id, Bool type)
 			return;
 		}
 	}
+	/* Transaction rollback */
 	else{
 		sqlite3_exec((sqlite3 *) db, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
 		if(errorMessage){
@@ -175,7 +176,7 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
  */
 
 static const String dbReadField(void *db, TALLOC_CTX *ctx, String id, String table, 
-String colName, String key, String valueName)
+String keyColName, String key, String valueColName)
 {
 	String errorMessage;
 	String sql;
@@ -183,18 +184,18 @@ String colName, String key, String valueName)
 	
 	
 	ASSERT_FAIL(table)
-	ASSERT_FAIL(colName)
+	ASSERT_FAIL(keyColName)
 	ASSERT_FAIL(key)
-	ASSERT_FAIL(valueName)
+	ASSERT_FAIL(valueColName)
 	ASSERT_FAIL(id)
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	
-	cbd.valueName = valueName;
+	cbd.valueName = valueColName;
 	cbd.res = NULL;
 	cbd.ctx = ctx;
 	
-	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s='%s'", table, colName, key);
+	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s='%s' LIMIT 1", table, keyColName, key);
 	MALLOC_FAIL(sql);
 	sqlite3_exec((sqlite3 *) db, sql, dbReadFieldCallback, (void *) &cbd , &errorMessage);
 	if(errorMessage){

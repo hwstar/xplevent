@@ -97,6 +97,49 @@ static void kvDump(const String key, const String value)
 	debug(DEBUG_EXPECTED, "Key = %s, Value = %s", key, value);
 }
 
+/*
+ * Parse HCL and generate pcode
+ */
+ 
+static Bool parseHCL(ParseCtrlPtr_t parseCtrl, String hcl)
+{
+	int res;
+	
+	ASSERT_FAIL(parseCtrl)
+	
+	res = ParserParseHCL(parseCtrl, FALSE, hcl);
+	
+	if(res == FAIL){
+		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
+		if(Globals->exitOnErr){
+			exit(-1);
+		}
+	}
+	return res;
+}
+
+
+/*
+ * Execute pcode
+ */
+ 
+
+static Bool execPcode(pcodeHeaderPtr_t ph)
+{
+	int res;
+	
+	ASSERT_FAIL(ph);
+	res = ParserExecPcode(ph);
+	if(res == FAIL){
+		debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
+		if(Globals->exitOnErr){
+			exit(-1);
+		}
+	}
+	return res;
+}
+
+
 
 /*
  * Parse and execute script
@@ -126,15 +169,11 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 	
 	parseCtrl->pcodeHeader = ph;
 	 
+	/* Parse the script */
 	
-	/* Initialize and fill %xplnvin */
+	res = parseHCL(parseCtrl, hcl);
 
-	res = ParserParseHCL(parseCtrl, FALSE, hcl);
-	
-	if(parseCtrl->failReason){
-		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
-		res = FAIL;
-	}
+	/* Free the parser data structures */
 	
 	talloc_free(parseCtrl);
 	
@@ -144,14 +183,7 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 	/* Execute user code */
 	
 	if(res == PASS){
-		res = ParserExecPcode(ph);
-		if(res == FAIL){
-			debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
-			if(Globals->exitOnErr){
-				exit(-1);
-			}
-		}
-		
+		execPcode(ph);	
 	}
 	
 	talloc_free(ph);
@@ -165,7 +197,7 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
  * Parse and execute based on contents of trigger message
  */
  
-static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
+static int parseAndExecTrig(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
 {
 	ParseCtrlPtr_t parseCtrl;
 	xPL_NameValueListPtr msgBody;
@@ -212,16 +244,11 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	MALLOC_FAIL(sourceAddress);
 	ParserHashAddKeyValue(ph, ph, "xplin", "sourceaddress", sourceAddress);
 	
-	/* Parse user code */
+	/* Parse the script */
 	
-	res = ParserParseHCL(parseCtrl, FALSE, hcl);
+	res = parseHCL(parseCtrl, hcl);
 	
-	if(parseCtrl->failReason){
-		debug(DEBUG_UNEXPECTED,"Parse failed: %s", parseCtrl->failReason);
-		if(Globals->exitOnErr){
-			exit(-1);
-		}
-	}
+	/* Free the parser data structures */
 	
 	talloc_free(parseCtrl);
 	
@@ -231,14 +258,7 @@ static int parseAndExec(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, Stri
 	/* Execute user code */
 	
 	if(res == PASS){
-		res = ParserExecPcode(ph);
-		if(res == FAIL){
-			debug(DEBUG_UNEXPECTED,"Code execution failed: %s", ph->failReason);
-			if(Globals->exitOnErr){
-				exit(-1);
-			}
-		}
-		
+		execPcode(ph);	
 	}
 	return res;
 }
@@ -267,7 +287,7 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHe
 	/* Set the pointer to the database */
 	(*ph)->DB = Globals->db;
 
-	res = parseAndExec(*ph, triggerMessage, script);
+	res = parseAndExecTrig(*ph, triggerMessage, script);
 		
 	return res;
 	
@@ -339,25 +359,26 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	
 	MALLOC_FAIL(ctx = talloc_new(Globals->masterCTX))
 	
-
+	/* Make combined schema string */
+	snprintf(schema, 63, "%s.%s", schema_class, schema_type);
+	debug(DEBUG_ACTION, "Schema: %s", schema);
+	
 	/* Get any preprocessing script */
 	pScript = DBFetchScript(ctx, Globals->db, "preprocess");
 	
 	if(!pScript){
 		debug(DEBUG_EXPECTED,"Preprocess script not found, using canned subaddress handling");
-		// Make combined schema string;
-		snprintf(schema, 63, "%s.%s", schema_class, schema_type);
-		debug(DEBUG_ACTION, "Schema: %s", schema);
 	
-		// Test for sensor.basic
+
+		/* Test for sensor.basic */
 		if(!strcmp(schema, "sensor.basic"))
 			subAddress = xPL_getMessageNamedValue(theMessage, "device");
 	
-		// Test for hvac.zone or security.gateway
+		/* Test for hvac.zone or security.gateway */
 		if((!strcmp(schema, "hvac.zone")) || (!strcmp(schema, "security.gateway")))
 			subAddress = xPL_getMessageNamedValue(theMessage, "zone");
 	
-		// Make source name with sub-address if available
+		/* Make source name with sub-address if available */
 		snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
 		if(subAddress){
 			snprintf(source + strlen(source), 31, ":%s", subAddress);
@@ -496,12 +517,12 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 		const char *class = xPL_getSchemaClass(theMessage);
 		const char *type = xPL_getSchemaType(theMessage);
 		if((mtype == xPL_MESSAGE_STATUS) && !strcmp(class, "hbeat") && !strcmp(type, "app")){
-			// Log heartbeat messages
+			/* Log heartbeat messages */
 			logHeartBeatMessage(theMessage);
 		}
 		else if(mtype == xPL_MESSAGE_TRIGGER){
 			String sourceDevice;
-			// Process trigger message
+			/* Process trigger message */
 			checkTriggerMessage(theMessage, &sourceDevice);
 			logTriggerMessage(theMessage, sourceDevice);
 			talloc_free(sourceDevice);
@@ -595,7 +616,7 @@ void interpretClientCommand(int userSock, String cl)
  * Client command data is ready
  */
 
-int processClientCommand(int userSock)
+static void clientCommandListener(int userSock, int revents, int uservalue)
 {
 	unsigned length = 0;
 	String line;
@@ -615,18 +636,7 @@ int processClientCommand(int userSock)
 	if(line){
 		talloc_free(line);
 	}
-	return length;
-	
-}
-
-/*
- * Read client command data from an accepted socket
- */
- 
-
-static void clientCommandListener(int userSock, int revents, int uservalue)
-{
-	if(!(processClientCommand(userSock))){
+	if(!length){
 		/* EOF or ERROR */
 		/* Remove the socket from the polling list and close it */
 		debug(DEBUG_ACTION, "Removing socket from poll list, and closing the socket");
@@ -634,7 +644,6 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 		close(userSock);
 	}
 }
-
 
 /*
  * Read data ready on one of the command sockets

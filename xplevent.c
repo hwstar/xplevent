@@ -599,6 +599,9 @@ int main(int argc, char *argv[])
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
 	}
 	
+	/* Free the config data */
+	ConfReadFree(Globals->configEntry);
+	Globals->configEntry = NULL;
 	
 	
 	/* Install signal traps for proper shutdown */

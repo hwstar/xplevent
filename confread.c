@@ -563,13 +563,13 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 	
 	/* Allocate a line buffer */
 
-	ce->line = talloc_zero_array(ctx, char, MAX_CONFIG_LINE);
+	ce->line = talloc_zero_array(ce, char, MAX_CONFIG_LINE);
 	MALLOC_FAIL(ce->line)
 
 
-	/* Allocate a line buffer */
+	/* Allocate a work string */
 
-	ce->work_string = talloc_zero_array(ctx, char, MAX_CONFIG_LINE);
+	ce->work_string = talloc_zero_array(ce, char, MAX_CONFIG_LINE);
 	MALLOC_FAIL(ce->work_string)
 
 
@@ -605,14 +605,14 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 			
 			case TOK_SECTION:
 
-				se = talloc_zero(ctx, SectionEntry_t);
+				se = talloc_zero(ce, SectionEntry_t);
 				MALLOC_FAIL(se)
 				
 				/* Initialize section entry */
 				se->magic = SE_MAGIC;
 
 				/* Copy the section name into the new entry */
-				se->section = talloc_strdup(ctx, ce->work_string);
+				se->section = talloc_strdup(se, ce->work_string);
 				MALLOC_FAIL(se->section);
 			
 				/* Hash the section */
@@ -650,7 +650,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 
 				kv = NULL;
 				if(se){	/* There has to be a section defined */
-					kv = talloc_zero(ctx, KeyEntry_t);
+					kv = talloc_zero(se, KeyEntry_t);
 					MALLOC_FAIL(kv)
 					
 		
@@ -658,7 +658,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 					kv->magic = KE_MAGIC;
 
 					/* Save the key */
-					kv->key = talloc_strdup(ctx, ce->work_string);
+					kv->key = talloc_strdup(kv, ce->work_string);
 					MALLOC_FAIL(kv->key);
 				
 
@@ -675,7 +675,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 					case TOK_VALUE:
 						if(kv && se){
 							/* Save value */
-							kv->value = talloc_strdup(ctx, ce->work_string);
+							kv->value = talloc_strdup(kv, ce->work_string);
 							ASSERT_FAIL(kv->value)
 						
 							/* Count the new entry */
