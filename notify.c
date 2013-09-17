@@ -64,7 +64,8 @@ void notify_timen(Bool ena)
 
 
 /*
-* Redirect logging and error output
+* Redirect logging and error output. If a logging file is open,
+* close it before opening the new file.
 *
 * Arguments:
 * 
@@ -79,11 +80,12 @@ void notify_logpath(const String path)
 {
   FILE *f;
 
-  if(output != NULL)
+  if(output != NULL){
     fclose(output);
-    
-  if((f = fopen(path,"w")) == NULL)
+  } 
+  if((f = fopen(path,"w")) == NULL){
     fatal_with_reason(errno, "Can't open log file for writing");
+  }
   output = f;
 }
 
@@ -270,9 +272,8 @@ void debug(int level, const String message, ...) {
 		}
 		vfprintf(LOGOUT, message, ap);
 		fprintf(LOGOUT,"\n");
-		if(output != NULL)  /* If we are writing to a log file, flush the debug output. */
-			fflush(output);
-		}
+		fflush(LOGOUT);
+	}
 	va_end(ap);
 }
 
@@ -299,8 +300,9 @@ void debug_hexdump(int level, const void *buf, int buflen, const String message,
 	if(Globals->debugLvl >= level) {
 		fprintf(LOGOUT,"%s: (debug): ",Globals->progName);
 		vfprintf(LOGOUT,message,ap);
-		for(i = 0 ; i < buflen ; i++)
+		for(i = 0 ; i < buflen ; i++){
 			fprintf(LOGOUT,"%02X ",((int) ((char *)buf)[i]) & 0xFF);
+		}
 		fprintf(LOGOUT,"\n");
 	}
 }
