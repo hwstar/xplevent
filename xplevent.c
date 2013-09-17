@@ -143,12 +143,37 @@ static struct option longOptions[] = {
 /*
 * When the user hits ^C, logically shutdown
 * (including telling the network the service is ending)
+*
+* Arguments:
+*
+* 1. Signal number
+* 2. Signal info (see sigaction documentation for details)
+* 3. Generic pointer (not used, see sigaction docunent for details)
+*
+* Return value:
+*
+* None
 */
 
 static void shutdownHandler(int signal, siginfo_t *info, void *ucontext)
 {
 	exitRequest = TRUE;
 }
+
+/*
+* When a hangup signal is sent, make a note of it, so the log file
+* can be closed and re-opened.
+*
+* Arguments:
+*
+* 1. Signal number
+* 2. Signal info (see sigaction documentation for details)
+* 3. Generic pointer (not used, see sigaction docunent for details)
+*
+* Return value:
+*
+* None
+*/
 
 
 static void hupHandler(int signal, siginfo_t *info, void *ucontext)
@@ -159,6 +184,14 @@ static void hupHandler(int signal, siginfo_t *info, void *ucontext)
 
 /*
 * Show help
+*
+* Arguments:
+*
+* None
+*
+* Return value:
+*
+* None
 */
 
 static void showHelp(void)
@@ -195,7 +228,18 @@ static void showHelp(void)
 }
 
 /*
-* Default error handler for confreadScan()
+* Error handler callback for confreadScan()
+*
+* Arguments:
+*
+* 1 Error type. (See confread.h)
+* 2. Line number where the error occurred (valid for syntax error only)
+* 3. Info string containg output from strerror(). (valid for I/O error only)
+*
+* Return value:
+*
+* None
+*
 */
 
 static void confDefErrorHandler( int etype, int linenum, const String info)
@@ -223,7 +267,15 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 }
 
 /* 
- * Shutdown and exit
+ * Atexit callback to shut down xplevent
+ *
+ * Arguments:
+ *
+ * None
+ *
+ * Return value
+ *
+ * None
  */ 
 
 static void xpleventShutdown(void)
@@ -245,6 +297,14 @@ static void xpleventShutdown(void)
 
 /*
 * Print -f switch reqired error and exit
+*
+* Arguments:
+*
+* None
+*
+* Return value:
+*
+* None
 */
 
 
@@ -254,7 +314,15 @@ static void noFileSwitch(void)
 }
 
 /*
- * Send a command line to the daemon
+ * Send a command line to the daemon and display the results
+ *
+ * Arguments:
+ *
+ * 1. Command line to send
+ *
+ * Return value:
+ *
+ * None
  */
 
 static void utilitySendCmd(String utilityArg)
