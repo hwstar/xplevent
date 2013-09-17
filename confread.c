@@ -72,6 +72,17 @@ static char copyuntil(String dest, String *srcp, int max_dest_len,  String stopc
 * and always terminate the destination with a NUL character. Return the
 * character the copy stopped on. In the case of no stop character
 * match, return a nul.
+*
+* Arguments:
+* 
+* 1. Destination string or NULL
+* 2. Pointer to source string pointer (String poiner will be modified).
+* 3. Length limit
+* 4. String containg all of the stop characters
+*
+* Returns 
+*
+* Stop character detected, or NUL.
 */
 
 static char copyuntil(String dest, String *srcp, int max_dest_len, String stopchrs){
@@ -121,6 +132,14 @@ static char copyuntil(String dest, String *srcp, int max_dest_len, String stopch
 
 /*
 * Remove spaces and tabs from the line in place
+*
+* Arguments:
+*
+* 1. Input string (will be modified)
+*
+* Return value:
+*
+* Modified input String
 */
 			
 static String removespctab(String line)
@@ -143,6 +162,15 @@ static String removespctab(String line)
 * Scan the line for tokens. Return a token code indicating what was
 * found. Load tokstring with the token found unless tokstring is set to NULL, 
 * in that case, throw the characters away until the next token is detected.
+*
+* Arguments:
+*
+* 1. Pointer to String pointer pointing to line (line String pointer will be modified).
+* 2. Pointer to a place to store the token string found (Or NULL if not required)
+*
+* Return value:
+* 
+* The token detected.
 */
 
 static int linescan(String *lp, String tokstring){
@@ -216,7 +244,11 @@ static int linescan(String *lp, String tokstring){
 	return retval;
 }					
 
-/* Global functions */
+/* 
+**************************
+* Global functions       *
+**************************
+*/
 
 
 /*
