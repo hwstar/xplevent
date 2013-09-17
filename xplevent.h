@@ -11,7 +11,6 @@ typedef struct XPLEvGlobals_s {
 	String cmdService;
 	void *masterCTX;
 	void *xplEventService;
-	void *configEntry;
 	void *db;	
 } XPLEvGlobals_t;
 
