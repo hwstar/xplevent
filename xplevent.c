@@ -259,14 +259,14 @@ static void utilitySendCmd(String utilityArg)
 {
 	int daemonSock;
 	unsigned length;
-	Bool recv;
+
 	String line;
 	/* Try and connect to daemon */
 	if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
 		fatal("Could not connect to daemon at address: %s", Globals->cmdHostName);
 	}	
 	SocketPrintf(Globals->masterCTX, daemonSock, "cl:%s\n", utilityArg);
-	line = SocketReadLine(Globals->masterCTX, daemonSock, &recv, &length);	
+	line = SocketReadLine(Globals->masterCTX, daemonSock, &length);	
 	if(line && length){
 		printf("Result = %s\n", line);
 	}

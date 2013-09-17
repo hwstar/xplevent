@@ -597,15 +597,14 @@ void interpretClientCommand(int userSock, String cl)
 
 int processClientCommand(int userSock)
 {
-	Bool rcvdFlag;
 	unsigned length = 0;
 	String line;
 	
-	if((line = SocketReadLine(Globals->masterCTX, userSock, &rcvdFlag, &length)) == NULL){
+	if((line = SocketReadLine(Globals->masterCTX, userSock, &length)) == NULL){
 		debug(DEBUG_UNEXPECTED, "Could not read socket");
 	}
 	else{
-		if(rcvdFlag && length){
+		if(length){
 			debug(DEBUG_ACTION, "Line read from socket: %s", line); 
 			if(!strncmp("cl:", line, 3)){
 				interpretClientCommand(userSock, line + 3);

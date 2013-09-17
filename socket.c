@@ -91,6 +91,55 @@ Bool SocketWaitReadReady(int socket, int msTimeout)
 }
 
 
+/* 
+ * Wait for a write output buffer to become ready.
+ *
+ * Arguments:
+ * 
+ * 1. The socket to wait on.
+ * 2. The time out value in milliseconds. If set to -1, the time out will be infinite.
+ *
+ *
+ * Return value:
+ * 
+ * Boolean. Return PASS if sucessful,
+ * otherwise FAIL.
+ *
+ *
+ */
+Bool SocketWaitWriteReady(int socket, int msTimeout)
+{
+	fd_set write_fd_set;
+	struct timeval tv;
+	struct timeval *tvp;
+	
+	/* If the timeout is -1, we have no timeout. */
+	if(msTimeout == -1) {
+		tvp=NULL;
+	}
+	else {
+		tvp=&tv;
+	}
+	
+	/* Wait for data to be readable. */
+	FD_ZERO(&write_fd_set);
+	FD_SET(socket, &write_fd_set);
+	tv.tv_sec=msTimeout / 1000;
+	tv.tv_usec=(msTimeout % 1000) * 1000;
+	if(select(socket+1, NULL, &write_fd_set, NULL, tvp)) {
+		/* We got some data, return ok. */
+		return PASS;
+	}
+	else {
+		/* We didn't see the buffer become ready, this is a fail. */
+		return FAIL;
+	}
+}
+
+
+
+
+
 
 /*
 * Helper to figure out the offset to the address field depending upon the address family
@@ -323,16 +372,16 @@ int SocketConnectIP(const String host, const String service, int family, int soc
  *
  * 1. The talloc context to hang the result off of.
  * 2. The socket to read from.
- * 3. A flag indicating if there was something received or not.
- * 4. The length of the line received.
+ * 3. Unsigned pointer to the length of the line received. 
  *
  * Return Value:
  *
  * Success: A string containing the line of text NUL terminated. This must be freed when no longer required.
+ * If the length of the string returned is 0, then EOF has been detected.
  * Failure: NULL
  *
  */
-String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *length)
+String SocketReadLine(TALLOC_CTX *ctx, int socket, unsigned *length)
 {
 	int lsize = 80;
 	int res;
@@ -342,15 +391,10 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 	
 	ASSERT_FAIL(length)
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(rcvdFlag)
-
 	
 	MALLOC_FAIL(line = talloc_zero_array(ctx, char, lsize))
 	
-	
-	*rcvdFlag = FALSE;
 	*length = 0;
-	
 	
 	for(;;){
 		if(*length >= (lsize - 2)){
@@ -367,7 +411,7 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 			if(errno == EINTR){
 				continue;
 			}
-			if(errno == EAGAIN){
+			if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
 				if(SocketWaitReadReady(socket, 5000) == FAIL){
 					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", id);
 					talloc_free(line);
@@ -390,7 +434,6 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 			}
 			else{
 				line[*length] = 0;
-				*rcvdFlag = TRUE;
 				return line;
 			}
 		}
@@ -398,7 +441,6 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, Bool *rcvdFlag, unsigned *len
 			debug(DEBUG_ACTION,"%s: EOF on line", id);
 			*length = 0;
 			line[0] = 0;
-			*rcvdFlag = TRUE;
 			return line;
 		}
 	}	
@@ -429,6 +471,7 @@ int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 	int res = 0;
 	int len;
 	String string, sp;
+	static String id = "SocketPrintf";
 
 	ASSERT_FAIL(format)
 	ASSERT_FAIL(ctx)
@@ -444,9 +487,14 @@ int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 				if(errno == EINTR){
 					continue;
 				}
-				if(errno != EWOULDBLOCK){
-					break;
+				if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+					if(SocketWaitWriteReady(socket, 5000) == PASS){
+						continue;
+					}
+					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", id);
 				}
+				debug(DEBUG_UNEXPECTED, "%s: Socket write error: %s", id, strerror(errno));
+				break;
 			}
 			else{
 				if(res == len){
