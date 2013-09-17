@@ -253,6 +253,15 @@ static int linescan(String *lp, String tokstring){
 
 /*
 * Retrieve a section structure by name. If it doesn't exist, return NULL
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+* 2. Section name
+*
+* Return value:
+*
+* Pointer to section entry or NULL if it does not exist.
 */
 
 
@@ -277,6 +286,15 @@ SectionEntryPtr_t ConfReadFindSection(ConfigEntryPtr_t ce, const String section)
 
 /*
 * Return the section name, or NULL if it does not exist
+*
+* Arguments:
+*
+* 1. Pointer to section entry.
+*
+* Return value:
+*
+* Pointer to section name or NULL if it does not exist.
+*
 */
 
 const String ConfReadGetSection(SectionEntryPtr_t se)
@@ -289,6 +307,16 @@ const String ConfReadGetSection(SectionEntryPtr_t se)
 
 /*
 * Return a pointer to the first section entry if it exists. If it does not exist, return NULL
+*
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+*
+* Return value:
+*
+* Pointer to section entry or NULL if it does not exist.
+*
 */
 
 SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce)
@@ -300,6 +328,15 @@ SectionEntryPtr_t ConfReadGetFirstSection(ConfigEntryPtr_t ce)
 
 /*
 * Return a pointer to the next section entry if it exists. If it does not exist, return NULL
+*
+* Arguments:
+*
+* 1. Pointer to current section entry
+*
+* Return value:
+*
+* Pointer to the next section entry or NULL if it does not exist.
+*
 */
 
 SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se)
@@ -311,6 +348,15 @@ SectionEntryPtr_t ConfReadGetNextSection(SectionEntryPtr_t se)
 
 /*
 * Return the line number for the section entry
+*
+*
+* Arguments:
+*
+* 1. Pointer to the section entry.
+*
+* Return value:
+*
+* Line number or 0 if there is an error.
 */
 
 unsigned ConfReadSectionLineNum(SectionEntryPtr_t se)
@@ -324,6 +370,15 @@ unsigned ConfReadSectionLineNum(SectionEntryPtr_t se)
 
 /*
 * Return a pointer to the matching key in a section if it exists
+*
+* Arguments:
+*
+* 1. Pointer to section entry.
+* 2. String with key name
+*
+* Return value:
+*
+* Pointer to the key entry or NULL if it does not exist or there is an error.
 */
 
 KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key)
@@ -343,8 +398,17 @@ KeyEntryPtr_t ConfReadFindKey(SectionEntryPtr_t se, const String key)
 	}
 	return NULL; /* No match found */
 }
+
 /*
 * Return a key from a key struct
+*
+* Arguments:
+*
+* 1. Pointer to key entry
+*
+* Return value:
+*
+* String with key entry, or NULL if there is an error.
 */
 
 const String ConfReadGetKey(KeyEntryPtr_t ke)
@@ -357,6 +421,14 @@ const String ConfReadGetKey(KeyEntryPtr_t ke)
 
 /*
 * Return a line number from a key entry
+*
+* Arguments:
+*
+* 1. Pointer to key entry
+*
+* Return value:
+*
+* Line number, or 0 if there was an error.
 */
 
 unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke)
@@ -369,6 +441,14 @@ unsigned ConfReadKeyLineNum(KeyEntryPtr_t ke)
 
 /*
 * Return first key structure in a given section if it exists
+*
+* Arguments:
+*
+* 1. Pointer to section entry
+*
+* Return value:
+*
+* Pointer to key entry, or NULL if it does not exist, or there is an error.
 */
 
 KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se)
@@ -382,6 +462,14 @@ KeyEntryPtr_t ConfReadGetFirstKey(SectionEntryPtr_t se)
 
 /*
 * Return the next key structure pointed to by the current key structure if it exists
+*
+* Arguments:
+*
+* 1. Pointer to key entry
+*
+* Return value:
+*
+* Pointer to next key entry or NULL if it does not exist, or there is an error.
 */
 
 KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke)
@@ -394,6 +482,14 @@ KeyEntryPtr_t ConfReadGetNextKey(KeyEntryPtr_t ke)
 
 /*
 * Return a value associated with a key struct
+*
+* Arguments:
+*
+* 1. Pointer to key entry.
+*
+* Return value:
+*
+* String containing the value, or NULL if it does not exist or there was an error.
 */
 
 const String ConfReadGetValue(KeyEntryPtr_t ke)
@@ -406,8 +502,18 @@ const String ConfReadGetValue(KeyEntryPtr_t ke)
 
 
 /*
- * Return value string by section entry and key name
- */
+* Return value string by section entry and key name
+*
+* Arguments:
+*
+* 1. Pointer to section entry.
+* 2. String with key name
+*
+* Return value:
+*
+* Value in a String or NULL if it does not exist.
+*/
+
 const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key)
 {
 	return ConfReadGetValue(ConfReadFindKey(se, key));
@@ -415,6 +521,17 @@ const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key)
 
 /*
 * Return key entry by section and key
+*
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+* 2. Section name
+* 3. Key name
+*
+* Return value:
+*
+* Value in a String or  NULL if it does not exist.
 */
 
 
@@ -432,6 +549,15 @@ KeyEntryPtr_t ConfReadKeyEntryBySectKey(ConfigEntryPtr_t ce, const String sectio
 
 /*
 * Return first Key in section
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+* 2. Section name
+*
+* Return value:
+*
+* Pointer to key entry or NULL if it does not exist.
 */
 
 KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String section)
@@ -442,6 +568,15 @@ KeyEntryPtr_t ConfReadGetFirstKeyBySection(ConfigEntryPtr_t ce, const String sec
 
 /*
 * Return a count of the number of entries in a section
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+* 2. Section name
+*
+* Return value:
+*
+* Count of key/value pairs in this section.
 */
 
 unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section)
@@ -456,6 +591,16 @@ unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section)
 
 /*
 * Find a value by section and key
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+* 2. Section name
+* 3. Key
+*
+* Return value:
+*
+* Value as a string or NULL if it does not exist.
 */
 
 const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key)
@@ -466,7 +611,19 @@ const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, c
 }
 
 /*
-* Find value by section and key, convert to unsigned int, return in res. 
+* Find value by section and key, convert to unsigned int, return in res.
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+* 2. Section name
+* 3. Key
+* 4. Pointer to an unsigned int to store the converted value.
+
+*
+* Return value:
+*
+* TRUE indicates success, FALSE indicaes failure.
 */
 
 int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res)
@@ -486,6 +643,16 @@ int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, 
 
 /*
 * Default error handler for confreadScan()
+*
+* Arguments:
+*
+* 1. Error code
+* 2. Line number (only valid with syntax errors)
+* 3. Info string (only valid with I/O errors)
+*
+* Return value:
+*
+* None
 */
 
 void ConfReadDefErrorHandler( int etype, int linenum, const String info)
@@ -516,7 +683,15 @@ void ConfReadDefErrorHandler( int etype, int linenum, const String info)
 
 
 /*
-* Free all data structures associated with our config files
+* Free all data structures associated with the config file
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+*
+* Return value:
+*
+* None
 */
 
 void ConfReadFree(ConfigEntryPtr_t ce)
@@ -527,6 +702,15 @@ void ConfReadFree(ConfigEntryPtr_t ce)
 
 /*
 * Dump all printable fields in all data structures associated with the config file
+*
+* Arguments:
+*
+* 1. Pointer to configuration information.
+*
+* Return value:
+*
+* None
+*
 */
 
 void ConfReadDebugDump(ConfigEntryPtr_t ce)
@@ -567,6 +751,29 @@ void ConfReadDebugDump(ConfigEntryPtr_t ce)
 * Pass in the path to the config file, and optionally an error handling function.
 * If the default error handling function is going to be used, then pass in a NULL for the
 * second argument.
+*
+* Arguments:
+*
+* 1. Talloc context to hang the configuration data structures off of.
+* 2. A string with the path name to the configuration file.
+* 3. An error callback (see below)
+*
+* Return value:
+*
+* Pointer to configuration information or NULL if there was an error.
+*
+********** Callback Function ***********
+*
+* Arguments:
+*
+* 1. Error code
+* 2. Line number (only valid with syntax errors)
+* 3. Info string (only valid with I/O errors)
+*
+* Return value:
+*
+* None
+*
 */
 
 
