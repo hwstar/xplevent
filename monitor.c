@@ -779,8 +779,20 @@ void interpretClientCommand(int userSock, String cl)
 
 
 /*
- * Client command data is ready
- */
+* Client command data is ready. Callback from xPL library
+*
+* Arguments:
+*
+* 1. Socket connection to client.
+* 2. Read events (not used)
+* 3. User value (not used)
+*
+* Return value:
+*
+* None
+*
+*/
+ 
 
 static void clientCommandListener(int userSock, int revents, int uservalue)
 {
@@ -812,8 +824,19 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 }
 
 /*
- * Read data ready on one of the command sockets
- */
+* Read data ready on one of the command sockets. Callback from xPL library.
+*
+* Arguments:
+*
+* 1. Socket connection to client.
+* 2. Read events (not used)
+* 3. User value (not used)
+*
+* Return value:
+*
+* None
+*
+*/
  
 static void commandSocketListener(int fd, int revents, int uservalue)
 {
@@ -835,8 +858,20 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 }
 
 /*
- * Call back to add command sockets 
- */
+* Call back to add command sockets. Called from SocketCreateListenList.
+* Calls the xPL library to add the listening socket to the poll list.
+*
+* Arguments:
+*
+* 1. Listening socket to add
+* 2. Address family
+* 3. Socket type
+*
+* Return value:
+*
+* 0 indicates success. Nonzero indicates failure.
+*
+*/
  
 static int addIPSocket(int sock, void *addr, int family, int socktype)
 {
@@ -851,7 +886,20 @@ static int addIPSocket(int sock, void *addr, int family, int socktype)
 	return xPL_addIODevice(commandSocketListener, 0, sock, TRUE, FALSE, FALSE);
 
 }
-
+/*
+*
+* Pre setup of monitor code.
+*
+* Arguments:
+*
+* 1. Interface to listen on as a string. 
+* 2. Instance ID to use.
+*
+* Return value:
+*
+* None
+*
+*/
 
 void MonitorPreForkSetup(String interface, String instance_id)
 {
@@ -860,6 +908,21 @@ void MonitorPreForkSetup(String interface, String instance_id)
 	instanceID = instance_id;
 	
 }
+
+
+/*
+* Run monitor. This function sets up the xPL service, registers the necessaty handlers,
+* enables the xPL service, and registers the cleanup code. It then calls the xPL library
+* message processing function. This function never returns.
+*
+* Arguments:
+*
+* None
+*
+* Return value:
+*
+* None
+*/
 
 void MonitorRun(void)
 {
