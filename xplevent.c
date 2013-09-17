@@ -336,11 +336,11 @@ static void utilitySendCmd(String utilityArg)
 		fatal("Could not connect to daemon at address: %s", Globals->cmdHostName);
 	}	
 	SocketPrintf(Globals->masterCTX, daemonSock, "cl:%s\n", utilityArg);
-	line = SocketReadLine(Globals->masterCTX, daemonSock, &length);	
+	MALLOC_FAIL(line = SocketReadLine(Globals->masterCTX, daemonSock, &length))	
 	if(line && length){
 		printf("Result = %s\n", line);
 	}
-	
+	talloc_free(line);
 	close(daemonSock); /* Done */
 }
 
@@ -348,6 +348,16 @@ static void utilitySendCmd(String utilityArg)
 
 /*
  * Do utility command and exit
+ *
+ * Arguments:
+ * 
+ * 1. Utility command code
+ * 2. Utility command argument (NULL if none)
+ * 3. Utility filename set with -f switch (NULL if none)
+ *
+ * Return Value:
+ *
+ * None
  */
 static void doUtilityCommand(int utilityCommand, String utilityArg, String utilityFile)
 {
@@ -426,6 +436,15 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 
 /*
 * Set up a utility command. If a command has already been specified, exit with an error message.
+*
+* Arguments:
+*
+* 1. Utility command code
+* 2. Optional argument (If not used, pass in a NULL)
+*
+* Return value:
+*
+* None
 * 
 */
 
@@ -442,15 +461,36 @@ static void prepareUtilityCommand(int command, String optarg)
 	}
 }
 
+/*
+* Check to see if the user has requested that daemon be stopped
+*
+* Arguments:
+*
+* None
+*
+* Return value
+*
+* Return TRUE, if user has requested that daemon be stopped, otherwise FALSE
+* 
+*/
 
 Bool XpleventCheckExit(void)
 {
-	return (int) exitRequest;
+	return (Bool) exitRequest;
 }
 
 
 /*
-* main
+* Program entry point
+*
+* Arguments 
+*
+* 1. Count of command line arguments
+* 2. Array of command line arguments as Strings
+*
+* Return value:
+*
+* Program error state.
 */
 
 
