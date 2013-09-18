@@ -62,7 +62,16 @@ static ParseCtrlPtr_t parseCtrl; /* Not re-entrant because of this */
 
 
 /*
- * Malloc for parser
+ * Malloc for parser. This is called by Lemon when a block of memory is required.
+ *
+ * Arguments: 
+ *
+ * 1. Size of block to allocate
+ *
+ * Return value:
+ *
+ * Generic pointer to block of memory allocated.
+ *
  */
 
 static void *parserMalloc(size_t size)
@@ -74,7 +83,16 @@ static void *parserMalloc(size_t size)
 }
 
 /*
- * Free for parser
+ * Free for parser. Called by Lemon when a memory block is no longer required.
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to block of memory to free.
+ *
+ * Return value:
+ *
+ * None
+ *
  */
 
 
@@ -86,8 +104,16 @@ static void parserFree(void *ctx)
 }
 
 /*
-* Print P-code info
-*/
+ * Print P-code info
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to pcode block.
+ *
+ * Return value:
+ *
+ * None
+ */
 
 static void printOpcode(PcodePtr_t p)
 {
@@ -142,7 +168,18 @@ static void printOpcode(PcodePtr_t p)
 
 
 /*
- * Set undefined variable error message
+ * Set undefined variable error message, or warn about it if the ignore assign error flag is set
+ * in the pcode header.
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to pcode header
+ * 2. String containing variable name
+ * 3. Line number where the veriable was referenced.
+ *
+ * Return value:
+ *
+ * None
  */
 
 static void undefVar(PcodeHeaderPtr_t ph, String var, int lineNo)
@@ -164,6 +201,13 @@ static void undefVar(PcodeHeaderPtr_t ph, String var, int lineNo)
 
 /*
 * Remove ALL the keys from a hash
+* Arguments: 
+*
+* 1. Pointer the hash to empty out.
+*
+* Return value:
+*
+* None
 */
 
 static void deleteHashContents(ParseHashSTEPtr_t se)
@@ -177,8 +221,18 @@ static void deleteHashContents(ParseHashSTEPtr_t se)
 
 /*
  * Find a hash in the symbol table
+ *
+ * Arguments: 
+ *
+ * 1. Pointer the pcode header block
+ * 2. String contining the name of the hash
+ * 3. A pointer to a pointer variable where the end of the list can be stored if the search fails.
+ *    this value is optional, and a NULL can be passed in if it is not required.
+ *
+ *
+ * Return value:
  * 
- * Return NULL if not found
+ * Return the symbol table entry, or NULL if not found
  */
 
 static ParseHashSTEPtr_t findHash(PcodeHeaderPtr_t ph, const String hashName, ParseHashSTEPtrPtr_t tail)
@@ -212,6 +266,16 @@ static ParseHashSTEPtr_t findHash(PcodeHeaderPtr_t ph, const String hashName, Pa
 
 /*
 * Add a hash to the end of the symbol table
+*
+* Arguments: 
+*
+* 1. Talloc context to hang the new symbol table off of.
+* 2. Pointer to the symbol tavle tail pointer.
+* 3. The key to add to the new hash entry.
+*
+* Return value:
+*
+* None
 *
 * 
 */
