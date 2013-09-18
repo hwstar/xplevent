@@ -50,6 +50,13 @@
 #include "xplevent.h"
 
 
+typedef struct connectionData_s {
+	char *buffer;
+} connectionData_t;
+
+typedef connectionData_t * connectionDataPtr_t;
+
+
 /* Client command codes */
 
 enum {CC_EXEC = 0 };
@@ -733,12 +740,14 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 */
  
  
-static void interpretClientCommand(int userSock, String cl)
+static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String cl)
 {
-	String *argv = UtilSplitString(Globals->masterCTX, cl, ' ');
+	String *argv = UtilSplitString(cdp, cl, ' ');
 	int i;
-	int res = PASS;
+	Bool res = PASS;
 	String script;
+	
+	ASSERT_FAIL(cdp)
 	
 	for(i = 0; clientCommands[i]; i++){
 		if(!strcmp(clientCommands[i], argv[0])){
@@ -750,11 +759,11 @@ static void interpretClientCommand(int userSock, String cl)
 			case CC_EXEC:
 				if(argv[1]){
 					debug(DEBUG_EXPECTED, "Exec: %s", argv[1]);
-					if(!(script = DBFetchScript(argv, Globals->db, argv[1]))){
+					if(!(script = DBFetchScript(cdp, Globals->db, argv[1]))){
 							res = FAIL;
 					}
 					else{
-						res = parseAndExecScript(argv, script);	
+						res = parseAndExecScript(cdp, script);	
 					}
 				}
 				else{
@@ -775,6 +784,7 @@ static void interpretClientCommand(int userSock, String cl)
 	SocketPrintf(argv, userSock,"%s:\n", (res == PASS) ? "ok" : "er");
 
 	talloc_free(argv);
+	return res;
 }
 
 
@@ -785,7 +795,7 @@ static void interpretClientCommand(int userSock, String cl)
 *
 * 1. Socket connection to client.
 * 2. Read events (not used)
-* 3. User value (not used)
+* 3. User value (set to connection data pointer).
 *
 * Return value:
 *
@@ -798,15 +808,19 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 {
 	unsigned length = 0;
 	String line;
+	connectionDataPtr_t cdp = (connectionDataPtr_t) uservalue;
 	
-	if((line = SocketReadLine(Globals->masterCTX, userSock, &length)) == NULL){
+	ASSERT_FAIL(cdp)
+	
+	
+	if((line = SocketReadLine(cdp, userSock, &length)) == NULL){
 		debug(DEBUG_UNEXPECTED, "Could not read socket");
 	}
 	else{
 		if(length){
 			debug(DEBUG_ACTION, "Line read from socket: %s", line); 
 			if(!strncmp("cl:", line, 3)){
-				interpretClientCommand(userSock, line + 3);
+				interpretClientCommand(cdp, userSock, line + 3);
 			}
 		}
 	}
@@ -814,12 +828,13 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 	if(line){
 		talloc_free(line);
 	}
-	if(!length){
+	if(!length){ 
 		/* EOF or ERROR */
 		/* Remove the socket from the polling list and close it */
-		debug(DEBUG_ACTION, "Removing socket from poll list, and closing the socket");
-		xPL_removeIODevice(userSock);
-		close(userSock);
+		debug(DEBUG_ACTION, "Removing socket from poll list, close the socket, and free the persistent connection data");
+		xPL_removeIODevice(userSock); /* Remove listener from the polling list */
+		close(userSock); /* Close the socket */
+		talloc_free(cdp); /* Free persistent connection data */
 	}
 }
 
@@ -840,6 +855,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
  
 static void commandSocketListener(int fd, int revents, int uservalue)
 {
+	connectionDataPtr_t cdp;
 	int userSock;
 	
 	debug(DEBUG_ACTION, "Accepting socket connection");
@@ -853,8 +869,11 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	if(fcntl(userSock, F_SETFL, O_NONBLOCK) == -1) {
 		fatal_with_reason(errno, "Could not set user socket to non-blocking");
 	}
+	/* Allocate a data structure for connection persistent data for use by the listener */
+	ASSERT_FAIL(cdp = talloc_zero(Globals->masterCTX, connectionData_t))
+	
 	/* Add the accepted socket to the polling list */
-	xPL_addIODevice(clientCommandListener, 0, userSock, TRUE, FALSE, FALSE);
+	xPL_addIODevice(clientCommandListener, (int) cdp, userSock, TRUE, FALSE, FALSE);
 }
 
 /*
