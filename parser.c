@@ -728,6 +728,29 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String ha
 
 /*
  * Walk the list calling a callback function with each key/value
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to the pcode header block.
+ * 2. String containing the hash name
+ * 3. Callback function (see below)
+ * 
+ *
+ *
+ * Return value:
+ *
+ * None
+ *
+ ************** Callback Function ***************
+ *
+ * Arguments:
+ *
+ * 1. Key found as a String
+ * 2. Value found as a String
+ *
+ * Return value:
+ *
+ * None
  */
  
 void ParserHashWalk(PcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value))
@@ -755,6 +778,18 @@ void ParserHashWalk(PcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
 
 /*
  * Return the value for the push instruction passed in
+ *
+ * Arguments: 
+ *
+ * 1. Talloc context to hang the result off of.
+ * 2. Pointer to the pcode header block.
+ * 3. Pointer to the push instruction to extract the value from.
+ * 4. Pointer to string to store value.
+ *
+ *
+ * Return value:
+ *
+ * Boolean. PASS if variable could be retrieved, else FAIL
  */
  
 
@@ -796,6 +831,18 @@ Bool ParserPcodeGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr,
 
 /*
  * Put a value in a variable
+ *
+ * Arguments: 
+ *
+ * 1. Talloc context to hang the result off of.
+ * 2. Pointer to the pcode header block.
+ * 3. Pointer to the push instruction contining the lvalue.
+ * 4. String containing the value to add to the hash
+ *
+ *
+ * Return value:
+ *
+ * Boolean. PASS if success, otherwise FAIL
  */
 
 Bool ParserPcodePutValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String value)
@@ -813,7 +860,21 @@ Bool ParserPcodePutValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr,
 }
 
 /*
- * This is called by the parser when a pcode structure has to be added to the list
+ * This is called by the parser when a pcode structure has to be added to the list. It adds
+ * the new instruction to the end of the instruction list.
+ *
+ *  Arguments: 
+ *
+ * 1. Pointer to parse control block
+ * 2. Opcode type
+ * 3. Operand
+ * 4. Optional string 1 (Pass NULL if not used)
+ * 5. Optional string 2 (Pass NULL if not used)
+ *
+ *
+ * Return value:
+ *
+ * None
  */
 
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2)
@@ -867,6 +928,14 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
  * Debug function.
  * 
  * Dump pcode list
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to the pcode header block.
+ *
+ * Return value:
+ *
+ * None
  */
 
 void ParserPcodeDumpList(PcodeHeaderPtr_t ph)
@@ -888,10 +957,18 @@ void ParserPcodeDumpList(PcodeHeaderPtr_t ph)
 	
 /*
  * Execute a built-in function
- */
-
-/*
- * Set Jumps for control statements
+ * Sets Jumps for control statements.
+ * Called by the Lemon grammar file when a control statement is seen.
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to parse control block
+ * 2. Token id.
+ *
+ *
+ * Return value:
+ *
+ * None.
  */
  
 void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
@@ -956,6 +1033,21 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	ASSERT_FAIL(p);	
 }
 
+/*
+* Execute a function.
+* Called by the Lemon grammar file when a function keyword is seen.
+*
+* Arguments: 
+*
+* 1. Pointer to the pcode header block.
+* 2. Pointer to the pcode instruction containing the function to execute.
+*
+*
+*
+* Return value:
+*
+* None
+*/
  
 void ParserExecFunction(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
