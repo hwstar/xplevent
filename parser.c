@@ -270,7 +270,7 @@ static ParseHashSTEPtr_t findHash(PcodeHeaderPtr_t ph, const String hashName, Pa
 * Arguments: 
 *
 * 1. Talloc context to hang the new symbol table off of.
-* 2. Pointer to the symbol tavle tail pointer.
+* 2. Pointer to the symbol table tail pointer.
 * 3. The key to add to the new hash entry.
 *
 * Return value:
@@ -303,6 +303,16 @@ static void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
 
 /*
  * Spawn another program
+ *
+ * Arguments: 
+ *
+ * 1. Pointer to the pcode header
+ * 2. Pointer to the pcode instruction containing the spawn token.
+ *
+ * Return value:
+ *
+ * None
+ *
  */
  
 static void spawn(PcodeHeaderPtr_t ph, PcodePtr_t pi)
@@ -343,6 +353,14 @@ end:
 
 /*
  * Send xPL command if everything looks good
+ * Arguments: 
+ *
+ * 1. Pointer to the pcode header
+ * 2. Pointer to the pcode instruction containing the spawn token.
+ *
+ * Return value:
+ *
+ * None
  */
 
 static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
@@ -447,9 +465,21 @@ end:
  * 
  * Check parts for length
  * 
- * To do a validation without returning the strings, set vendor, device, and instance to NULL
+ * To do just a validation without returning the strings, set vendor, device, and instance to NULL
  * 
  * Strings must be freed unless set to NULL
+ *
+ * Arguments: 
+ *
+ * 1. Talloc context to hang the strings off of.
+ * 2. String containing xPL tag. 
+ * 3. Pointer to string to store vendor name (or NULL)
+ * 4. Pointer to string to store device name (or NULL)
+ * 5. Pointer to string to store instance (or NULL)
+ *
+ * Return value:
+ *
+ * Boolean. PASS indicates success, FAIL indicates failure.
  * 
  */
 
@@ -538,7 +568,21 @@ Bool ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String
 
 
 /*
- * Get a value from the hash.
+ * Get a value from the hash. If the has name is "nvstate" and the database pointer is
+ * in the pcode header, retreive the value from the database instead of memory.
+ *
+ * Arguments: 
+ *
+ * 1. Talloc context to hang the result off of.
+ * 2. Pointer to pcode header block.
+ * 3. String with the name of the hash.
+ * 4. String with the key to look up.
+ *
+ * Return value:
+ *
+ * Value as a string. String must be freed when it is no longer required.
+ *
+ * 
  */
 
 const String ParserHashGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key)
@@ -578,6 +622,22 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const Stri
  * Add a value to the hash
  * Replace any entry with a matching key which is already there
  * Add hash to the symbol table if it does not already exist.
+ * If the hash name is "nvstate" and the database pointer is in the
+ * pcode header block, store the key and value in the database instead
+ * of in memory.
+ * 
+ *
+ * Arguments: 
+ *
+ * 1. Talloc context to hang the result off of.
+ * 2. Pointer to the pcode header block.
+ * 3. String containing the name of the hash.
+ * 4. String containing the key to add to the hash
+ *
+ *
+ * Return value:
+ *
+ * Boolean. PASS, unless DB write fails, then FAIL.
  */
  
 Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
