@@ -456,7 +456,8 @@ static void prepareUtilityCommand(int command, String optarg)
 }
 
 /*
-* Check to see if the user has requested that daemon be stopped
+* Check to see if the user has requested that daemon be stopped. Close and re-open log file if
+* HUP was received.
 *
 * Arguments:
 *
@@ -470,6 +471,15 @@ static void prepareUtilityCommand(int command, String optarg)
 
 Bool XpleventCheckExit(void)
 {
+	if(gotHup){
+		gotHup = FALSE;
+		if(Globals->logPath[0]){
+			debug(DEBUG_EXPECTED, "Closing %s", Globals->logPath)
+			notify_logpath(Globals->logPath);
+			debug(DEBUG_EXPECTED, "Re-opening %s", Globals->logPath)
+		}
+	}
+	
 	return (Bool) exitRequest;
 }
 
@@ -747,7 +757,7 @@ int main(int argc, char *argv[])
  	
 	/* Open the database */
 	if(!(Globals->db = DBOpen(Globals->dbFile))){
-		fatal("Database file does not exist or is not writeble: %s", dbFile);
+		fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
 	}
 
 	/* Check for utility commands */
