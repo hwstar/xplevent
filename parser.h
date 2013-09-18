@@ -133,7 +133,7 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID);
 Bool ParserPcodeGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String *pValue);
 Bool ParserPcodePutValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String value);
 Bool ParserExecPcode(PcodeHeaderPtr_t ph);
-Bool ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str);
+Bool ParserParseHCL(ParseCtrlPtr_t this, Bool fileMode, const String str);
 String ParserCheckSyntax(TALLOC_CTX *ctx, String file);
 
 
