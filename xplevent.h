@@ -9,6 +9,7 @@ typedef struct XPLEvGlobals_s {
 	String cmdBindAddress;
 	String cmdHostName;
 	String cmdService;
+	String configFile;
 	String pidFile;
 	String dbFile;
 	String logFile;
