@@ -102,10 +102,6 @@ static String utilityArg = NULL;
 static String utilityFile = NULL;
 static void *configInfo = NULL;
 
-static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
-static char logPath[WS_SIZE] = "/tmp/xplevent.log";
-static char pidFile[WS_SIZE] = DEF_PID_FILE;
-static char dbFile[WS_SIZE] = DEF_DB_FILE;
 
 
 
@@ -280,7 +276,7 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 static void xpleventShutdown(void)
 {
 	DBClose(Globals->db);
-	(void) unlink(pidFile);
+	(void) unlink(Globals->pidFile);
 	
 	
 	/* If running in the foreground and the debug level is 4, print talloc report on exit */
@@ -500,7 +496,7 @@ int main(int argc, char *argv[])
 	TALLOC_CTX *m;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
-	/* Set up before notify functions can be used */
+	/* Set up Globals before notify functions can be used */
 	
 	if(!(Globals = talloc_zero(NULL, XPLEvGlobals_t))){
 		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
@@ -508,7 +504,7 @@ int main(int argc, char *argv[])
 	}
 	
 	
-	/* Notify functions can now be used */
+	/* Initialize defaults in Globals */
 	
 	Globals->progName = argv[0];
 	Globals->cmdService = DEF_CMD_SERVICE_NAME;
@@ -518,6 +514,7 @@ int main(int argc, char *argv[])
 	Globals->logFile = DEF_LOG_FILE;
 	Globals->interface = DEF_INTERFACE;
 	Globals->instanceID = DEF_INSTANCE_ID;
+	Globals->configFile = DEF_CONFIG_FILE;
 	
 	atexit(xpleventShutdown);
 	
@@ -545,8 +542,8 @@ int main(int argc, char *argv[])
 		
 				/* Was it a config file switch? */
 			case 'C':
-				UtilStringCopy(configFile, optarg, WS_SIZE - 1);
-				debug(DEBUG_ACTION,"New config file path is: %s", configFile);
+				MALLOC_FAIL(Globals->configFile = talloc_strdup(Globals, optarg));
+				debug(DEBUG_ACTION,"New config file path is: %s", Globals->configFile);
 				break;
 				
 			case 'c': /* Check syntax of a script file */
@@ -586,22 +583,22 @@ int main(int argc, char *argv[])
 				
 				/* Was it a host name request */
 			case 'h':
-				MALLOC_FAIL(Globals->cmdHostName = talloc_strdup(Globals, optarg));
 				clOverride.hostname = 1;
+				MALLOC_FAIL(Globals->cmdHostName = talloc_strdup(Globals, optarg));
 				break;
 
 				/* Specify interface to broadcast on */
 			case 'i': 
-				MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, optarg));
 				clOverride.interface = 1;
+				MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, optarg));
 				break;
 
 			case 'L':
 				/* Override log path*/
-				UtilStringCopy(logPath, optarg, WS_SIZE - 1);
 				clOverride.log_path = 1;
+				MALLOC_FAIL(Globals->logPath = talloc_strdup(Globals, optarg));
 				debug(DEBUG_ACTION,"New log path is: %s",
-				logPath);
+				Globals->logPath);
 
 				break;
 				
@@ -614,9 +611,9 @@ int main(int argc, char *argv[])
 
 			
 			case 'o': /* Database file */
-				UtilStringCopy(dbFile, optarg, WS_SIZE);
 				clOverride.dbfile = 1;
-				debug(DEBUG_ACTION,"New db file is: %s", dbFile);
+				MALLOC_FAIL(Globals->dbFile = talloc_strdup(Globals, optarg));
+				debug(DEBUG_ACTION,"New db file is: %s", Globals->dbFile);
 				break;		
 				
 				
@@ -625,19 +622,19 @@ int main(int argc, char *argv[])
 				break;
 			
 			case 'P': /* PID file */
-				UtilStringCopy(pidFile, optarg, WS_SIZE - 1);
 				clOverride.pid_file = 1;
+				MALLOC_FAIL(Globals->pidFile = talloc_strdup(Globals, optarg));
 				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
 				break;
 				
 			case 'S': /* Service port name or number */
-				MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, optarg));
 				clOverride.service = 1;
+				MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, optarg));
 				break;
 			
 			case 's': /* Instance ID */
-				MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, optarg));
 				clOverride.instance_id = 1;
+				MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, optarg));
 				debug(DEBUG_ACTION,"New instance ID is: %s", instanceID);
 				break;
 
@@ -666,15 +663,17 @@ int main(int argc, char *argv[])
 
 	/* Attempt to read a config file */
 	
-	if((configInfo = ConfReadScan(Globals->masterCTX, configFile, confDefErrorHandler))){
+	if((configInfo = ConfReadScan(Globals, Globals->configFile, confDefErrorHandler))){
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
-		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id")))
+		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id"))){
 			MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, p));
+		}
 		
 		/* Interface */
-		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface")))
+		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface")))}{
 			MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, p));
+		}
 			
 		/* Bind Address */
 		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(configInfo, "general", "bind-addr"))){
@@ -692,16 +691,20 @@ int main(int argc, char *argv[])
 		}
 			
 		/* pid file */
-		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(configInfo, "general", "pid-file")))
-			UtilStringCopy(pidFile, p, sizeof(pidFile));	
+		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(configInfo, "general", "pid-file"))){
+			MALLOC_FAIL(Globals->pidFile = talloc_strdup(Globals, p));
+		}
 						
 		/* log path */
-		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configInfo, "general", "log-path")))
-			UtilStringCopy(logPath, p, sizeof(logPath));
+		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configInfo, "general", "log-path"))){
+			MALLOC_FAIL(Globals->logPath = talloc_strdup(Globals, p));
+		}
 		
 		/* db-file */
-		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "db-file")))
-			UtilStringCopy(dbFile, p, sizeof(dbFile));
+		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "db-file"))){
+			MALLOC_FAIL(Globals->dbFile = talloc_strdup(Globals, p));
+		}
+		
 		
 	}
 	else{
@@ -743,7 +746,7 @@ int main(int argc, char *argv[])
 
  	
 	/* Open the database */
-	if(!(Globals->db = DBOpen(dbFile))){
+	if(!(Globals->db = DBOpen(Globals->dbFile))){
 		fatal("Database file does not exist or is not writeble: %s", dbFile);
 	}
 
@@ -763,7 +766,7 @@ int main(int argc, char *argv[])
 	
 
 	/* Make sure we are not already running (.pid file check). */
-	if(UtilPIDRead(pidFile) != -1){
+	if(UtilPIDRead(Globals->pidFile) != -1){
 		fatal("%s is already running", Globals->progName);
 	}
 	
@@ -784,8 +787,8 @@ int main(int argc, char *argv[])
     	* the path to the logfile is defined
 		*/
 
-		if((Globals->debugLvl) && (logPath[0]))                          
-			notify_logpath(logPath);
+		if((Globals->debugLvl) && (Globals->logPath[0]))                          
+			notify_logpath(Globals->logPath);
 			
 	
 		/* Fork and exit the parent */
@@ -797,8 +800,8 @@ int main(int argc, char *argv[])
 				fatal_with_reason(errno, "parent fork");
     		}
 	
-		if(!Globals->noBackground && (UtilPIDWrite(pidFile, getpid()) != 0)) {
-			debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", pidFile);
+		if(!Globals->noBackground && (UtilPIDWrite(Globals->pidFile, getpid()) != 0)) {
+			debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", Globals->pidFile);
 		}
 
 
@@ -843,7 +846,7 @@ int main(int argc, char *argv[])
  
 	}
 	/* Create the pid file */
-	if(UtilPIDWrite(pidFile, getpid())){
+	if(UtilPIDWrite(Globals->pidFile, getpid())){
 		fatal("pid file write error");
 	}
 	
