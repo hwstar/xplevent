@@ -99,7 +99,7 @@ static void logHeartBeatMessage(xPL_MessagePtr theMessage)
 	char source[64];
 	
 	/* Setup */
-	MALLOC_FAIL(log = talloc_new(Globals->masterCTX))
+	MALLOC_FAIL(log = talloc_new(Globals))
 	
 	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
 	debug(DEBUG_EXPECTED,"Heartbeat status message received: vendor = %s, device = %s, instance_id = %s",
@@ -283,7 +283,7 @@ static int parseAndExecTrig(PcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, 
 	
 	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
 
-	parseCtrl = talloc_zero(Globals->masterCTX, ParseCtrl_t);
+	parseCtrl = talloc_zero(Globals, ParseCtrl_t);
 	MALLOC_FAIL(parseCtrl);
 	
 	/* Save pointer to pcode header in parse control block */
@@ -366,7 +366,7 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, PcodeHe
 	
 	/* Initialize pcode header */
 	
-	*ph = talloc_zero(Globals->masterCTX, PcodeHeader_t);
+	*ph = talloc_zero(Globals, PcodeHeader_t);
 	MALLOC_FAIL(*ph);
 	
 	/* Set the pointer to the service */
@@ -471,7 +471,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 		return;
 	}
 	
-	MALLOC_FAIL(ctx = talloc_new(Globals->masterCTX))
+	MALLOC_FAIL(ctx = talloc_new(Globals))
 	
 	/* Make combined schema string */
 	snprintf(schema, 63, "%s.%s", schema_class, schema_type);
@@ -576,7 +576,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 
 	/* Allocate a dedicated context off of master */
 	
-	logctx = talloc_new(Globals->masterCTX);
+	logctx = talloc_new(Globals);
 	MALLOC_FAIL(logctx);
 
 	/* Allocate space for nvpairs */
@@ -714,7 +714,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 	if(Globals->noBackground && (ticks >= 30)){
 		ticks = 0;
 		if(Globals->debugLvl >= 4){
-			talloc_report(Globals->masterCTX, stdout);
+			talloc_report(Globals, stdout);
 		}
 	}
 	
@@ -870,7 +870,7 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 		fatal_with_reason(errno, "Could not set user socket to non-blocking");
 	}
 	/* Allocate a data structure for connection persistent data for use by the listener */
-	ASSERT_FAIL(cdp = talloc_zero(Globals->masterCTX, connectionData_t))
+	ASSERT_FAIL(cdp = talloc_zero(Globals, connectionData_t))
 	
 	/* Add the accepted socket to the polling list */
 	xPL_addIODevice(clientCommandListener, (int) cdp, userSock, TRUE, FALSE, FALSE);
