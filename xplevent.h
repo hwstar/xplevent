@@ -9,7 +9,10 @@ typedef struct XPLEvGlobals_s {
 	String cmdBindAddress;
 	String cmdHostName;
 	String cmdService;
-	void *masterCTX;
+	String pidFile;
+	String dbFile;
+	String interface;
+	String instanceID;
 	void *xplEventService;
 	void *db;	
 } XPLEvGlobals_t;
