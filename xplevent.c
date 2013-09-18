@@ -68,6 +68,7 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD};
 #define DEF_CONFIG_FILE		"./xplevent.conf"
 #define DEF_PID_FILE		"./xplevent.pid"
 #define DEF_DB_FILE		"./xplevent.sqlite3"
+#define DEF_LOG_FILE		"/tmp/xplevent.log"
 
 #define DEF_INTERFACE		"eth1"
 
@@ -102,9 +103,7 @@ static String utilityFile = NULL;
 static void *configInfo = NULL;
 
 static char configFile[WS_SIZE] = DEF_CONFIG_FILE;
-static char interface[WS_SIZE] = DEF_INTERFACE;
 static char logPath[WS_SIZE] = "/tmp/xplevent.log";
-static char instanceID[WS_SIZE] = DEF_INSTANCE_ID;
 static char pidFile[WS_SIZE] = DEF_PID_FILE;
 static char dbFile[WS_SIZE] = DEF_DB_FILE;
 
@@ -516,6 +515,7 @@ int main(int argc, char *argv[])
 	Globals->cmdHostName = "::1";
 	Globals->pidFile = DEF_PID_FILE;
 	Globals->dbFile = DEF_DB_FILE;
+	Globals->logFile = DEF_LOG_FILE;
 	Globals->interface = DEF_INTERFACE;
 	Globals->instanceID = DEF_INSTANCE_ID;
 	
@@ -592,7 +592,7 @@ int main(int argc, char *argv[])
 
 				/* Specify interface to broadcast on */
 			case 'i': 
-				UtilStringCopy(interface, optarg, WS_SIZE -1);
+				MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, optarg));
 				clOverride.interface = 1;
 				break;
 
@@ -636,7 +636,7 @@ int main(int argc, char *argv[])
 				break;
 			
 			case 's': /* Instance ID */
-				UtilStringCopy(instanceID, optarg, WS_SIZE);
+				MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, optarg));
 				clOverride.instance_id = 1;
 				debug(DEBUG_ACTION,"New instance ID is: %s", instanceID);
 				break;
@@ -670,11 +670,11 @@ int main(int argc, char *argv[])
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
 		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id")))
-			UtilStringCopy(instanceID, p, sizeof(instanceID));
+			MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, p));
 		
 		/* Interface */
 		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface")))
-			UtilStringCopy(interface, p, sizeof(interface));
+			MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, p));
 			
 		/* Bind Address */
 		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(configInfo, "general", "bind-addr"))){
@@ -770,7 +770,7 @@ int main(int argc, char *argv[])
 
 	/* Set the broadcast interface */
 	
-	MonitorPreForkSetup(interface, instanceID);	
+	MonitorPreForkSetup(Globals->interface, Globals->instanceID);	
 
 
 	/* Fork into the background. */	
