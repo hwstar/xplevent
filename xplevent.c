@@ -68,7 +68,7 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD};
 #define DEF_CONFIG_FILE		"./xplevent.conf"
 #define DEF_PID_FILE		"./xplevent.pid"
 #define DEF_DB_FILE		"./xplevent.sqlite3"
-#define DEF_LOG_FILE		"/tmp/xplevent.log"
+#define DEF_LOG_FILE		""
 
 #define DEF_INTERFACE		"eth1"
 
