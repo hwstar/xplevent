@@ -1365,8 +1365,8 @@ String ParserCheckSyntax(TALLOC_CTX *ctx, String file)
 	String s = NULL;
 	
 	/* Allocate memory */
-	MALLOC_FAIL(parseCtrl = talloc(ctx, ParseCtrl_t))
-	MALLOC_FAIL(ph = talloc(ctx, PcodeHeader_t))
+	MALLOC_FAIL(parseCtrl = talloc_zero(ctx, ParseCtrl_t))
+	MALLOC_FAIL(ph = talloc_zero(ctx, PcodeHeader_t))
 	parseCtrl->pcodeHeader = ph;
 	
 	/* Parse user code */
