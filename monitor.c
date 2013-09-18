@@ -169,7 +169,7 @@ static Bool parseHCL(ParseCtrlPtr_t parseCtrl, String hcl)
 */
  
 
-static Bool execPcode(pcodeHeaderPtr_t ph)
+static Bool execPcode(PcodeHeaderPtr_t ph)
 {
 	int res;
 	
@@ -204,7 +204,7 @@ static Bool execPcode(pcodeHeaderPtr_t ph)
 static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 {
 	ParseCtrlPtr_t parseCtrl;
-	pcodeHeaderPtr_t ph;
+	PcodeHeaderPtr_t ph;
 
 	Bool res = PASS;
 	
@@ -213,7 +213,7 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 	parseCtrl = talloc_zero(ctx, ParseCtrl_t);
 	MALLOC_FAIL(parseCtrl);
 	
-	ph = talloc_zero(ctx, pcodeHeader_t);
+	ph = talloc_zero(ctx, PcodeHeader_t);
 	MALLOC_FAIL(ph);
 	
 	/* Add XPL service pointer and database handle */
@@ -266,7 +266,7 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
  
 
  
-static int parseAndExecTrig(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
+static int parseAndExecTrig(PcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
 {
 	ParseCtrlPtr_t parseCtrl;
 	xPL_NameValueListPtr msgBody;
@@ -348,7 +348,7 @@ static int parseAndExecTrig(pcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, 
 */
  
 
-static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHeaderPtrPtr_t ph)
+static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, PcodeHeaderPtrPtr_t ph)
 {
 	Bool res;
 
@@ -359,7 +359,7 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHe
 	
 	/* Initialize pcode header */
 	
-	*ph = talloc_zero(Globals->masterCTX, pcodeHeader_t);
+	*ph = talloc_zero(Globals->masterCTX, PcodeHeader_t);
 	MALLOC_FAIL(*ph);
 	
 	/* Set the pointer to the service */
@@ -396,7 +396,7 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, pcodeHe
 static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
 {
 	Bool res;
-	pcodeHeaderPtr_t ph = NULL;
+	PcodeHeaderPtr_t ph = NULL;
 
 	
 	
@@ -436,7 +436,7 @@ static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
 static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 {
 	
-	pcodeHeaderPtr_t ph;
+	PcodeHeaderPtr_t ph;
 	String vendor;
 	String device;
 	String instance_id;

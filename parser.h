@@ -83,18 +83,18 @@ typedef struct pcode_s {
 	struct pcode_s *skip;
 	struct pcode_s *prev;
 	struct pcode_s *next;
-} pcode_t;
+} Pcode_t;
 
-typedef pcode_t * pcodePtr_t;
-typedef pcodePtr_t * pcodePtrPtr_t;
+typedef Pcode_t * PcodePtr_t;
+typedef PcodePtr_t * PcodePtrPtr_t;
 
 /* pcode header */
 
 typedef struct pcheader_s {
-	pcodePtr_t head;
-	pcodePtr_t tail;
+	PcodePtr_t head;
+	PcodePtr_t tail;
 	ParseHashSTEPtr_t steHead;
-	pcodePtr_t firstPush;
+	PcodePtr_t firstPush;
 	String failReason;
 	int ctrlStructRefCount;
 	int seq;
@@ -104,16 +104,16 @@ typedef struct pcheader_s {
 	void *xplServicePtr;
 	void *DB;
 	
-} pcodeHeader_t;
+} PcodeHeader_t;
 
-typedef pcodeHeader_t * pcodeHeaderPtr_t;
-typedef pcodeHeaderPtr_t * pcodeHeaderPtrPtr_t;
+typedef PcodeHeader_t * PcodeHeaderPtr_t;
+typedef PcodeHeaderPtr_t * PcodeHeaderPtrPtr_t;
 	
 
 /* Parse Control Block */
 
 typedef struct ParseCtrl_s {
-	pcodeHeaderPtr_t pcodeHeader;
+	PcodeHeaderPtr_t pcodeHeader;
 	String failReason;
 	short lineNo;
 }ParseCtrl_t;	
@@ -123,16 +123,16 @@ typedef ParseCtrl_t * ParseCtrlPtr_t;
 
 
 Bool ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String *device, String *instance);
-void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value));
-Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key, const String value);
-const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key);
-void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi);
+void ParserHashWalk(PcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value));
+Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key, const String value);
+const String ParserHashGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key);
+void ParserExecFunction(PcodeHeaderPtr_t ph, PcodePtr_t pi);
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2);
-void ParserPcodeDumpList(pcodeHeaderPtr_t ph);
+void ParserPcodeDumpList(PcodeHeaderPtr_t ph);
 void ParserSetJumps(ParseCtrlPtr_t this, int tokenID);
-Bool ParserPcodeGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue);
-Bool ParserPcodePutValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String value);
-Bool ParserExecPcode(pcodeHeaderPtr_t ph);
+Bool ParserPcodeGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String *pValue);
+Bool ParserPcodePutValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String value);
+Bool ParserExecPcode(PcodeHeaderPtr_t ph);
 Bool ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str);
 String ParserCheckSyntax(TALLOC_CTX *ctx, String file);
 

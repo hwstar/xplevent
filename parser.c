@@ -89,7 +89,7 @@ static void parserFree(void *ctx)
 * Print P-code info
 */
 
-static void printOpcode(pcodePtr_t p)
+static void printOpcode(PcodePtr_t p)
 {
 	String op ,data1, data2;
 	
@@ -145,7 +145,7 @@ static void printOpcode(pcodePtr_t p)
  * Set undefined variable error message
  */
 
-static void undefVar(pcodeHeaderPtr_t ph, String var, int lineNo)
+static void undefVar(PcodeHeaderPtr_t ph, String var, int lineNo)
 {
 	String res;
 	
@@ -181,7 +181,7 @@ static void deleteHashContents(ParseHashSTEPtr_t se)
  * Return NULL if not found
  */
 
-static ParseHashSTEPtr_t findHash(pcodeHeaderPtr_t ph, const String hashName, ParseHashSTEPtrPtr_t tail)
+static ParseHashSTEPtr_t findHash(PcodeHeaderPtr_t ph, const String hashName, ParseHashSTEPtrPtr_t tail)
 {
 	unsigned hashVal;
 	ParseHashSTEPtr_t se,p;
@@ -241,9 +241,9 @@ static void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
  * Spawn another program
  */
  
-static void spawn(pcodeHeaderPtr_t ph, pcodePtr_t pi)
+static void spawn(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
-	pcodePtr_t pa;
+	PcodePtr_t pa;
 	String command;
 	TALLOC_CTX *ctx;
 	
@@ -281,7 +281,7 @@ end:
  * Send xPL command if everything looks good
  */
 
-static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
+static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
 	String tag;
 	String class;
@@ -292,7 +292,7 @@ static void sendXPLCommand(pcodeHeaderPtr_t ph, pcodePtr_t pi)
 	ParseHashSTEPtr_t se = NULL;
 	ParseHashKVPtr_t kvp;
 	xPL_MessagePtr msg;
-	pcodePtr_t pa;
+	PcodePtr_t pa;
 
 
 	ASSERT_FAIL(ph)
@@ -477,7 +477,7 @@ Bool ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String
  * Get a value from the hash.
  */
 
-const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key)
+const String ParserHashGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key)
 {
 	unsigned kh;
 	String s;
@@ -516,7 +516,7 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const Stri
  * Add hash to the symbol table if it does not already exist.
  */
  
-Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
+Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
 {
 	ParseHashSTEPtr_t h;
 	ParseHashKVPtr_t ke, keNew, kePrev;
@@ -606,7 +606,7 @@ Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, const String ha
  * Walk the list calling a callback function with each key/value
  */
  
-void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value))
+void ParserHashWalk(PcodeHeaderPtr_t ph, const String name, void (*parseHashWalkCallback)(const String key, const String value))
 {
 	ParseHashKVPtr_t ke;
 	ParseHashSTEPtr_t h;
@@ -634,7 +634,7 @@ void ParserHashWalk(pcodeHeaderPtr_t ph, const String name, void (*parseHashWalk
  */
  
 
-Bool ParserPcodeGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String *pValue)
+Bool ParserPcodeGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String *pValue)
 {
 	String value = NULL;
 	
@@ -674,7 +674,7 @@ Bool ParserPcodeGetValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr,
  * Put a value in a variable
  */
 
-Bool ParserPcodePutValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr, String value)
+Bool ParserPcodePutValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, PcodePtr_t instr, String value)
 {
 	ASSERT_FAIL(ph)
 	ASSERT_FAIL(instr)
@@ -694,8 +694,8 @@ Bool ParserPcodePutValue(TALLOC_CTX *ctx, pcodeHeaderPtr_t ph, pcodePtr_t instr,
 
 void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, String data2)
 {
-	pcodeHeaderPtr_t ph;
-	pcodePtr_t new;
+	PcodeHeaderPtr_t ph;
+	PcodePtr_t new;
 	
 	ASSERT_FAIL(pc)
 	
@@ -703,7 +703,7 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
 	
 	if(ph){
 		
-		new = talloc_zero(ph, pcode_t);
+		new = talloc_zero(ph, Pcode_t);
 		ASSERT_FAIL(new);
 		
 		/* Initialize new list entry */
@@ -745,10 +745,10 @@ void ParserPcodeEmit(ParseCtrlPtr_t pc, opType_t op, int operand, String data1, 
  * Dump pcode list
  */
 
-void ParserPcodeDumpList(pcodeHeaderPtr_t ph)
+void ParserPcodeDumpList(PcodeHeaderPtr_t ph)
 {
 
-	pcodePtr_t p;
+	PcodePtr_t p;
 	int count;
 	
 	if(!ph)
@@ -773,8 +773,8 @@ void ParserPcodeDumpList(pcodeHeaderPtr_t ph)
 void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 {
 	int myCBRC;
-	pcodeHeaderPtr_t ph;
-	pcodePtr_t tail, p, elseblock = NULL;
+	PcodeHeaderPtr_t ph;
+	PcodePtr_t tail, p, elseblock = NULL;
 	
 	ASSERT_FAIL((tokenID == TOK_ELSE) || (tokenID == TOK_IF))
 	
@@ -833,7 +833,7 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 }
 
  
-void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
+void ParserExecFunction(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
 
 	
@@ -865,9 +865,9 @@ void ParserExecFunction(pcodeHeaderPtr_t ph, pcodePtr_t pi)
  * Exec p-code generated by parser
  */
  
-Bool ParserExecPcode(pcodeHeaderPtr_t ph)
+Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 {
-	pcodePtr_t pe,p;
+	PcodePtr_t pe,p;
 	String value,rvalue;
 	double leftNum, rightNum;
 	Bool testRes;
@@ -1036,7 +1036,7 @@ Bool ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str)
 	tokenPtr_t pToken;
 	void *pParser;
 	FILE *file;
-	pcodeHeaderPtr_t ph;
+	PcodeHeaderPtr_t ph;
 	
 	ASSERT_FAIL(this);
 	
@@ -1106,12 +1106,12 @@ Bool ParserParseHCL(ParseCtrlPtr_t this, int fileMode, const String str)
 String ParserCheckSyntax(TALLOC_CTX *ctx, String file)
 {
 	ParseCtrlPtr_t parseCtrl;
-	pcodeHeaderPtr_t ph;
+	PcodeHeaderPtr_t ph;
 	String s = NULL;
 	
 	/* Allocate memory */
 	MALLOC_FAIL(parseCtrl = talloc(ctx, ParseCtrl_t))
-	MALLOC_FAIL(ph = talloc(ctx, pcodeHeader_t))
+	MALLOC_FAIL(ph = talloc(ctx, PcodeHeader_t))
 	parseCtrl->pcodeHeader = ph;
 	
 	/* Parse user code */
