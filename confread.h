@@ -88,7 +88,7 @@ unsigned ConfReadGetNumEntriesInSect(ConfigEntryPtr_t ce, const String section);
 /* Value functions */
 const String ConfReadGetValue(KeyEntryPtr_t ke);
 const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, const String key);
-int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res);
+Bool ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res);
 const String ConfReadValueBySectEntKey(SectionEntryPtr_t se, const String key);
 
 /* Default error handler */

@@ -733,7 +733,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 */
  
  
-void interpretClientCommand(int userSock, String cl)
+static void interpretClientCommand(int userSock, String cl)
 {
 	String *argv = UtilSplitString(Globals->masterCTX, cl, ' ');
 	int i;

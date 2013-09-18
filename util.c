@@ -377,7 +377,7 @@ pid_t UtilPIDRead(const String filename) {
 * otherwise.
 */
 
-int UtilPIDWrite(const String filename, pid_t pid) {
+Bool UtilPIDWrite(const String filename, pid_t pid) {
 	FILE *file;
 	
 	ASSERT_FAIL(filename)
@@ -385,20 +385,20 @@ int UtilPIDWrite(const String filename, pid_t pid) {
 	/* Create the file. */
 	file=fopen(filename, "w");
 	if(!file) {
-		return -1;
+		return FAIL;
 	}
 	/* Write the pid into the file. */
 	(void) fprintf(file, "%d\n", pid);
 	if(ferror(file) != 0) {
 		(void) fclose(file);
-		return -1;
+		return FAIL;
 	}
 	/* Close the file. */
 	if(fclose(file) != 0) {
-		return -1;
+		return FAIL;
 	}
 	/* We finished ok. */
-	return 0;
+	return PASS;
 }
 
 /*

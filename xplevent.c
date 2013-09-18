@@ -670,38 +670,38 @@ int main(int argc, char *argv[])
 	if((configInfo = ConfReadScan(Globals->masterCTX, configFile, confDefErrorHandler))){
 		debug(DEBUG_ACTION,"Using config file: %s", configFile);
 		/* Instance ID */
-		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "instance-id")))
+		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id")))
 			UtilStringCopy(instanceID, p, sizeof(instanceID));
 		
 		/* Interface */
-		if((!clOverride.interface) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "interface")))
+		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface")))
 			UtilStringCopy(interface, p, sizeof(interface));
 			
 		/* Bind Address */
-		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "bind-addr"))){
+		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(configInfo, "general", "bind-addr"))){
 			MALLOC_FAIL(Globals->cmdBindAddress = talloc_strdup(Globals, p));
 		}
 		
 		/* Host name */
-		if((!clOverride.hostname) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "host"))){
+		if((!clOverride.hostname) && (p = ConfReadValueBySectKey(configInfo, "general", "host"))){
 			MALLOC_FAIL(Globals->cmdHostName = talloc_strdup(Globals, p));
 		}
 		
 		/* Service name or port */
-		if((!clOverride.service) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "service"))){
+		if((!clOverride.service) && (p = ConfReadValueBySectKey(configInfo, "general", "service"))){
 			MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, p));
 		}
 			
 		/* pid file */
-		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "pid-file")))
+		if((!clOverride.pid_file) && (p = ConfReadValueBySectKey(configInfo, "general", "pid-file")))
 			UtilStringCopy(pidFile, p, sizeof(pidFile));	
 						
 		/* log path */
-		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "log-path")))
+		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configInfo, "general", "log-path")))
 			UtilStringCopy(logPath, p, sizeof(logPath));
 		
 		/* db-file */
-		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(Globals->configEntry, "general", "db-file")))
+		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "db-file")))
 			UtilStringCopy(dbFile, p, sizeof(dbFile));
 		
 	}

@@ -7,7 +7,7 @@ uint32_t UtilHash(const String key);
 String UtilMoveString(TALLOC_CTX *newCtx, String oldStr, int offset);
 String UtilStringCopy(String dest, const String src, int charsToCopy);
 pid_t UtilPIDRead(const String filename);
-int UtilPIDWrite(const String filename, pid_t pid);
+Bool UtilPIDWrite(const String filename, pid_t pid);
 Bool UtilSpawn(const String command, pid_t *pid);
 String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep);
 

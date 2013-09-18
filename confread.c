@@ -640,21 +640,21 @@ const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, c
 *
 * Return value:
 *
-* TRUE indicates success, FALSE indicaes failure.
+* PASS indicates success, FAIL indicates failure.
 */
 
-int ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res)
+Bool ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res)
 {
 	const char *num = ConfReadValueBySectKey(ce, section, key);
 	if(num && res){
 		long val = strtol(num, NULL, 0);
 		if((errno != ERANGE) && (val > 0) && (val <= UINT_MAX)){
 			*res = (unsigned) val;
-			return TRUE;
+			return PASS;
 		}
 	}
 
-	return FALSE;
+	return FAIL;
 }
 
 

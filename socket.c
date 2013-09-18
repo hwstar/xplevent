@@ -199,7 +199,7 @@ void *SocketFixAddrPointer(void *p)
 *
 */
 	
-int SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
+Bool SocketCreateListenList(String bindaddr, String service, int family, int socktype, 
 	int (*addsock)(int sock, void *addr, int family, int socktype))
 {
 	struct addrinfo hints, *list, *p;
@@ -465,10 +465,10 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, unsigned *length)
  * 
  */
  
-int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
+Bool SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 {
 	va_list ap;
-	int res = 0;
+	int res = PASS;
 	int len;
 	String string, sp;
 	static String id = "SocketPrintf";
@@ -494,24 +494,26 @@ int SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", id);
 				}
 				debug(DEBUG_UNEXPECTED, "%s: Socket write error: %s", id, strerror(errno));
+				res = FAIL;
 				break;
 			}
 			else{
 				if(res == len){
-					res = 0;
+					res = PASS;
 					break;
 				}
 				sp += len;
 				len -= res;
 			}
 		}
+		talloc_free(string);
 	}
 	
-	talloc_free(string);
+
 
 	va_end(ap);
 
-	return res;	
+	return (Bool) res;	
 }
 
 	
