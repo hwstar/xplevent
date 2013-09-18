@@ -286,12 +286,11 @@ static void xpleventShutdown(void)
 	
 	/* If running in the foreground and the debug level is 4, print talloc report on exit */
 	if(Globals->noBackground && (Globals->debugLvl == 4)){
-		talloc_report(Globals->masterCTX, stdout);
+		talloc_report(Globals, stdout);
 	}
 	
-	if(Globals->masterCTX){ /* Free the master context */
-		TALLOC_CTX *m = Globals->masterCTX;
-		talloc_free(m);
+	if(Globals){ /* Free the master context */
+		talloc_free(Globals);
 	}
 }
 
@@ -335,8 +334,8 @@ static void utilitySendCmd(String utilityArg)
 	if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
 		fatal("Could not connect to daemon at address: %s", Globals->cmdHostName);
 	}	
-	SocketPrintf(Globals->masterCTX, daemonSock, "cl:%s\n", utilityArg);
-	MALLOC_FAIL(line = SocketReadLine(Globals->masterCTX, daemonSock, &length))	
+	SocketPrintf(Globals, daemonSock, "cl:%s\n", utilityArg);
+	MALLOC_FAIL(line = SocketReadLine(Globals, daemonSock, &length))	
 	if(line && length){
 		printf("Result = %s\n", line);
 	}
@@ -375,7 +374,7 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 				if(access(utilityFile, R_OK | F_OK)){
 					fatal("Can't open %s for reading", utilityFile);
 				}
-				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
+				s = ParserCheckSyntax(Globals, utilityFile);
 				if(s){
 					fatal("%s", s);
 				}
@@ -388,7 +387,7 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 		case UC_GET_SCRIPT: /* Fetch a script from the database */
 			if(utilityFile){
 				String script;
-				if(!(script = DBFetchScript(Globals->masterCTX, Globals->db, utilityArg))){
+				if(!(script = DBFetchScript(Globals, Globals->db, utilityArg))){
 					fatal("Could not fetch script: %s", utilityArg);
 				}
 				if(UtilFileWriteString(utilityFile, script) == FAIL){
@@ -408,14 +407,14 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 				if(access(utilityFile, R_OK | F_OK)){
 					fatal("Can't open %s for reading", utilityFile);
 				}
-				s = ParserCheckSyntax(Globals->masterCTX, utilityFile);
+				s = ParserCheckSyntax(Globals, utilityFile);
 				if(s){
 					fatal("%s: script not added to database", s);
 				}
-				if(!(script = UtilFileReadString(Globals->masterCTX, utilityFile))){
+				if(!(script = UtilFileReadString(Globals, utilityFile))){
 					fatal_with_reason(errno, "Could not read file: %s", utilityFile);
 				}
-				if(DBIRScript(Globals->masterCTX, Globals->db, utilityArg, script) == FAIL){
+				if(DBIRScript(Globals, Globals->db, utilityArg, script) == FAIL){
 					fatal("Script %s could not be stored in the database");
 				}
 			}
@@ -453,7 +452,7 @@ static void prepareUtilityCommand(int command, String optarg)
 	if(!utilityCommand){
 		utilityCommand = command;
 		if(optarg){
-			MALLOC_FAIL(utilityArg = talloc_strdup(Globals->masterCTX, optarg))
+			MALLOC_FAIL(utilityArg = talloc_strdup(Globals, optarg))
 		}
 	}
 	else{
@@ -503,22 +502,22 @@ int main(int argc, char *argv[])
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
 	/* Set up before notify functions can be used */
-	if(!(m = talloc_new(NULL))){
+	
+	if(!(Globals = talloc_zero(NULL, XPLEvGlobals_t))){
 		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
 		exit(1);
 	}
 	
-	if(!(Globals = talloc_zero(m, XPLEvGlobals_t))){
-		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
-		exit(1);
-	}
-	
-	Globals->masterCTX = m;
 	
 	/* Notify functions can now be used */
 	
 	Globals->progName = argv[0];
 	Globals->cmdService = DEF_CMD_SERVICE_NAME;
+	Globals->cmdHostName = "::1";
+	Globals->pidFile = DEF_PID_FILE;
+	Globals->dbFile = DEF_DB_FILE;
+	Globals->interface = DEF_INTERFACE;
+	Globals->instanceID = DEF_INSTANCE_ID;
 	
 	atexit(xpleventShutdown);
 	
@@ -571,7 +570,7 @@ int main(int argc, char *argv[])
 
 			/* Was it a utility file switch? */
 			case 'f':
-				utilityFile = talloc_strndup(Globals->masterCTX, optarg, WS_SIZE);
+				utilityFile = talloc_strndup(Globals, optarg, WS_SIZE);
 				debug(DEBUG_ACTION,"New utility file path is: %s", utilityFile);
 				break;
 				
