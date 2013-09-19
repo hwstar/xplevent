@@ -230,7 +230,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	for(p = list; p != NULL; p = p->ai_next){ // Traverse the list
 		int sockopt = 1;
 	
-		if((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+		if((sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol)) == -1){
 			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...",id, strerror(errno));
 			continue;
 		}		
@@ -335,7 +335,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 	/* Create a socket for talking to the daemon program. */
 
-	sock = socket(p->ai_family, p->ai_socktype,p->ai_protocol );
+	sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol );
 	if(sock == -1) {
 		freeaddrinfo(list);
 		debug(DEBUG_ACTION, "%s: Could not create ip socket: %s", id, strerror(errno));
@@ -352,12 +352,6 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	
 	freeaddrinfo(list);
 	
-	/* We don't want to block reads. */
-	if(fcntl(sock, F_SETFL, O_NONBLOCK) == -1) {
-		debug(DEBUG_UNEXPECTED,"%s: Could not set socket to nonblocking", id);
-		close(sock);
-		return -1;
-	}
 
 	/* Return this socket. */
 	return(sock);
