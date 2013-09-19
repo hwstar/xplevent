@@ -49,18 +49,8 @@
 #include "util.h"
 #include "xplevent.h"
 
-typedef enum {RS_IDLE = 0, RS_WAIT_LINE, RS_FINISHED, RS_ERROR} rs_state_t;
 
-typedef struct rcvInfo_s {
-	String script;
-	unsigned scriptLen;
-	unsigned scriptBufSize;
-	unsigned scriptSizeLimit;
-	int userSock;
-	rs_state_t state;
-} rcvInfo_t;
-
-typedef rcvInfo_t * rcvInfoPtr_t;
+typedef MonRcvInfo_t * MonRcvInfoPtr_t;
 
 typedef struct connectionData_s {
 	rcvInfoPtr_t rcvInfo;
@@ -822,7 +812,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 	unsigned length = 0;
 	String line, theScript;
 	connectionDataPtr_t cdp = (connectionDataPtr_t) uservalue;
-	rcvInfoPtr_t ri;
+	MonRcvInfoPtr_t ri;
 	
 	ASSERT_FAIL(cdp)
 	
@@ -859,7 +849,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 					}
 				}
 				if(!strncmp("rs:", line, 3)){ /* Receive script */
-					MALLOC_FAIL(ri = talloc_zero(cdp, rcvInfo_t))
+					MALLOC_FAIL(ri = talloc_zero(cdp, MonRcvInfo_t))
 					ri->scriptBufSize = 2048; /* Starting buffer size */
 					ri->scriptSizeLimit = 65536; /* Maximum buffer size */
 					ri->userSock = userSock; /* Save the socket FD */
@@ -995,7 +985,7 @@ void MonitorSendScript(TALLOC_CTX *ctx, int userSock, String theScript, String i
 * TRUE if script has been received, otherwise FALSE
 *
 */
-Bool MonitorRecvScript(rcvInfoPtr_t ri, String line) 
+Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line) 
 {
 	char *p;
 	int len;
