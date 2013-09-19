@@ -954,15 +954,12 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	
 	debug(DEBUG_ACTION, "Accepting socket connection");
 	/* Accept the user connection. */
-	userSock = accept(fd, NULL, NULL);
+	userSock = accept4(fd, NULL, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
 	if(userSock == -1) {
 		debug(DEBUG_UNEXPECTED, "Could not accept socket");
 		return;
 	}
-	/* The socket needs to be non-blocking. */
-	if(fcntl(userSock, F_SETFL, O_NONBLOCK) == -1) {
-		fatal_with_reason(errno, "Could not set user socket to non-blocking");
-	}
+
 	/* Allocate a data structure for connection persistent data for use by the listener */
 	ASSERT_FAIL(cdp = talloc_zero(Globals, connectionData_t))
 	
