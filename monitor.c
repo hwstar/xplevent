@@ -878,7 +878,7 @@ static Bool recvScript(rcvInfoPtr_t ri, String line)
 					ri->scriptBufSize <<= 1; /* Increase buffer size */
 					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
 					ASSERT_FAIL(ri->script = talloc_realloc(ri, ri->script, 
-					'char', ri->scriptBufSize))
+					char, ri->scriptBufSize))
 				}
 				UtilStringCopy(ri->script + ri->scriptLen, p, len);
 				ri->scriptLen += len;
