@@ -825,6 +825,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 			if(ri){ /* If in the midst of receiving a script */
 				if(MonitorRecvScript(ri, line)){
 					/* Process script */
+					debug(DEBUG_EXPECTED,"Script %s received, result = %d", ri->name, ri->state)
 					
 					/* Done with the received script, free the data structure and the underlying buffer */
 					talloc_free(ri);
@@ -993,7 +994,8 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 	switch(ri->state){
 		case RS_IDLE:
 			if(!strncmp("sb:", line, 3)){
-				debug(DEBUG_EXPECTED,"Received script start")
+				debug(DEBUG_EXPECTED,"Received script start. Name = %s", line + 3);
+				MALLOC_FAIL(ri->name = talloc_strdup(ri, line + 3))
 				ri->state = RS_WAIT_LINE;
 				return FALSE;
 			}
@@ -1001,7 +1003,7 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 		
 		case RS_WAIT_LINE:
 			if(!strncmp("se:", line, 3)){
-				debug(DEBUG_EXPECTED,"Script received")
+				debug(DEBUG_EXPECTED,"Script received");
 				ri->state = RS_FINISHED;
 				return TRUE;
 			}
