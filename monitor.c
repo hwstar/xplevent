@@ -869,7 +869,8 @@ static Bool recvScript(rcvInfoPtr_t ri, String line)
 			else if (!strncmp("sl:", line, 3)){
 				p = line + 3;
 				len = strlen(p);
-				if(scriptLen + len >= ri->scriptSizeLimit){
+				if((scriptLen + len >= ri->scriptSizeLimit) ||
+				(len > 256)){
 					debug(DEBUG_UNEXPECTED, "Script size exceeds limit")
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
@@ -877,10 +878,12 @@ static Bool recvScript(rcvInfoPtr_t ri, String line)
 				if(ri->scriptLen + len >= ri->scriptBufSize){
 					ri->scriptBufSize <<= 1; /* Increase buffer size */
 					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
-					ASSERT_FAIL(ri->script = talloc_realloc(ri, ri->script, 
+					MALLOC_FAIL(ri->script = talloc_realloc(ri, ri->script, 
 					char, ri->scriptBufSize))
 				}
-				UtilStringCopy(ri->script + ri->scriptLen, p, len);
+				/* Insert line into buffer */
+				len+=2; /* Account for added newline and nul character */
+				snprintf(ri->script + ri->scriptLen, len, "%s\n\0", p);
 				ri->scriptLen += len;
 			}
 			break;
@@ -960,6 +963,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 					ri->scriptSizeLimit = 65536; /* Maximum buffer size */
 					ri->userSock = userSock; /* Save the socket FD */
 					MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize)) /* Allocate the initial buffer */
+					ri->script[0] = 0; /* Set to zero length */
 					cdp->rcvInfo = ri; /* Activate the receiver */
 				}
 			}
