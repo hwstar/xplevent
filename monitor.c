@@ -799,105 +799,6 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 	talloc_free(argv);
 	return res;
 }
-/*
-* Send a script
-*
-* Arguments:
-* 
-* 1. Talloc context to hang termprary data off of.
-* 2. Socket providing a connection to the client.
-* 3. Script as a string
-*
-* Return value:
-*
-* None
-*
-*/
-
-static void sendScript(TALLOC_CTX *ctx, int userSock, String theScript, String id)
-{
-	String *lines;
-	int i;
-	
-	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(theScript)
-	
-	SocketPrintf(ctx, userSock, "sb:%s\n", id);
-	lines = UtilSplitString(ctx, theScript, '\n');
-	for(i = 0; lines[i]; i++){
-		SocketPrintf(ctx, userSock, "sl:%s\n", lines[i]); 
-	}
-	SocketPrintf(ctx, userSock, "se:%s\n", id);
-	talloc_free(lines);
-}
-/*
-* Receive a script
-*
-* Arguments:
-* 
-* 1. Pointer to a receive state info structure
-* 2. Line received
-* 
-*
-* Return value:
-*
-* TRUE if script has been received, otherwise FALSE
-*
-*/
-static Bool recvScript(rcvInfoPtr_t ri, String line) 
-{
-	char *p;
-	int len;
-	ASSERT_FAIL(ri)
-	ASSERT_FAIL(line)
-	
-	switch(ri->state){
-		case RS_IDLE:
-			if(!strncmp("sb:", line, 3)){
-				debug(DEBUG_EXPECTED,"Received script start")
-				ri->state = RS_WAIT_LINE;
-				return FALSE;
-			}
-			break;
-		
-		case RS_WAIT_LINE:
-			if(!strncmp("se:", line, 3)){
-				debug(DEBUG_EXPECTED,"Script received")
-				ri->state = RS_FINISHED;
-				return TRUE;
-			}
-			else if (!strncmp("sl:", line, 3)){
-				p = line + 3;
-				len = strlen(p);
-				if((scriptLen + len >= ri->scriptSizeLimit) ||
-				(len > 256)){
-					debug(DEBUG_UNEXPECTED, "Script size exceeds limit")
-					ri->state = RS_ERROR; /* Upload size exceeded */
-					return TRUE;
-				}
-				len += 2; /* Account for newline and nul character to be added below */
-				if(ri->scriptLen + len >= ri->scriptBufSize){
-					ri->scriptBufSize <<= 1; /* Increase buffer size */
-					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
-					MALLOC_FAIL(ri->script = talloc_realloc(ri, ri->script, 
-					char, ri->scriptBufSize))
-				}
-				/* Insert line into buffer */
-				snprintf(ri->script + ri->scriptLen, len, "%s\n", p);
-				ri->scriptLen += len;
-			}
-			break;
-			
-		case RS_FINISHED:
-		case RS_ERROR:
-			return TRUE;
-			
-		default:
-			ASSERT_FAIL(0);
-	}
-	
-	return FALSE;
-}
 
 
 /*
@@ -934,7 +835,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 	else{
 		if(length){
 			if(ri){ /* If in the midst of receiving a script */
-				if(recvScript(ri, line)){
+				if(MonitorRecvScript(ri, line)){
 					/* Process script */
 					
 					/* Done with the received script, free the data structure and the underlying buffer */
@@ -951,7 +852,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 				if(!strncmp("ss:", line, 3)){ /* Send script */
 					theScript = DBFetchScript(cdp, Globals->db, line + 3);
 					if(theScript){
-						sendScript(cdp, userSock, theScript, line + 3);
+						MonitorSendScript(cdp, userSock, theScript, line + 3);
 					}
 					else{
 						SocketPrintf(cdp, userSock, "er:\n");
@@ -1047,6 +948,110 @@ static int addIPSocket(int sock, void *addr, int family, int socktype)
 	return xPL_addIODevice(commandSocketListener, 0, sock, TRUE, FALSE, FALSE);
 
 }
+
+
+/*
+* Send a script
+*
+* Arguments:
+* 
+* 1. Talloc context to hang termprary data off of.
+* 2. Socket providing a connection to the client.
+* 3. Script as a string
+*
+* Return value:
+*
+* None
+*
+*/
+
+void MonitorSendScript(TALLOC_CTX *ctx, int userSock, String theScript, String id)
+{
+	String *lines;
+	int i;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(theScript)
+	
+	SocketPrintf(ctx, userSock, "sb:%s\n", id);
+	lines = UtilSplitString(ctx, theScript, '\n');
+	for(i = 0; lines[i]; i++){
+		SocketPrintf(ctx, userSock, "sl:%s\n", lines[i]); 
+	}
+	SocketPrintf(ctx, userSock, "se:%s\n", id);
+	talloc_free(lines);
+}
+/*
+* Receive a script
+*
+* Arguments:
+* 
+* 1. Pointer to a receive state info structure
+* 2. Line received
+* 
+*
+* Return value:
+*
+* TRUE if script has been received, otherwise FALSE
+*
+*/
+Bool MonitorRecvScript(rcvInfoPtr_t ri, String line) 
+{
+	char *p;
+	int len;
+	ASSERT_FAIL(ri)
+	ASSERT_FAIL(line)
+	
+	switch(ri->state){
+		case RS_IDLE:
+			if(!strncmp("sb:", line, 3)){
+				debug(DEBUG_EXPECTED,"Received script start")
+				ri->state = RS_WAIT_LINE;
+				return FALSE;
+			}
+			break;
+		
+		case RS_WAIT_LINE:
+			if(!strncmp("se:", line, 3)){
+				debug(DEBUG_EXPECTED,"Script received")
+				ri->state = RS_FINISHED;
+				return TRUE;
+			}
+			else if (!strncmp("sl:", line, 3)){
+				p = line + 3;
+				len = strlen(p);
+				if((scriptLen + len >= ri->scriptSizeLimit) ||
+				(len > 256)){
+					debug(DEBUG_UNEXPECTED, "Script size exceeds limit")
+					ri->state = RS_ERROR; /* Upload size exceeded */
+					return TRUE;
+				}
+				len += 2; /* Account for newline and nul character to be added below */
+				if(ri->scriptLen + len >= ri->scriptBufSize){
+					ri->scriptBufSize <<= 1; /* Increase buffer size */
+					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
+					MALLOC_FAIL(ri->script = talloc_realloc(ri, ri->script, 
+					char, ri->scriptBufSize))
+				}
+				/* Insert line into buffer */
+				snprintf(ri->script + ri->scriptLen, len, "%s\n", p);
+				ri->scriptLen += len;
+			}
+			break;
+			
+		case RS_FINISHED:
+		case RS_ERROR:
+			return TRUE;
+			
+		default:
+			ASSERT_FAIL(0);
+	}
+	
+	return FALSE;
+}
+
+
+
 /*
 *
 * Pre setup of monitor code.
