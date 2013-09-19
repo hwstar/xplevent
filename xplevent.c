@@ -339,6 +339,86 @@ static void utilitySendCmd(String utilityArg)
 }
 
 
+/*
+ * Get a script from the daemon
+ *
+ * Arguments:
+ *
+ * 1. Script Name as a string
+ * 2. Filename to store the script in.
+ *
+ * Return value:
+ *
+ * None
+ */
+
+
+static void getScript(String utilityArg, String utilityFile)
+{
+	if(utilityFile){
+		String script;
+#if(0)
+		if(!(script = DBFetchScript(Globals, Globals->db, utilityArg))){
+			fatal("Could not fetch script: %s", utilityArg);
+		}
+#else
+	/* Receive script from daemon */
+
+#endif
+		if(UtilFileWriteString(utilityFile, script) == FAIL){
+			fatal_with_reason(errno, "Could not write file: %s", utilityFile);
+		}
+				
+	}
+	else{
+		noFileSwitch();
+	}
+}
+
+
+/*
+ * Send a script to the daemon
+ *
+ * Arguments:
+ *
+ * 1. Script name as a string
+ * 2. Script file to read as a string.
+ *
+ * Return value:
+ *
+ * None
+ */
+
+
+static void putScript(String utilityArg, String utilityFile)
+{
+	if(utilityFile){
+		String script, s;
+		if(access(utilityFile, R_OK | F_OK)){
+			fatal("Can't open %s for reading", utilityFile);
+		}
+		s = ParserCheckSyntax(Globals, utilityFile);
+		if(s){
+			fatal("%s: script not added to database", s);
+		}
+		if(!(script = UtilFileReadString(Globals, utilityFile))){
+			fatal_with_reason(errno, "Could not read file: %s", utilityFile);
+		}
+#if(0)
+		if(DBIRScript(Globals, Globals->db, utilityArg, script) == FAIL){
+			fatal("Script %s could not be stored in the database");
+		}
+#else
+		/* Send script to daemon */
+
+#endif
+		
+	}
+	else{
+		noFileSwitch();
+	}
+}
+
 
 /*
  * Do utility command and exit
@@ -380,42 +460,12 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 			break;
 			
 		case UC_GET_SCRIPT: /* Fetch a script from the database */
-			if(utilityFile){
-				String script;
-				if(!(script = DBFetchScript(Globals, Globals->db, utilityArg))){
-					fatal("Could not fetch script: %s", utilityArg);
-				}
-				if(UtilFileWriteString(utilityFile, script) == FAIL){
-					fatal_with_reason(errno, "Could not write file: %s", utilityFile);
-				}
-				
-			}
-			else{
-				noFileSwitch();
-			}
+			getScript(utilityArg, utilityFile);
 			break;		
 			
 			
 		case UC_PUT_SCRIPT: /* Check syntax, and if good, place a script in the database */
-			if(utilityFile){
-				String script, s;
-				if(access(utilityFile, R_OK | F_OK)){
-					fatal("Can't open %s for reading", utilityFile);
-				}
-				s = ParserCheckSyntax(Globals, utilityFile);
-				if(s){
-					fatal("%s: script not added to database", s);
-				}
-				if(!(script = UtilFileReadString(Globals, utilityFile))){
-					fatal_with_reason(errno, "Could not read file: %s", utilityFile);
-				}
-				if(DBIRScript(Globals, Globals->db, utilityArg, script) == FAIL){
-					fatal("Script %s could not be stored in the database");
-				}
-			}
-			else{
-				noFileSwitch();
-			}
+			putScript(utilityArg, utilityFile);
 			break;	
 			
 		case UC_SEND_CMD:
