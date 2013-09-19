@@ -875,6 +875,7 @@ static Bool recvScript(rcvInfoPtr_t ri, String line)
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
 				}
+				len += 2; /* Account for newline and nul character to be added below */
 				if(ri->scriptLen + len >= ri->scriptBufSize){
 					ri->scriptBufSize <<= 1; /* Increase buffer size */
 					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
@@ -882,7 +883,6 @@ static Bool recvScript(rcvInfoPtr_t ri, String line)
 					char, ri->scriptBufSize))
 				}
 				/* Insert line into buffer */
-				len+=2; /* Account for added newline and nul character */
 				snprintf(ri->script + ri->scriptLen, len, "%s\n\0", p);
 				ri->scriptLen += len;
 			}
