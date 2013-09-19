@@ -143,7 +143,7 @@ String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(filename)
   
-	file = fopen(filename, "r");
+	file = fopen(filename, "re");
 	if(!file) {
 		debug(DEBUG_UNEXPECTED, "%s: Can't open file: %s for reading: %s",id, filename, strerror(errno));
 		return NULL;
@@ -205,7 +205,7 @@ Bool UtilFileWriteString(const String filename, const String str)
 	ASSERT_FAIL(filename)
 	ASSERT_FAIL(str)
   
-	file = fopen(filename, "w");
+	file = fopen(filename, "we");
 	if(!file) {
 		debug(DEBUG_UNEXPECTED, "%s: Can't open file: %s for writing: %s",id, filename, strerror(errno));
 		return FAIL;
@@ -341,7 +341,7 @@ pid_t UtilPIDRead(const String filename) {
 	
 	ASSERT_FAIL(filename)
 	/* Get the pid from the file. */
-	file=fopen(filename, "r");
+	file=fopen(filename, "re");
 	if(!file) {
 		return -1;
 	}
@@ -383,7 +383,7 @@ Bool UtilPIDWrite(const String filename, pid_t pid) {
 	ASSERT_FAIL(filename)
 
 	/* Create the file. */
-	file=fopen(filename, "w");
+	file=fopen(filename, "we");
 	if(!file) {
 		return FAIL;
 	}
