@@ -883,7 +883,7 @@ static Bool recvScript(rcvInfoPtr_t ri, String line)
 					char, ri->scriptBufSize))
 				}
 				/* Insert line into buffer */
-				snprintf(ri->script + ri->scriptLen, len, "%s\n\0", p);
+				snprintf(ri->script + ri->scriptLen, len, "%s\n", p);
 				ri->scriptLen += len;
 			}
 			break;
