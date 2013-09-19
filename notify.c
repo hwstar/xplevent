@@ -83,7 +83,7 @@ void notify_logpath(const String path)
   if(output != NULL){
     fclose(output);
   } 
-  if((f = fopen(path,"w")) == NULL){
+  if((f = fopen(path,"we")) == NULL){
     fatal_with_reason(errno, "Can't open log file for writing");
   }
   output = f;
