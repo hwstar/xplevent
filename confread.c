@@ -838,7 +838,7 @@ ConfigEntryPtr_t ConfReadScan(void *ctx, const String thePath, void (*error_call
 
 	/* Open the config file */
 
-	if((conf_file = fopen(thePath, "r")) == NULL){
+	if((conf_file = fopen(thePath, "re")) == NULL){
 		(*error_callback)(CRE_FOPEN, __LINE__, thePath);
 		return NULL;
 	}
