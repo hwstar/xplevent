@@ -991,6 +991,13 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 	ASSERT_FAIL(ri)
 	ASSERT_FAIL(line)
 	
+	len = strlen(line);
+	if((len < 3) || (len > 258)){
+		debug(DEBUG_UNEXPECTED,"Line length too long or too short");
+		ri->state = RS_ERROR;
+		return TRUE;
+	}
+	
 	switch(ri->state){
 		case RS_IDLE:
 			if(!strncmp("sb:", line, 3)){
@@ -1009,9 +1016,8 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 			}
 			else if (!strncmp("sl:", line, 3)){
 				p = line + 3;
-				len = strlen(p);
-				if((scriptLen + len >= ri->scriptSizeLimit) ||
-				(len > 256)){
+				len -= 3;
+				if(scriptLen + len >= ri->scriptSizeLimit){
 					debug(DEBUG_UNEXPECTED, "Script size exceeds limit")
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
