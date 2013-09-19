@@ -49,9 +49,21 @@
 #include "util.h"
 #include "xplevent.h"
 
+typedef enum {RS_IDLE = 0, RS_WAIT_START, RS_WAIT_LINE, RS_FINISHED} rs_state_t;
+
+typedef struct rcvInfo_s {
+	String script;
+	unsigned scriptLen;
+	unsigned scriptBufSize;
+	unsigned scriptSizeLimit;
+	int userSock;
+	rs_state_t state;
+} rcvInfo_t;
+
+typedef rcvInfo_t * rcvInfoPtr_t;
 
 typedef struct connectionData_s {
-	char *buffer;
+	rcvInfoPtr_t rcvInfo;
 } connectionData_t;
 
 typedef connectionData_t * connectionDataPtr_t;
@@ -748,6 +760,7 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 	String script;
 	
 	ASSERT_FAIL(cdp)
+	ASSERT_FAIL(cl)
 	
 	for(i = 0; clientCommands[i]; i++){
 		if(!strcmp(clientCommands[i], argv[0])){
@@ -786,6 +799,55 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 	talloc_free(argv);
 	return res;
 }
+/*
+* Send a script
+*
+* Arguments:
+* 
+* 1. Talloc context to hang termprary data off of.
+* 2. Socket providing a connection to the client.
+* 3. Script as a string
+*
+* Return value:
+*
+* None
+*
+*/
+
+static void sendScript(TALLOC_CTX *ctx, int userSock, String theScript, String id)
+{
+	String *lines;
+	int i;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(theScript)
+	
+	SocketPrintf(ctx, userSock, "sb:%s\n", id);
+	lines = UtilSplitString(ctx, theScript, '\n');
+	for(i = 0; lines[i]; i++){
+		SocketPrintf(ctx, userSock, "sl:%s\n", lines[i]); 
+	}
+	SocketPrintf(ctx, userSock, "se:%s\n", id);
+	talloc_free(lines);
+}
+/*
+* Receive a script
+*
+* Arguments:
+* 
+* 1. Pointer to a receive state info structure
+* 2. Line received
+* 
+*
+* Return value:
+*
+* TRUE if script has been received, otherwise FALSE
+*
+*/
+static Bool recvScript(rcvInfoPtr_t ri, String line) 
+{
+	return TRUE;
+}
 
 
 /*
@@ -807,10 +869,13 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 static void clientCommandListener(int userSock, int revents, int uservalue)
 {
 	unsigned length = 0;
-	String line;
+	String line, theScript;
 	connectionDataPtr_t cdp = (connectionDataPtr_t) uservalue;
+	rcvInfoPtr_t ri;
 	
 	ASSERT_FAIL(cdp)
+	
+	ri = cdp->rcvInfo; /* Shorthand reference */
 	
 	
 	if((line = SocketReadLine(cdp, userSock, &length)) == NULL){
@@ -818,9 +883,38 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 	}
 	else{
 		if(length){
-			debug(DEBUG_ACTION, "Line read from socket: %s", line); 
-			if(!strncmp("cl:", line, 3)){
-				interpretClientCommand(cdp, userSock, line + 3);
+			if(ri){ /* If in the midst of receiving a script */
+				if(recvScript(ri, line)){
+					/* Process script */
+					
+					/* Done with the received script, free the data structure and the underlying buffer */
+					talloc_free(ri);
+					ri = cdp->rcvInfo = NULL;
+				}
+				
+			}
+			else{		
+				debug(DEBUG_ACTION, "Line read from socket: %s", line); 
+				if(!strncmp("cl:", line, 3)){ /* Command line */
+					interpretClientCommand(cdp, userSock, line + 3);
+				}
+				if(!strncmp("ss:", line, 3)){ /* Send script */
+					theScript = DBFetchScript(cdp, Globals->db, line + 3);
+					if(theScript){
+						sendScript(cdp, userSock, theScript, line + 3);
+					}
+					else{
+						SocketPrintf(cdp, userSock, "er:\n");
+					}
+				}
+				if(!strncmp("rs:", line, 3)){ /* Receive script */
+					MALLOC_FAIL(ri = talloc_zero(cdp, rcvInfo_t))
+					ri->scriptBufSize = 2048; /* Starting buffer size */
+					ri->scriptSizeLimit = 65536; /* Maximum buffer size */
+					ri->userSock = userSock; /* Save the socket FD */
+					MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize)) /* Allocate the initial buffer */
+					cdp->rcvInfo = ri; /* Activate the receiver */
+				}
 			}
 		}
 	}
