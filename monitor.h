@@ -5,6 +5,7 @@
 typedef enum {RS_IDLE = 0, RS_WAIT_LINE, RS_FINISHED, RS_ERROR} rs_state_t;
 
 typedef struct MonRcvInfo_s {
+	String name;
 	String script;
 	unsigned scriptLen;
 	unsigned scriptBufSize;
