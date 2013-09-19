@@ -13,6 +13,7 @@ typedef struct MonRcvInfo_s {
 	rs_state_t state;
 } MonRcvInfo_t;
 
+typedef MonRcvInfo_t * MonRcvInfoPtr_t;
 
 void MonitorPreForkSetup(String interface, String instance_id);
 void MonitorRun(void);
