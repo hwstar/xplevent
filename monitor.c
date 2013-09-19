@@ -49,7 +49,7 @@
 #include "util.h"
 #include "xplevent.h"
 
-typedef enum {RS_IDLE = 0, RS_WAIT_START, RS_WAIT_LINE, RS_FINISHED} rs_state_t;
+typedef enum {RS_IDLE = 0, RS_WAIT_LINE, RS_FINISHED, RS_ERROR} rs_state_t;
 
 typedef struct rcvInfo_s {
 	String script;
@@ -846,7 +846,54 @@ static void sendScript(TALLOC_CTX *ctx, int userSock, String theScript, String i
 */
 static Bool recvScript(rcvInfoPtr_t ri, String line) 
 {
-	return TRUE;
+	char *p;
+	int len;
+	ASSERT_FAIL(ri)
+	ASSERT_FAIL(line)
+	
+	switch(ri->state){
+		case RS_IDLE:
+			if(!strncmp("sb:", line, 3)){
+				debug(DEBUG_EXPECTED,"Received script start")
+				ri->state = RS_WAIT_LINE;
+				return FALSE;
+			}
+			break;
+		
+		case RS_WAIT_LINE:
+			if(!strncmp("se:", line, 3)){
+				debug(DEBUG_EXPECTED,"Script received")
+				ri->state = RS_FINISHED;
+				return TRUE;
+			}
+			else if (!strncmp("sl:", line, 3)){
+				p = line + 3;
+				len = strlen(p);
+				if(scriptLen + len >= ri->scriptSizeLimit){
+					debug(DEBUG_UNEXPECTED, "Script size exceeds limit")
+					ri->state = RS_ERROR; /* Upload size exceeded */
+					return TRUE;
+				}
+				if(ri->scriptLen + len >= ri->scriptBufSize){
+					ri->scriptBufSize <<= 1; /* Increase buffer size */
+					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
+					ASSERT_FAIL(ri->script = talloc_realloc(ri, ri->script, 
+					'char', ri->scriptBufSize))
+				}
+				UtilStringCopy(ri->script + ri->scriptLen, p, len);
+				ri->scriptLen += len;
+			}
+			break;
+			
+		case RS_FINISHED:
+		case RS_ERROR:
+			return TRUE;
+			
+		default:
+			ASSERT_FAIL(0);
+	}
+	
+	return FALSE;
 }
 
 
