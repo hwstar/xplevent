@@ -357,7 +357,7 @@ static void getScript(String utilityArg, String utilityFile)
 {
 	if(utilityFile){
 		String script;
-#if(0)
+#if(1)
 		if(!(script = DBFetchScript(Globals, Globals->db, utilityArg))){
 			fatal("Could not fetch script: %s", utilityArg);
 		}
@@ -404,7 +404,7 @@ static void putScript(String utilityArg, String utilityFile)
 		if(!(script = UtilFileReadString(Globals, utilityFile))){
 			fatal_with_reason(errno, "Could not read file: %s", utilityFile);
 		}
-#if(0)
+#if(1)
 		if(DBIRScript(Globals, Globals->db, utilityArg, script) == FAIL){
 			fatal("Script %s could not be stored in the database");
 		}
