@@ -50,10 +50,8 @@
 #include "xplevent.h"
 
 
-typedef MonRcvInfo_t * MonRcvInfoPtr_t;
-
 typedef struct connectionData_s {
-	rcvInfoPtr_t rcvInfo;
+	MonRcvInfoPtr_t rcvInfo;
 } connectionData_t;
 
 typedef connectionData_t * connectionDataPtr_t;
