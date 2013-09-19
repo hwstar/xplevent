@@ -210,9 +210,9 @@ static void showHelp(void)
 	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
 	printf("  -o, --db-file           Database file\n");
-	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", pidFile);
+	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", Globals->pidFile);
 	printf("  -p, --put scriptname    Utility function: Put file in script name\n");
-	printf("  -s, --instance ID       Set instance id. Default is %s\n", instanceID);
+	printf("  -s, --instance ID       Set instance id. Default is %s\n", Globals->instanceID);
 	printf("  -S, --service SERVICE   Set service name or port number for command listener\n");
 	printf("  -V, --version           Display program version\n");
 	printf("  -x, --command COMMAND   Execute command on daemon from client\n");
@@ -473,10 +473,10 @@ Bool XpleventCheckExit(void)
 {
 	if(gotHup){
 		gotHup = FALSE;
-		if(Globals->logPath[0]){
-			debug(DEBUG_EXPECTED, "Closing %s", Globals->logPath)
-			notify_logpath(Globals->logPath);
-			debug(DEBUG_EXPECTED, "Re-opening %s", Globals->logPath)
+		if(Globals->logFile[0]){
+			debug(DEBUG_EXPECTED, "Closing %s", Globals->logFile);
+			notify_logpath(Globals->logFile);
+			debug(DEBUG_EXPECTED, "Re-opening %s", Globals->logFile);
 		}
 	}
 	
@@ -503,7 +503,6 @@ int main(int argc, char *argv[])
 	int longindex;
 	int optchar;
 	String p;
-	TALLOC_CTX *m;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
 	/* Set up Globals before notify functions can be used */
@@ -606,9 +605,9 @@ int main(int argc, char *argv[])
 			case 'L':
 				/* Override log path*/
 				clOverride.log_path = 1;
-				MALLOC_FAIL(Globals->logPath = talloc_strdup(Globals, optarg));
+				MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, optarg));
 				debug(DEBUG_ACTION,"New log path is: %s",
-				Globals->logPath);
+				Globals->logFile);
 
 				break;
 				
@@ -634,7 +633,7 @@ int main(int argc, char *argv[])
 			case 'P': /* PID file */
 				clOverride.pid_file = 1;
 				MALLOC_FAIL(Globals->pidFile = talloc_strdup(Globals, optarg));
-				debug(DEBUG_ACTION,"New pid file path is: %s", pidFile);
+				debug(DEBUG_ACTION,"New pid file path is: %s", Globals->pidFile);
 				break;
 				
 			case 'S': /* Service port name or number */
@@ -645,7 +644,7 @@ int main(int argc, char *argv[])
 			case 's': /* Instance ID */
 				clOverride.instance_id = 1;
 				MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, optarg));
-				debug(DEBUG_ACTION,"New instance ID is: %s", instanceID);
+				debug(DEBUG_ACTION,"New instance ID is: %s", Globals->instanceID);
 				break;
 
 
@@ -674,14 +673,14 @@ int main(int argc, char *argv[])
 	/* Attempt to read a config file */
 	
 	if((configInfo = ConfReadScan(Globals, Globals->configFile, confDefErrorHandler))){
-		debug(DEBUG_ACTION,"Using config file: %s", configFile);
+		debug(DEBUG_ACTION,"Using config file: %s", Globals->configFile);
 		/* Instance ID */
 		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id"))){
 			MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, p));
 		}
 		
 		/* Interface */
-		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface")))}{
+		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface"))){
 			MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, p));
 		}
 			
@@ -707,7 +706,7 @@ int main(int argc, char *argv[])
 						
 		/* log path */
 		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configInfo, "general", "log-path"))){
-			MALLOC_FAIL(Globals->logPath = talloc_strdup(Globals, p));
+			MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, p));
 		}
 		
 		/* db-file */
@@ -718,7 +717,7 @@ int main(int argc, char *argv[])
 		
 	}
 	else{
-		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", configFile);
+		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", Globals->configFile);
 	}
 	
 	/* Free the config info */
@@ -797,8 +796,8 @@ int main(int argc, char *argv[])
     	* the path to the logfile is defined
 		*/
 
-		if((Globals->debugLvl) && (Globals->logPath[0]))                          
-			notify_logpath(Globals->logPath);
+		if((Globals->debugLvl) && (Globals->logFile[0]))                          
+			notify_logpath(Globals->logFile);
 			
 	
 		/* Fork and exit the parent */

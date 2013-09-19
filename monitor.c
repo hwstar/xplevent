@@ -519,7 +519,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	}
 	
 	if(sourceDevice){ /* Store a copy of the source device tag if so requested */
-		*sourceDevice = talloc_strdup(Globals->masterCTX, source);
+		*sourceDevice = talloc_strdup(Globals, source);
 		ASSERT_FAIL(*sourceDevice);
 	}
 	
