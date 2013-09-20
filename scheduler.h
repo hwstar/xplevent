@@ -13,9 +13,13 @@ typedef struct SchedListEntry_s{
 typedef SchedListEntry_t * SchedListEntryPtr_t;
 
 typedef struct SchedInfo_s{
+  time_t now;
+  time_t prevNow;
   SchedListEntryPtr_t head;
 } SchedInfo_t;
 
 typedef SchedInfo_t * SchedInfoPtr_t;
+
+static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch);
 
 #endif
