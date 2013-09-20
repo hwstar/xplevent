@@ -30,7 +30,7 @@ static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch)
 	time(&now);
 
 	
-	/* 1 minute resolution */
+	/* 1 second resolution */
 	
 	if(sch->now == sch->prevNow)
 		return;
