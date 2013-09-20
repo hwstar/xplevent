@@ -24,33 +24,20 @@ static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch)
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(sch)
 
-	memcpy(&sch->lasttv, &sch->curtv, sizeof(struct timeval));
+
 	
-	/* Get seconds and microseconds since epoch */
-	if( (res = gettimeofday(&sch->curtv, NULL)) < 0){
-		debug(DEBUG_UNEXPECTED, "Scheduler gettime of day returned: %s\n", strerror(res));
-		
-	}
+	/* Get seconds */
+	time(&now);
+
 	
 	/* 1 minute resolution */
 	
-	if(sch->lasttv.tv_min == sch->curtv.tv_min)
+	if(sch->now == sch->prevNow)
 		return;
+		
+	/* Code below only executes once per second */
+	sch->prevNow = sch->now;
 
-	/* Code below only executes once per minute */
-
-	/* Convert time to struct */
-	localtime_r(&sch->curtv.tv_sec, &tmnow);
-
-	/* If midnight, then reset all daily statistics */
-	
-	if((tmnow.tm_hour == 0)&&(tmnow.tm_min == 0){
-	}
-
-
-
-	debug(DEBUG_ACTION, "Time now: %02d:%02d %02d %02d %02d\n",
-		tmnow.tm_hour,tmnow.tm_min,tmnow.tm_mday,tmnow.tm_mon + 1, tmnow.tm_wday); 
 	
 	/* walk the list */
 	for(schedlist = sch->head; schedlist; schedlist = schedlist->next){
