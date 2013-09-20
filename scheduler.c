@@ -27,7 +27,7 @@ static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch)
 
 	
 	/* Get seconds */
-	time(&now);
+	time(&sch->now);
 
 	
 	/* 1 second resolution */
