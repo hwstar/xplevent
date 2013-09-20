@@ -18,8 +18,8 @@ static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch)
 	int i,res;
 
 	struct tm tmnow;
-	struct SchListEntryPtr_t skedlist;
-	char *strs[5],*vp,*val,value[100];
+	struct SchListEntryPtr_t schedlist;
+
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(sch)
@@ -53,7 +53,7 @@ static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch)
 		tmnow.tm_hour,tmnow.tm_min,tmnow.tm_mday,tmnow.tm_mon + 1, tmnow.tm_wday); 
 	
 	/* walk the list */
-	for(skedlist = sch->list; skedlist; skedlist = skedlist->next){
+	for(schedlist = sch->head; schedlist; schedlist = schedlist->next){
 
 	}
 
