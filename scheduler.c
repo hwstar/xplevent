@@ -1,15 +1,20 @@
-/* Scheduler */
-/* must be called locked */
 
-static void do_scheduler(struct rpt *myrpt)
+#define _GNU_SOURCE
+#include <stdlib.h>
+#include <time.h>
+
+#include "defs.n"
+#include "types.h"
+#include ""
+
+
+/* Scheduler */
+
+static void SchedulerDo(struct rpt *myrpt)
 {
 	int i,res;
 
-#ifdef	NEW_ASTERISK
-	struct ast_tm tmnow;
-#else
 	struct tm tmnow;
-#endif
 	struct ast_variable *skedlist;
 	char *strs[5],*vp,*val,value[100];
 
