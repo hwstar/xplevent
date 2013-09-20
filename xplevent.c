@@ -422,17 +422,24 @@ static void getScript(String utilityArg, String utilityFile)
 static void putScript(String utilityArg, String utilityFile)
 {
 	int daemonSock;
+	unsigned length;
 	String id = "xplevent:putScript";
+	String ack = NULL;
 	
 	if(utilityFile){
 		String script, s;
+		
+		/* Check to see if we can write where the file is to be saved */
 		if(access(utilityFile, R_OK | F_OK)){
 			fatal("%s: Can't open %s for reading", id, utilityFile);
 		}
+		/* Check syntax locally before sending to server */
 		s = ParserCheckSyntax(Globals, utilityFile);
 		if(s){
 			fatal("%s:%s: script not added to database",id, s);
 		}
+		
+		/* Slurp the file */
 		if(!(script = UtilFileReadString(Globals, utilityFile))){
 			fatal_with_reason(errno, "%s: Could not read file: %s", id, utilityFile);
 		}
@@ -442,12 +449,28 @@ static void putScript(String utilityArg, String utilityFile)
 			fatal("%s: Could not connect to daemon at address: %s",id, Globals->cmdHostName);
 		}	
 		MonitorSendScript(Globals, daemonSock, script, utilityArg);
+		/* Get the response */
+		if(ack = SocketReadLine(Globals, daemonSock, &length) == NULL){
+			fatal("%s: Failed to get acknowlgement of receipt of script");
+		}
+		/* Free the script */
 		talloc_free(script);
+		
+		/* Close the socket */
 		if(close(daemonSock) < 0){
 			fatal("%s: Close error on socket: %s", id, strerror(errno));
-		}			
+		}
+		
+		/* Check the response */
+		if(!strncmp("er:", ack, 3)){
+			error("Error sending sctipt to server: %s", ack + 3);
+		/* Free the response */
+		
+		talloc_free(ack);
+		}
 	}
 	else{
+		/* No file name specified */
 		noFileSwitch();
 	}
 }
