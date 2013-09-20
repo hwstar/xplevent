@@ -1008,12 +1008,14 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 	len = strlen(line);
 	if((len < 3) || (len > 258)){
 		debug(DEBUG_UNEXPECTED,"Line length too long or too short");
+		MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Invalid line lingth: %d", len))
 		ri->state = RS_ERROR;
 		return TRUE;
 	}
 	
 	if(!strncmp("er:", line, 3)){ /* Will get this if other side terminates */
 		debug(DEBUG_UNEXPECTED,"Receive terminated: ", line + 3)
+		MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Receive terminated", len))
 		ri->state = RS_ERROR;
 		return TRUE;
 	}
@@ -1039,6 +1041,8 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 				len -= 3;
 				if(ri->scriptLen + len >= ri->scriptSizeLimit){
 					debug(DEBUG_UNEXPECTED, "Script size exceeds limit");
+					MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Script size exceeds limit of %d bytes", 
+					re->scriptSizeLimit))
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
 				}
