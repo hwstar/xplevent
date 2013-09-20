@@ -1006,7 +1006,7 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 	ASSERT_FAIL(line)
 	
 	len = strlen(line);
-	if((len < 3) || (len > 258)){
+	if((len < 3) || (len > 258)){ /* Check to see that the line length is within limits */
 		debug(DEBUG_UNEXPECTED,"Line length too long or too short");
 		MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Invalid line lingth: %d", len))
 		ri->state = RS_ERROR;
@@ -1014,14 +1014,15 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 	}
 	
 	if(!strncmp("er:", line, 3)){ /* Will get this if other side terminates */
-		debug(DEBUG_UNEXPECTED,"Receive terminated: ", line + 3)
-		MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Receive terminated", len))
+		debug(DEBUG_UNEXPECTED,"Receive terminated: ");
+		MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Receive terminated"))
 		ri->state = RS_ERROR;
 		return TRUE;
 	}
 
 	switch(ri->state){
 		case RS_IDLE:
+			/* Wait for start of script */
 			if(!strncmp("sb:", line, 3)){
 				debug(DEBUG_EXPECTED,"Received script start. Name = %s", line + 3);
 				MALLOC_FAIL(ri->name = talloc_strdup(ri, line + 3))
@@ -1032,13 +1033,16 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 		
 		case RS_WAIT_LINE:
 			if(!strncmp("se:", line, 3)){
+				/* Script end detected */
 				debug(DEBUG_EXPECTED,"Script received");
 				ri->state = RS_FINISHED;
 				return TRUE;
 			}
 			else if (!strncmp("sl:", line, 3)){
+				/* Script line detected */
 				p = line + 3;
 				len -= 3;
+				/* Check to see we don't hit the buffer size limit */
 				if(ri->scriptLen + len >= ri->scriptSizeLimit){
 					debug(DEBUG_UNEXPECTED, "Script size exceeds limit");
 					MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Script size exceeds limit of %d bytes", 
@@ -1046,6 +1050,7 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
 				}
+				/* Check to see if we need to increase the buffer size */
 				if(ri->scriptLen + len + 2 >= ri->scriptBufSize){
 					ri->scriptBufSize <<= 1; /* Increase buffer size */
 					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
