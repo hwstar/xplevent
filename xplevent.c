@@ -387,9 +387,15 @@ static void getScript(String utilityArg, String utilityFile)
 	
 		if(close(daemonSocket) < 0){
 			fatal("%s: Close error on socket: %s", id, strerror(errno));
-		}	
-		if(UtilFileWriteString(utilityFile, ri->script) == FAIL){
-			fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
+		}
+		if(ri->state != RS_ERROR){	
+			if(UtilFileWriteString(utilityFile, ri->script) == FAIL){
+				fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
+			}
+		}
+		else{
+			talloc_free(ri);
+			fatal("Script receive error");
 		}	
 		talloc_free(ri);	
 	}

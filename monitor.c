@@ -1007,6 +1007,10 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 				ri->state = RS_WAIT_LINE;
 				return FALSE;
 			}
+			if(!strncmp("er:", line, 3)){ /* Will get this if script doesn't exist */
+				ri->state = RS_ERROR;
+				return TRUE;
+			}
 			break;
 		
 		case RS_WAIT_LINE:
