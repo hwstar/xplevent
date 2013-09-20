@@ -20,7 +20,7 @@
 *
 *
 */
-
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -47,6 +47,7 @@
 #include "parser.h"
 #include "db.h"
 #include "util.h"
+#include "monitor.h"
 #include "xplevent.h"
 
 
@@ -825,7 +826,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 			if(ri){ /* If in the midst of receiving a script */
 				if(MonitorRecvScript(ri, line)){
 					/* Process script */
-					debug(DEBUG_EXPECTED,"Script %s received, result = %d", ri->name, ri->state)
+					debug(DEBUG_EXPECTED,"Script %s received, result = %d", ri->name, ri->state);
 					
 					/* Done with the received script, free the data structure and the underlying buffer */
 					talloc_free(ri);
@@ -1017,8 +1018,8 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 			else if (!strncmp("sl:", line, 3)){
 				p = line + 3;
 				len -= 3;
-				if(scriptLen + len >= ri->scriptSizeLimit){
-					debug(DEBUG_UNEXPECTED, "Script size exceeds limit")
+				if(ri->scriptLen + len >= ri->scriptSizeLimit){
+					debug(DEBUG_UNEXPECTED, "Script size exceeds limit");
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
 				}

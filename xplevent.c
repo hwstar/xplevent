@@ -32,6 +32,7 @@
 	#define EMAIL "hwstar@rodgers.sdcoxmail.com"
 #endif
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>

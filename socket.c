@@ -21,7 +21,7 @@
 * Stephen "Steve" Rodgers <hwstar@rodgers.sdcoxmail.com>
 *
 */
-
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -335,7 +335,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 	/* Create a socket for talking to the daemon program. */
 
-	sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol );
+	sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC, p->ai_protocol );
 	if(sock == -1) {
 		freeaddrinfo(list);
 		debug(DEBUG_ACTION, "%s: Could not create ip socket: %s", id, strerror(errno));
