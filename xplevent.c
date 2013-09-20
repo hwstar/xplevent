@@ -45,6 +45,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <string.h>
 #include <talloc.h>
 #include  "defs.h"
 #include "types.h"
@@ -356,20 +357,41 @@ static void utilitySendCmd(String utilityArg)
 
 static void getScript(String utilityArg, String utilityFile)
 {
+	Bool done;
+	unsigned length;
+	int daemonSocket;
+	String line;
+	String id = "xplevent:getScript";
+	MonRcvInfoPtr_t ri;
+	
 	if(utilityFile){
-		String script;
-#if(1)
-		if(!(script = DBFetchScript(Globals, Globals->db, utilityArg))){
-			fatal("Could not fetch script: %s", utilityArg);
-		}
-#else
-	/* Receive script from daemon */
 
-#endif
-		if(UtilFileWriteString(utilityFile, script) == FAIL){
-			fatal_with_reason(errno, "Could not write file: %s", utilityFile);
+		/* Receive script from daemon */
+		if(( daemonSocket = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
+			fatal("%s:Could not connect to daemon at address: %s",id, Globals->cmdHostName);
+		}	
+		MALLOC_FAIL(ri = talloc_zero(Globals, MonRcvInfo_t))
+		ri->scriptBufSize = 2048;
+		ri->scriptSizeLimit = 65536;
+		MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize))
+		ri->script[0] = 0; /* Set to zero length */
+		SocketPrintf(Globals, daemonSocket, "ss:%s\n", utilityArg);
+		for(done = FALSE;!done;){
+			ASSERT_FAIL(line = SocketReadLine(Globals, daemonSocket, &length))
+			if(!length){
+				break;
+			}
+			done = MonitorRecvScript(ri, line);
+			talloc_free(line);
 		}
-				
+	
+		if(close(daemonSocket) < 0){
+			fatal("%s: Close error on socket: %s", id, strerror(errno));
+		}	
+		if(UtilFileWriteString(utilityFile, ri->script) == FAIL){
+			fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
+		}	
+		talloc_free(ri);	
 	}
 	else{
 		noFileSwitch();
@@ -393,27 +415,31 @@ static void getScript(String utilityArg, String utilityFile)
 
 static void putScript(String utilityArg, String utilityFile)
 {
+	int daemonSock;
+	String id = "xplevent:putScript";
+	
 	if(utilityFile){
 		String script, s;
 		if(access(utilityFile, R_OK | F_OK)){
-			fatal("Can't open %s for reading", utilityFile);
+			fatal("%s: Can't open %s for reading", id, utilityFile);
 		}
 		s = ParserCheckSyntax(Globals, utilityFile);
 		if(s){
-			fatal("%s: script not added to database", s);
+			fatal("%s:%s: script not added to database",id, s);
 		}
 		if(!(script = UtilFileReadString(Globals, utilityFile))){
-			fatal_with_reason(errno, "Could not read file: %s", utilityFile);
+			fatal_with_reason(errno, "%s: Could not read file: %s", id, utilityFile);
 		}
-#if(1)
-		if(DBIRScript(Globals, Globals->db, utilityArg, script) == FAIL){
-			fatal("Script %s could not be stored in the database");
-		}
-#else
-		/* Send script to daemon */
 
-#endif
-		
+		/* Send script to daemon */
+		if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
+			fatal("%s: Could not connect to daemon at address: %s",id, Globals->cmdHostName);
+		}	
+		MonitorSendScript(Globals, daemonSock, script, utilityArg);
+		talloc_free(script);
+		if(close(daemonSock) < 0){
+			fatal("%s: Close error on socket: %s", id, strerror(errno));
+		}			
 	}
 	else{
 		noFileSwitch();

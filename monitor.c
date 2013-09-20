@@ -1023,16 +1023,14 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
 				}
-				len += 2; /* Account for newline and nul character to be added below */
-				if(ri->scriptLen + len >= ri->scriptBufSize){
+				if(ri->scriptLen + len + 2 >= ri->scriptBufSize){
 					ri->scriptBufSize <<= 1; /* Increase buffer size */
 					debug(DEBUG_ACTION,"Increasing buffer size to: %u", ri->scriptBufSize);
 					MALLOC_FAIL(ri->script = talloc_realloc(ri, ri->script, 
 					char, ri->scriptBufSize))
 				}
 				/* Insert line into buffer */
-				snprintf(ri->script + ri->scriptLen, len, "%s\n", p);
-				ri->scriptLen += len;
+				ri->scriptLen += snprintf(ri->script + ri->scriptLen, len + 2, "%s\n", p);
 			}
 			break;
 			
