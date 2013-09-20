@@ -369,37 +369,47 @@ static void getScript(String utilityArg, String utilityFile)
 		/* Receive script from daemon */
 		if(( daemonSocket = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
 			fatal("%s:Could not connect to daemon at address: %s",id, Globals->cmdHostName);
-		}	
+		}
+		/* Allocate the receive info structure */
 		MALLOC_FAIL(ri = talloc_zero(Globals, MonRcvInfo_t))
+		/* Initialize the structure */
 		ri->scriptBufSize = 2048;
 		ri->scriptSizeLimit = 65536;
 		MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize))
 		ri->script[0] = 0; /* Set to zero length */
+		/* Send the send script comment */
 		SocketPrintf(Globals, daemonSocket, "ss:%s\n", utilityArg);
+		/* Loop while getting the contents of the script from the server */
 		for(done = FALSE;!done;){
+			/* Read one line at a time, then process it */
 			ASSERT_FAIL(line = SocketReadLine(Globals, daemonSocket, &length))
 			if(!length){
+				/* empty line from file */
 				break;
 			}
 			done = MonitorRecvScript(ri, line);
+			/* Free the line */
 			talloc_free(line);
 		}
 	
+		/* Close the socket */
 		if(close(daemonSocket) < 0){
 			fatal("%s: Close error on socket: %s", id, strerror(errno));
 		}
+		/* Check for errors */
 		if(ri->state != RS_ERROR){	
-			if(UtilFileWriteString(utilityFile, ri->script) == FAIL){
+			if(UtilFileWriteString(utilityFile, ri->script) == FAIL){ /* Error free, save the script */
 				fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
 			}
 		}
 		else{
-			talloc_free(ri);
-			fatal("Script receive error");
+			talloc_free(ri); /* Error detected */
+			fatal("Script receive error"); /* FIXME */
 		}	
-		talloc_free(ri);	
+		talloc_free(ri); /* Free the receive info structure */	
 	}
 	else{
+		/* File not specified */
 		noFileSwitch();
 	}
 }
@@ -463,7 +473,7 @@ static void putScript(String utilityArg, String utilityFile)
 		
 		/* Check the response */
 		if(!strncmp("er:", ack, 3)){
-			error("Error sending sctipt to server: %s", ack + 3);
+			error("Error sending script to server: %s", ack + 3);
 		/* Free the response */
 		
 		talloc_free(ack);
