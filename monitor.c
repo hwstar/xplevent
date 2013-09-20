@@ -783,7 +783,7 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 		res = FAIL;
 	}
 
-	SocketPrintf(argv, userSock,"%s:\n", (res == PASS) ? "ok" : "er");
+	SocketPrintf(argv, userSock,"%s\n", (res == PASS) ? "ok:" : "er:Command not recognized");
 
 	talloc_free(argv);
 	return res;
@@ -812,6 +812,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 	String line, theScript;
 	connectionDataPtr_t cdp = (connectionDataPtr_t) uservalue;
 	MonRcvInfoPtr_t ri;
+	String res = "ok:";
 	
 	ASSERT_FAIL(cdp)
 	
@@ -828,6 +829,18 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 					/* Process script */
 					debug(DEBUG_EXPECTED,"Script %s received, result = %d", ri->name, ri->state);
 					
+					if(ri->state != RS_ERROR){
+						if(DBIRScript(ri, Globals->db, 
+						ri->name, ri->script)){
+							debug(DEBUG_UNEXPECTED, "Error while saving script");
+							res = "er:Could not save script"
+						}
+					}
+					else{
+						res = "er:Script receive error";
+					}
+					/* Sand status back to client */
+					SocketPrintf(ri, userSock, "%s", res);
 					/* Done with the received script, free the data structure and the underlying buffer */
 					talloc_free(ri);
 					ri = cdp->rcvInfo = NULL;
@@ -845,7 +858,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 						MonitorSendScript(cdp, userSock, theScript, line + 3);
 					}
 					else{
-						SocketPrintf(cdp, userSock, "er:\n");
+						SocketPrintf(cdp, userSock, "er:Script not in database\n");
 					}
 				}
 				if(!strncmp("rs:", line, 3)){ /* Receive script */
@@ -999,6 +1012,12 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 		return TRUE;
 	}
 	
+	if(!strncmp("er:", line, 3)){ /* Will get this if other side terminates */
+		debug(DEBUG_UNEXPECTED,"Receive terminated: ", line + 3)
+		ri->state = RS_ERROR;
+		return TRUE;
+	}
+
 	switch(ri->state){
 		case RS_IDLE:
 			if(!strncmp("sb:", line, 3)){
@@ -1006,10 +1025,6 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 				MALLOC_FAIL(ri->name = talloc_strdup(ri, line + 3))
 				ri->state = RS_WAIT_LINE;
 				return FALSE;
-			}
-			if(!strncmp("er:", line, 3)){ /* Will get this if script doesn't exist */
-				ri->state = RS_ERROR;
-				return TRUE;
 			}
 			break;
 		
@@ -1040,7 +1055,7 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 			
 		case RS_FINISHED:
 		case RS_ERROR:
-			return TRUE;
+			return TRUE; 
 			
 		default:
 			ASSERT_FAIL(0);
