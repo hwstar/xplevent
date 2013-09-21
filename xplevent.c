@@ -401,6 +401,7 @@ static void getScript(String utilityArg, String utilityFile)
 			if(UtilFileWriteString(utilityFile, ri->script) == FAIL){ /* Error free, save the script */
 				fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
 			}
+			note("Script received successfully");
 		}
 		else{
 			talloc_free(ri); /* Error detected */
@@ -457,12 +458,22 @@ static void putScript(String utilityArg, String utilityFile)
 		/* Send script to daemon */
 		if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
 			fatal("%s: Could not connect to daemon at address: %s",id, Globals->cmdHostName);
-		}	
+		}
+
+		/* Send the command */
+		debug(DEBUG_ACTION,"Sending recieve script request");
+		SocketPrintf(Globals, daemonSock, "rs:%s\n", utilityArg);	
+		
+		/* Send the script */
 		MonitorSendScript(Globals, daemonSock, script, utilityArg);
+		
 		/* Get the response */
-		if(ack = SocketReadLine(Globals, daemonSock, &length) == NULL){
+		debug(DEBUG_ACTION,"Waiting for response...");
+		if((ack = SocketReadLine(Globals, daemonSock, &length)) == NULL){
 			fatal("%s: Failed to get acknowlgement of receipt of script");
 		}
+		debug(DEBUG_ACTION,"Got response");
+		
 		/* Free the script */
 		talloc_free(script);
 		
@@ -474,10 +485,16 @@ static void putScript(String utilityArg, String utilityFile)
 		/* Check the response */
 		if(!strncmp("er:", ack, 3)){
 			error("Error sending script to server: %s", ack + 3);
+		}
+		else{
+			note("Script uploaded successfully");
+		}
+		
+		
 		/* Free the response */
 		
 		talloc_free(ack);
-		}
+	
 	}
 	else{
 		/* No file name specified */

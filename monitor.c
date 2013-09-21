@@ -833,14 +833,16 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 						if(DBIRScript(ri, Globals->db, 
 						ri->name, ri->script)){
 							debug(DEBUG_UNEXPECTED, "Error while saving script");
-							res = "er:Could not save script"
+							res = "er:Could not save script";
 						}
 					}
 					else{
 						res = "er:Script receive error";
 					}
 					/* Sand status back to client */
-					SocketPrintf(ri, userSock, "%s", res);
+					debug(DEBUG_ACTION, "Sending response: %s", res);
+					SocketPrintf(ri, userSock, "%s\n", res);
+					debug(DEBUG_ACTION, "Response sent");
 					/* Done with the received script, free the data structure and the underlying buffer */
 					talloc_free(ri);
 					ri = cdp->rcvInfo = NULL;
@@ -862,10 +864,10 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 					}
 				}
 				if(!strncmp("rs:", line, 3)){ /* Receive script */
+					debug(DEBUG_ACTION, "Receive script command");
 					MALLOC_FAIL(ri = talloc_zero(cdp, MonRcvInfo_t))
 					ri->scriptBufSize = 2048; /* Starting buffer size */
 					ri->scriptSizeLimit = 65536; /* Maximum buffer size */
-					ri->userSock = userSock; /* Save the socket FD */
 					MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize)) /* Allocate the initial buffer */
 					ri->script[0] = 0; /* Set to zero length */
 					cdp->rcvInfo = ri; /* Activate the receiver */
@@ -1046,7 +1048,7 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 				if(ri->scriptLen + len >= ri->scriptSizeLimit){
 					debug(DEBUG_UNEXPECTED, "Script size exceeds limit");
 					MALLOC_FAIL(ri->errMsg = talloc_asprintf(ri, "Script size exceeds limit of %d bytes", 
-					re->scriptSizeLimit))
+					ri->scriptSizeLimit))
 					ri->state = RS_ERROR; /* Upload size exceeded */
 					return TRUE;
 				}

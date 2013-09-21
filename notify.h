@@ -60,4 +60,8 @@ void error(const String message, ...);
 /* Warning handler. */
 void warn(const String message, ...);
 
+/* Note handler. */
+void note(const String message, ...);
+
+
 #endif

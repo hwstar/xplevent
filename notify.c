@@ -137,7 +137,7 @@ void fatal(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
-	fprintf(LOGOUT,"%s: ", Globals->progName);
+	fprintf(LOGOUT,"%s: Fatal: ", Globals->progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -200,7 +200,7 @@ void error(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
-	fprintf(LOGOUT,"%s: ",Globals->progName);
+	fprintf(LOGOUT,"%s: Error: ",Globals->progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -226,7 +226,32 @@ void warn(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print warning message. */
-	fprintf(LOGOUT,"%s: warning: ", Globals->progName);
+	fprintf(LOGOUT,"%s: Warning: ", Globals->progName);
+	vfprintf(LOGOUT,message,ap);
+	fprintf(LOGOUT,"\n");
+	
+	va_end(ap);
+	return;
+}
+
+/* 
+* Note handler
+* Arguments:
+* 
+* 1. Format string
+* 2. Variadic arguments
+*
+* Return value:
+*
+* None
+*/
+
+void note(const String message, ...) {
+	va_list ap;
+	va_start(ap, message);
+	
+	/* Print warning message. */
+	fprintf(LOGOUT,"%s: Note: ", Globals->progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
