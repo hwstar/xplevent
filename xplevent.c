@@ -657,6 +657,8 @@ int main(int argc, char *argv[])
 	Globals->interface = DEF_INTERFACE;
 	Globals->instanceID = DEF_INSTANCE_ID;
 	Globals->configFile = DEF_CONFIG_FILE;
+	Globals->lat = 33.0;
+	Globals->lon = -117.0;
 	
 	atexit(xpleventShutdown);
 	
@@ -845,6 +847,15 @@ int main(int argc, char *argv[])
 		/* db-file */
 		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "db-file"))){
 			MALLOC_FAIL(Globals->dbFile = talloc_strdup(Globals, p));
+		}
+		
+		/* latitude */
+		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "lat"))){
+			Globals->lat = atof(p);
+		}
+		/* longitude */
+		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "lon"))){
+			Globals->lon = atof(p);
 		}
 		
 		

@@ -19,6 +19,8 @@ typedef struct XPLEvGlobals_s {
 	void *xplEventService;
 	void *db;	
 	void *sch;
+	double lat;
+	double lon;
 } XPLEvGlobals_t;
 
 typedef XPLEvGlobals_t * XPLEvGlobalsPtr_t;

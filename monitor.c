@@ -759,7 +759,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 		/* Attempt to start the scheduler */
 		Globals->schInitTried = TRUE;
 		/* Initialize scheduler */
-		Globals->sch = SchedulerInit(Globals);
+		Globals->sch = SchedulerInit(Globals, Globals->lat, Globals->lon);
 		if(DBReadRecords(Globals->sch, Globals->db, Globals->sch, "schedule", 32, addScheduleEntry)){
 			debug(DEBUG_UNEXPECTED, "Can't read scheduler table in database. Disabling scheduler");
 			talloc_free(Globals->sch);
@@ -770,7 +770,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 		}
 	}
 	if(Globals->sch){ /* If scheduler initialized */
-		/* Run a each tick through the scheduler */
+		/* Run each tick through the scheduler */
 		SchedulerDo(Globals->sch);
 	}
 	

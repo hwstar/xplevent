@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 #include <string.h>
 #include <talloc.h>
 
@@ -32,15 +33,124 @@ typedef SchedListEntry_t * SchedListEntryPtr_t;
 
 typedef struct SchedInfo_s{
   unsigned magic;
+  int dawnHour;
+  int dawnMinute;
+  int duskHour;
+  int duskMinute;
+  int sunriseHour;
+  int sunriseMinute;
+  int sunsetHour;
+  int sunsetMinute;
   Bool enabled;
+  Bool ddValid;
+  Bool ssValid;
   SchedListEntryPtr_t head;
   SchedListEntryPtr_t tail;
   void *listContext;
+  double lat;
+  double lon;
+  double utcOffset;
   struct tm tmNow;
   struct tm tmPrevNow;
 } SchedInfo_t;
 
 typedef SchedInfo_t * SchedInfoPtr_t;
+
+
+/*
+ * Calculate sunrise/sunset times
+ */
+
+static void calcDawnDusk(SchedInfoPtr_t sch)
+{
+	int res;
+	time_t utc, local, now; 
+	struct tm utctm, localtm;
+	double utcOffsetSeconds;
+	double civ_start_utc, civ_start, civ_end_utc, civ_end;
+	double sunrise_utc, sunrise, sunset_utc, sunset;
+	
+	
+	/* Recalculate the offset to GMT */
+	time(&now);
+	gmtime_r(&now, &utctm);
+	localtime_r(&now, &localtm);
+	local = mktime(&localtm);
+	utc = mktime(&utctm);
+	
+	/* Calculate utc offset */
+	utcOffsetSeconds = difftime(local, utc);
+	
+	/* Adjust for daylight savings time */
+	if(localtm.tm_isdst){
+		utcOffsetSeconds += 3600;
+	}
+	/* Convert to hours */
+	sch->utcOffset = utcOffsetSeconds / 3600; 
+	
+	debug(DEBUG_ACTION, "*** Calculate dawn/sunrise and sunset/dusk times ***");
+	debug(DEBUG_ACTION, "UTC offset in hours: %2.3e", sch->utcOffset);
+	debug(DEBUG_ACTION, "Latitude used: %2.5e", sch->lat);
+	debug(DEBUG_ACTION, "Longitude used: %3.5e", sch->lon);
+	/* Calculate civil day length */
+	res  = civil_twilight( 1900.0 + localtm.tm_year, localtm.tm_mon, localtm.tm_mday,
+		sch->lon, sch->lat, &civ_start_utc, &civ_end_utc );
+	if(!res){
+	/*	debug(DEBUG_ACTION, "UTC dawn start: %2.5e", civ_start_utc); */
+	/*	debug(DEBUG_ACTION, "UTC_dusk start: %3.5e", civ_end_utc); */
+		sch->ddValid = TRUE;
+		civ_start = civ_start_utc + sch->utcOffset;
+		if(civ_start < 0.0){
+			civ_start += 24.0;
+		}
+		civ_end = civ_end_utc + sch->utcOffset;
+		if(civ_end < 0.0){
+			civ_end += 24.0;
+		}	
+		sch->duskHour = (int) civ_end;
+		sch->duskMinute = (int)(( civ_end - (double) sch->duskHour) * 60.0);
+		sch->dawnHour = (int) civ_start;
+		sch->dawnMinute = (int)(( civ_start - (double) sch->dawnHour) * 60.0);
+		
+		debug(DEBUG_ACTION, "Dawn start: %02d:%02d", sch->dawnHour, sch->dawnMinute);
+		debug(DEBUG_ACTION, "Twilight end: %02d:%02d", sch->duskHour, sch->duskMinute);	
+	}
+	else{
+		debug(DEBUG_ACTION, "Dusk and dawn times are not valid");
+		sch->ddValid = FALSE;
+	}	
+	res  = sun_rise_set( 1900.0 + localtm.tm_year, localtm.tm_mon, localtm.tm_mday,
+		sch->lon, sch->lat, &sunrise_utc, &sunset_utc );
+	if(!res){
+/*		debug(DEBUG_ACTION, "UTC Sunrise: %2.5e", sunrise_utc); */
+/*		debug(DEBUG_ACTION, "UTC Sunset: %3.5e", sunset_utc); */
+		sch->ssValid = TRUE;
+		sunrise = sunrise_utc + sch->utcOffset;
+		if(sunrise < 0.0){
+			sunrise += 24.0;
+		}
+		sunset = sunset_utc + sch->utcOffset;
+		if(sunset < 0.0){
+			sunset += 24.0;
+		}	
+		sch->sunsetHour = (int) sunset;
+		sch->sunsetMinute = (int)(( sunset - (double) sch->sunsetHour) * 60.0);
+		sch->sunriseHour = (int) sunrise;
+		sch->sunriseMinute = (int)(( sunrise - (double) sch->sunriseHour) * 60.0);
+		
+		debug(DEBUG_ACTION, "Sunrise: %02d:%02d", sch->sunriseHour, sch->sunriseMinute);
+		debug(DEBUG_ACTION, "Sunset: %02d:%02d", sch->sunsetHour, sch->sunsetMinute);	
+	}
+	else{
+		debug(DEBUG_ACTION, "Sunset and Sunrise times are not valid");
+		sch->ssValid = FALSE;
+	}	
+	debug(DEBUG_ACTION, "*** End calculate dawn/sunrise and sunset/dusk times ***");
+}
+
+
+
+
 
 /*
  * Do a straight numeric eval of the string expr against the field value
@@ -186,7 +296,6 @@ static void schedulerWalk(SchedInfoPtr_t sch)
 
 }
 
-
 /* 
  * Scheduler 
  */
@@ -194,6 +303,7 @@ static void schedulerWalk(SchedInfoPtr_t sch)
 void SchedulerDo(void *schedInfo)
 {
 	SchedInfoPtr_t sch = schedInfo;
+	
 
 	time_t now;
 		
@@ -207,16 +317,22 @@ void SchedulerDo(void *schedInfo)
 	
 	/* convert to localtime tm struct */
 	localtime_r(&now, &sch->tmNow);
+	
 
 	/* Check for a change of the minute of local time */
 	if(sch->tmNow.tm_min == sch->tmPrevNow.tm_min){
 		return;
 	}
-
 	
 	/* Code below only executes once per minute */
 	
 	debug(DEBUG_EXPECTED, "************* Minute = %d *************", sch->tmNow.tm_min);
+	
+	/* Midnight housekeeping */
+	if((!sch->tmNow.tm_hour) && (!sch->tmNow.tm_min)){
+		calcDawnDusk(sch);
+	}
+	/* Walk the list and execute any functions which are triggered */
 	
 	schedulerWalk(sch);
 	
@@ -231,13 +347,15 @@ void SchedulerDo(void *schedInfo)
  * Scheduler data structures can be freed by calling talloc_free on the returned generic pointer.
  */
 
-void *SchedulerInit(TALLOC_CTX *ctx)
+void *SchedulerInit(TALLOC_CTX *ctx, double lat, double lon)
 {
 	SchedInfoPtr_t sch;
 	
 	ASSERT_FAIL(ctx);
 	MALLOC_FAIL(sch = talloc_zero(ctx, SchedInfo_t))
 	MALLOC_FAIL(sch->listContext = talloc_new(ctx))
+	sch->lat = lat;
+	sch->lon = lon;
 	sch->magic = SI_MAGIC;
 	return sch;
 }
@@ -248,9 +366,13 @@ void *SchedulerInit(TALLOC_CTX *ctx)
  
 void SchedulerStart(void *schedInfo)
 {
+
 	SchedInfoPtr_t sch = schedInfo;
+	
 	ASSERT_FAIL(sch);
 	ASSERT_FAIL(sch->magic == SI_MAGIC)
+	/* Calculate dawn and dusk times */
+	calcDawnDusk(sch);
 	sch->enabled = TRUE;
 	
 }

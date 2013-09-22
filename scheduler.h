@@ -4,7 +4,7 @@
 typedef enum {ST_CRON, ST_EPHEM } SchedType_t;
 
 void SchedulerDo(void *schedInfo);
-void *SchedulerInit(TALLOC_CTX *ctx);
+void *SchedulerInit(TALLOC_CTX *ctx, double lat, double lon);
 void SchedulerStart(void *schedInfo);
 void SchedulerStop(void *schedInfo);
 void SchedularRemoveAllEntries(void *schedInfo);
