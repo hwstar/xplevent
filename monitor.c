@@ -692,6 +692,18 @@ static void xplShutdown(void)
 
 
 /*
+ * Callback to add a scheduler entry to the scheduler
+ */
+
+static int addScheduleEntry(void *data, int argc, String *argv, String *colnames)
+{
+	debug(DEBUG_ACTION, "AddSchedulerEntry Called, field count = %d", argc);
+	
+	return 0;
+}
+
+
+/*
 * Our tick handler. Called by xPL Library once per second.
 * We do exit checking, and logging memory usage here.
 *
@@ -709,18 +721,26 @@ static void xplShutdown(void)
 
 static void tickHandler(int userVal, xPL_ObjectPtr obj)
 {
-	static int ticks = 0;
+
 	
-	SchedulerDo(Globals->sch);
-	/* Report memory usage every 30 seconds if enabled and not in daemon mode */
-	ticks++;
-	if(Globals->noBackground && (ticks >= 30)){
-		ticks = 0;
-		if(Globals->debugLvl >= 4){
-			talloc_report(Globals, stdout);
+	if(!Globals->schInitTried){
+		/* Attempt to start the scheduler */
+		Globals->schInitTried = TRUE;
+		/* Initialize scheduler */
+		Globals->sch = SchedulerInit(Globals);
+		if(DBReadRecords(Globals->sch, Globals->db, Globals->sch, "schedule", 32, addScheduleEntry)){
+			debug(DEBUG_UNEXPECTED, "Can't read scheduler table in database. Disabling scheduler");
+			talloc_free(Globals->sch);
+			Globals->sch = NULL;
+		}
+		else{
+			SchedulerStart(Globals->sch);
 		}
 	}
-	
+	if(Globals->sch){ /* If scheduler initialized */
+		/* Run a each tick through the scheduler */
+		SchedulerDo(Globals->sch);
+	}
 	
 	/* Terminate if requested to do so */
 	if(XpleventCheckExit()){
@@ -1147,15 +1167,14 @@ void MonitorRun(void)
 		fatal("Can't create listening socket(s)");
 	}	
 
-	/* Initialize scheduler */
-	Globals->sch = SchedulerInit(Globals);
-
 
  	/* Enable the service */
   	xPL_setServiceEnabled(Globals->xplEventService, TRUE);
 
 	atexit(xplShutdown);
+	
 
+	
  	/** Main Loop **/
 
 	for (;;) {

@@ -730,6 +730,62 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	
 }
 
+/*
+ * Return a multiple results from a wildcard select.
+ * 
+ * Warning: Do not use this on large tables.
+ *
+ * Arguments:
+ *
+ *
+ * 1. Talloc context to hang the result off of.
+ * 2. Pointer to the database
+ * 3. Data pointer to be passed to callback
+ * 4. Table to be accessed
+ * 5. A limit on the number of records to be returned through the callback function
+ * 6. Callback function
+ *
+ *
+ * Return Value:
+ * 
+ * PASS if successful, otherwise FAIL.
+ *
+ *
+ */
+
+Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table, 
+	unsigned limit, DBRecordCallBack_t callback)
+{
+	Bool res;
+	String errorMessage;
+	String sql;
+	String id = "DBReadRecords";
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(db)
+	ASSERT_FAIL(table)
+	ASSERT_FAIL(callback)
+	
+	res = dbTxBegin(db, id);
+	if(res == PASS)
+		sql = talloc_asprintf(ctx , "SELECT * FROM %s LIMIT %u", table, limit);
+		MALLOC_FAIL(sql);
+		sqlite3_exec((sqlite3 *) db, sql, callback, data , &errorMessage);
+		if(errorMessage){
+			debug(DEBUG_UNEXPECTED,"%s: Sqlite select error on select: ", id, errorMessage);
+			sqlite3_free(errorMessage);
+			res = FAIL;
+		}
+	
+	dbTxEnd(db, id, res);
+	
+	talloc_free(sql);
+	
+	
+	return res;		
+	
+}
+
 	
 
 
