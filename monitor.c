@@ -690,6 +690,29 @@ static void xplShutdown(void)
 		xPL_shutdown();
 }
 
+/*
+ * Scheduler handler for executing scripts
+ */
+
+void schedulerExec(TALLOC_CTX *ctx, const String entryName, const String scriptName)
+{
+	String script;
+	
+	debug(DEBUG_EXPECTED, "Scheduler exec called: entryName = %s, scriptName = %s", entryName, scriptName);
+	script = DBFetchScript(Globals, Globals->db, scriptName);
+	if(!script){
+		debug(DEBUG_UNEXPECTED, "Script not in database");
+	}
+	else{
+		if(parseAndExecScript(Globals, script) == FAIL){
+			debug(DEBUG_UNEXPECTED, "Scheduler script failed");
+		}
+		talloc_free(script);
+	}
+	
+}
+
+
 
 /*
  * Callback to add a scheduler entry to the scheduler
@@ -697,7 +720,16 @@ static void xplShutdown(void)
 
 static int addScheduleEntry(void *data, int argc, String *argv, String *colnames)
 {
-	debug(DEBUG_ACTION, "AddSchedulerEntry Called, field count = %d", argc);
+	SchedType_t t;
+	
+	if(!strcmp(argv[2], "cron")){
+		t = ST_CRON;
+	}
+	else{
+		return 0;
+	}
+		
+	SchedulerAdd(data, argv[1], t, argv[3], schedulerExec, argv[4]);
 	
 	return 0;
 }
