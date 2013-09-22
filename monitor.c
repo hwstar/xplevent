@@ -720,16 +720,8 @@ void schedulerExec(TALLOC_CTX *ctx, const String entryName, const String scriptN
 
 static int addScheduleEntry(void *data, int argc, String *argv, String *colnames)
 {
-	SchedType_t t;
 	
-	if(!strcmp(argv[2], "cron")){
-		t = ST_CRON;
-	}
-	else{
-		return 0;
-	}
-		
-	SchedulerAdd(data, argv[1], t, argv[3], schedulerExec, argv[4]);
+	SchedulerAdd(data, argv[1], argv[3], schedulerExec, argv[4]);
 	
 	return 0;
 }

@@ -19,7 +19,6 @@
 typedef struct SchedListEntry_s{
   unsigned magic;
   Bool hasRun;
-  SchedType_t type;
   String typeParam;
   String entryName;
   String execParam;
@@ -217,82 +216,81 @@ static void schedulerWalk(SchedInfoPtr_t sch)
 	/* walk the list */
 	for(l = sch->head; l; l = l->next){
 		ASSERT_FAIL(l->magic == SE_MAGIC)
-		
-		if(l->type == ST_CRON){
-			/* Simplified cron table entry */
-			debug(DEBUG_ACTION, "Cron: %s %s %s %s %s", l->cronSubstrs[0], l->cronSubstrs[1],
-			l->cronSubstrs[2], l->cronSubstrs[3], l->cronSubstrs[4]);
-			/* Evaluate the cron expression */
-			for(i = 0, matchCount = 0; i < 5; i++){
-				ASSERT_FAIL(l->cronSubstrs[i]);
-				/* Check for wildcard */
-				if(l->cronSubstrs[i][0] == '*'){
-					if(!l->cronSubstrs[i][1]){
-						matchCount++; /* Straight wildcard */
-						continue;
-					}
-					else if(l->cronSubstrs[i][1] == '/'){
-						switch(i){ /* Wildcard with interval */
-							case 0:
-								cronWildCardEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
-								break;
-								
-							case 1:
-								cronWildCardEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
-								break;
-								
-							case 2:
-								cronWildCardEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
-								break;
-								
-							case 3:
-								cronWildCardEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
-								break;
-								
-							case 4:
-								cronWildCardEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
-								break;
-								
-							default:
-								ASSERT_FAIL(0)
-						}
-					}
+	
+
+		/* Simplified cron table entry */
+		debug(DEBUG_ACTION, "Cron: %s %s %s %s %s", l->cronSubstrs[0], l->cronSubstrs[1],
+		l->cronSubstrs[2], l->cronSubstrs[3], l->cronSubstrs[4]);
+		/* Evaluate the cron expression */
+		for(i = 0, matchCount = 0; i < 5; i++){
+			ASSERT_FAIL(l->cronSubstrs[i]);
+			/* Check for wildcard */
+			if(l->cronSubstrs[i][0] == '*'){
+				if(!l->cronSubstrs[i][1]){
+					matchCount++; /* Straight wildcard */
+					continue;
 				}
-				else{
-					switch(i){ /* Straight numeric compare */
+				else if(l->cronSubstrs[i][1] == '/'){
+					switch(i){ /* Wildcard with interval */
 						case 0:
-							cronNumEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
+							cronWildCardEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 1:
-							cronNumEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
+							cronWildCardEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 2:
-							cronNumEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
+							cronWildCardEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 3:
-							cronNumEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
+							cronWildCardEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 4:
-							cronNumEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
+							cronWildCardEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
-							
 						default:
-							ASSERT_FAIL(0);
+							ASSERT_FAIL(0)
 					}
-				}		
+				}
 			}
-			if(matchCount == 5){
-				/* Execute the provided function */
-				(*l->exec)(sch, l->entryName, l->execParam);
-			}
+			else{
+				switch(i){ /* Straight numeric compare */
+					case 0:
+						cronNumEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
+						break;
+						
+					case 1:
+						cronNumEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
+						break;
+						
+					case 2:
+						cronNumEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
+						break;
+						
+					case 3:
+						cronNumEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
+						break;
+						
+					case 4:
+						cronNumEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
+						break;
+						
+						
+					default:
+						ASSERT_FAIL(0);
+				}
+			}		
 		}
-		
+		if(matchCount == 5){
+			/* Execute the provided function */
+			(*l->exec)(sch, l->entryName, l->execParam);
+		}
 	}
+		
 
 }
 
@@ -408,7 +406,7 @@ void SchedularRemoveAllEntries(void *schedInfo)
  * Add a scheduler list entry.
  */
  
-void SchedulerAdd(void *schedInfo, String entryName, SchedType_t type, String typeParam,  
+void SchedulerAdd(void *schedInfo, String entryName, String typeParam,  
 	void (*exec)(TALLOC_CTX *ctx, const String entryName, const String execParam),  String execParam)
 {
 	SchedInfoPtr_t sch = schedInfo;
@@ -427,15 +425,9 @@ void SchedulerAdd(void *schedInfo, String entryName, SchedType_t type, String ty
 	ASSERT_FAIL(l->typeParam = talloc_strdup(l, typeParam))
 	ASSERT_FAIL(l->execParam = talloc_strdup(l, execParam))
 	l->exec = exec;
-	l->type = type;
 	l->magic = SE_MAGIC;
 	
-
-	if(type == ST_CRON){
-		/* Split cron expression into substrings */
-		l->cronSubstrs = UtilSplitWhite(l, typeParam);
-	}
-	
+	l->cronSubstrs = UtilSplitWhite(l, typeParam);
 	
 	/* Insert on end of list */
 
