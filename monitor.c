@@ -720,9 +720,8 @@ void schedulerExec(TALLOC_CTX *ctx, const String entryName, const String scriptN
 
 static int addScheduleEntry(void *data, int argc, String *argv, String *colnames)
 {
-	
-	SchedulerAdd(data, argv[1], argv[3], schedulerExec, argv[4]);
-	
+	ASSERT_FAIL(argc == 4)
+	SchedulerAdd(data, argv[1], argv[2], schedulerExec, argv[3]);
 	return 0;
 }
 

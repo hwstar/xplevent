@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
+#include <ctype.h>
 #include <time.h>
 #include <math.h>
 #include <string.h>
@@ -41,6 +42,7 @@ typedef struct SchedInfo_s{
   int sunsetHour;
   int sunsetMinute;
   Bool enabled;
+  Bool startupRan;
   Bool ddValid;
   Bool ssValid;
   SchedListEntryPtr_t head;
@@ -152,7 +154,7 @@ static void calcDawnDusk(SchedInfoPtr_t sch)
 
 
 /*
- * Do a straight numeric eval of the string expr against the field value
+ * Do a straight numeric eval of the string expr against the field value. Supports commas but not ranges.
  */
 
 static void cronNumEval(TALLOC_CTX *ctx, int fieldValue, String expr, int fieldIndex, int *matchCountPtr)
@@ -176,7 +178,7 @@ static void cronNumEval(TALLOC_CTX *ctx, int fieldValue, String expr, int fieldI
 }
 
 /*
- * Do a wildcard eval of the string expr against the field value
+ * Do a wildcard eval of the string expr against the field value. Also supports / interval operator.
  */
  
 static void cronWildCardEval(TALLOC_CTX *ctx, int fieldValue, String expr, int fieldIndex, int *matchCountPtr)
@@ -198,6 +200,79 @@ static void cronWildCardEval(TALLOC_CTX *ctx, int fieldValue, String expr, int f
 	}
 }
 
+/*
+ * Evaluate cron '@' style command
+ */
+
+static void cronAtCommand(SchedInfoPtr_t sch, SchedListEntryPtr_t l)
+{
+	int i;
+	Bool exec = FALSE;
+	
+	static const String atCommands[] = {
+		"startup",
+		"sunrise",
+		"sunset",
+		"dawn",
+		"dusk",
+		NULL
+	};
+	
+	ASSERT_FAIL(sch)
+	ASSERT_FAIL(l);
+	
+	/* Try to match command */
+	
+	for(i = 0; atCommands[i]; i++){
+		if(!strcmp(l->typeParam + 1, atCommands[i])){
+			break;
+		}
+	}
+	if(atCommands[i]){
+		switch(i){
+			case 0: /* startup */
+				if(!sch->startupRan){
+					exec = sch->startupRan = TRUE;
+				}			
+				break;
+			
+			case 1: /* sunrise */
+				if((sch->ssValid) && (sch->tmNow.tm_hour == sch->sunriseHour) && (sch->tmNow.tm_min == sch->sunriseMinute)){
+					exec = TRUE;
+				}
+				break;
+			
+			case 2: /* sunset */
+				if((sch->ssValid) && (sch->tmNow.tm_hour == sch->sunsetHour) && (sch->tmNow.tm_min == sch->sunsetMinute)){
+					exec = TRUE;
+				}
+				break;
+			
+			case 3: /* dawn */
+				if((sch->ddValid) && (sch->tmNow.tm_hour == sch->dawnHour) && (sch->tmNow.tm_min == sch->dawnMinute)){
+					exec = TRUE;
+				}
+				break;
+			
+			case 4: /* dusk */
+				if((sch->ddValid) && (sch->tmNow.tm_hour == sch->duskHour) && (sch->tmNow.tm_min == sch->duskMinute)){
+					exec = TRUE;
+				}
+				break;
+			
+			default:
+				ASSERT_FAIL(0)
+		}
+		if(exec){
+			/* Execute the provided function */
+			(*l->exec)(sch, l->entryName, l->execParam);
+		}
+	}
+	else{
+		debug(DEBUG_UNEXPECTED, "Unrecognized '@' command: %s", l->cronSubstrs[0]);
+	}	
+}
+
 
 /*
  * Walk the schedule list
@@ -216,82 +291,92 @@ static void schedulerWalk(SchedInfoPtr_t sch)
 	/* walk the list */
 	for(l = sch->head; l; l = l->next){
 		ASSERT_FAIL(l->magic == SE_MAGIC)
-	
 
-		/* Simplified cron table entry */
-		debug(DEBUG_ACTION, "Cron: %s %s %s %s %s", l->cronSubstrs[0], l->cronSubstrs[1],
-		l->cronSubstrs[2], l->cronSubstrs[3], l->cronSubstrs[4]);
-		/* Evaluate the cron expression */
-		for(i = 0, matchCount = 0; i < 5; i++){
-			ASSERT_FAIL(l->cronSubstrs[i]);
-			/* Check for wildcard */
-			if(l->cronSubstrs[i][0] == '*'){
-				if(!l->cronSubstrs[i][1]){
-					matchCount++; /* Straight wildcard */
-					continue;
+		/* Simplified/Customized cron implementation*/
+		debug(DEBUG_ACTION, "Cron: %s",l->typeParam);
+		
+		if(l->typeParam[0] == '@'){ 
+			/* Special single cron expression */
+			cronAtCommand(sch, l);
+		}
+		else{
+			/* Evaluate cron expression consisting of 5 parts*/
+			for(i = 0, matchCount = 0; i < 5; i++){
+				if(!l->cronSubstrs[i]){
+					debug(DEBUG_UNEXPECTED, "Not all 5 fields are populated in entry: %s. Skipping this entry", l->entryName); 
+					break;
+				}		
+				/* Check for wildcard */
+				if(l->cronSubstrs[i][0] == '*'){
+					if(!l->cronSubstrs[i][1]){
+						matchCount++; /* Straight wildcard */
+						continue;
+					}
+					else if(l->cronSubstrs[i][1] == '/'){
+						switch(i){ /* Wildcard with interval */
+							case 0:
+								cronWildCardEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
+								break;
+								
+							case 1:
+								cronWildCardEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
+								break;
+								
+							case 2:
+								cronWildCardEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
+								break;
+								
+							case 3:
+								cronWildCardEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
+								break;
+								
+							case 4:
+								cronWildCardEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
+								break;
+								
+							default:
+								ASSERT_FAIL(0)
+						}
+					}					
 				}
-				else if(l->cronSubstrs[i][1] == '/'){
-					switch(i){ /* Wildcard with interval */
+				else if(isdigit(l->cronSubstrs[i][0])){
+					switch(i){ /* Straight numeric compare with comma support, but not ranges */
 						case 0:
-							cronWildCardEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
+							cronNumEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 1:
-							cronWildCardEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
+							cronNumEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 2:
-							cronWildCardEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
+							cronNumEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 3:
-							cronWildCardEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
+							cronNumEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
 						case 4:
-							cronWildCardEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
+							cronNumEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
 							break;
 							
+							
 						default:
-							ASSERT_FAIL(0)
+							ASSERT_FAIL(0);
 					}
 				}
+				else{
+					debug(DEBUG_UNEXPECTED, "Unrecognized expression: %s. Skipping entry: %s", l->cronSubstrs[i], l->entryName);
+					break;
+				}		
 			}
-			else{
-				switch(i){ /* Straight numeric compare */
-					case 0:
-						cronNumEval(sch, sch->tmNow.tm_min, l->cronSubstrs[i], i, &matchCount);
-						break;
-						
-					case 1:
-						cronNumEval(sch, sch->tmNow.tm_hour, l->cronSubstrs[i], i, &matchCount);
-						break;
-						
-					case 2:
-						cronNumEval(sch, sch->tmNow.tm_mday, l->cronSubstrs[i], i, &matchCount);
-						break;
-						
-					case 3:
-						cronNumEval(sch, sch->tmNow.tm_mon, l->cronSubstrs[i], i, &matchCount);
-						break;
-						
-					case 4:
-						cronNumEval(sch, sch->tmNow.tm_wday, l->cronSubstrs[i], i, &matchCount);
-						break;
-						
-						
-					default:
-						ASSERT_FAIL(0);
-				}
-			}		
-		}
-		if(matchCount == 5){
-			/* Execute the provided function */
-			(*l->exec)(sch, l->entryName, l->execParam);
+			if(matchCount == 5){
+				/* Execute the provided function */
+				(*l->exec)(sch, l->entryName, l->execParam);
+			}
 		}
 	}
-		
-
 }
 
 /* 
