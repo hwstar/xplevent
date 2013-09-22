@@ -21,7 +21,7 @@ DAEMONDIR = /usr/local/bin
 
 # Object file lists
 
-OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o util.o socket.o
+OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o util.o socket.o scheduler.o sunriset.o
 
 PACKAGE_OBJS = $(PACKAGE).o $(OBJS)
 
@@ -32,7 +32,7 @@ all: $(PACKAGE)
 
 
 
-$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h socket.h
+$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h socket.h scheduler.h sunriset.h
 
 
 #Rules

@@ -17,6 +17,7 @@ typedef struct XPLEvGlobals_s {
 	String instanceID;
 	void *xplEventService;
 	void *db;	
+	void *sch;
 } XPLEvGlobals_t;
 
 typedef XPLEvGlobals_t * XPLEvGlobalsPtr_t;

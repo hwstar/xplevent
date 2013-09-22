@@ -47,6 +47,7 @@
 #include "parser.h"
 #include "db.h"
 #include "util.h"
+#include "scheduler.h"
 #include "monitor.h"
 #include "xplevent.h"
 
@@ -710,6 +711,7 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 {
 	static int ticks = 0;
 	
+	SchedulerDo(Globals->sch);
 	/* Report memory usage every 30 seconds if enabled and not in daemon mode */
 	ticks++;
 	if(Globals->noBackground && (ticks >= 30)){
@@ -1145,7 +1147,9 @@ void MonitorRun(void)
 		fatal("Can't create listening socket(s)");
 	}	
 
-	
+	/* Initialize scheduler */
+	Globals->sch = SchedulerInit(Globals);
+
 
  	/* Enable the service */
   	xPL_setServiceEnabled(Globals->xplEventService, TRUE);

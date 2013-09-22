@@ -1,25 +1,20 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-typedef struct SchedListEntry_s{
-  time_t time;
-  uint32_t magic;
-  Bool hasRun;
-  String name;
-  String scriptName
-  struct SchedListEntry_s *next;
-} SchedInfo_t;
+typedef enum {ST_CRON, ST_EPHEM } SchedType_t;
 
-typedef SchedListEntry_t * SchedListEntryPtr_t;
+void SchedulerDo(void *schedInfo);
+void *SchedulerInit(TALLOC_CTX *ctx);
+void SchedulerStart(void *schedInfo);
+void SchedulerStop(void *schedInfo);
+void SchedularRemoveAllEntries(void *schedInfo);
+void SchedulerAdd(void *schedInfo, String entryName, SchedType_t type, String typeParam,  
+	void (*exec)(TALLOC_CTX *ctx, const String entryName, const String execParam),  String execParam);
+void SchedulerDefaultHandler(TALLOC_CTX *ctx, const String entryName, const String execParam);
 
-typedef struct SchedInfo_s{
-  time_t now;
-  time_t prevNow;
-  SchedListEntryPtr_t head;
-} SchedInfo_t;
 
-typedef SchedInfo_t * SchedInfoPtr_t;
 
-static void SchedulerDo(TALLOC_CTX *ctx, SchedInfoPtr_t sch);
+
+
 
 #endif

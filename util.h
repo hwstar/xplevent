@@ -10,6 +10,7 @@ pid_t UtilPIDRead(const String filename);
 Bool UtilPIDWrite(const String filename, pid_t pid);
 Bool UtilSpawn(const String command, pid_t *pid);
 String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep);
+String *UtilSplitWhite(TALLOC_CTX *ctx, String input);
 
 
 #endif
