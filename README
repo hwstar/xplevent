@@ -1,8 +1,13 @@
-xplevent is a program which reponds to xPL trigger messages, and executes
+xplevent is a program which responds to xPL trigger messages, and executes
 a tiny perl-like language to send xPL commands. It contains a built in scheduler
 to send xPL commands on a certain time/date or an event like sunrise, sunset,
 dusk, dawn, or startup. The scheduler uses cron-like expressions to trigger
 scripts to be executed. 
+
+The tiny scripting language supports tests, assignment and if-else conditionals, and
+stores data in hashes. Some predefined hashes e.g. %xplnvin, %xplin, are passed in 
+to trigaction scripts so that the data can be tested and reformatted into an 
+appropriate series of xPL commands which are sent using the xplcmd() function. 
 
 The database keeps track of the most recent heartbeat and trigger messages
 received. The database also contains a trigger table which matches trigger
