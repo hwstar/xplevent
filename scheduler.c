@@ -350,6 +350,28 @@ static void cronAtCommand(SchedInfoPtr_t sch, SchedListEntryPtr_t l)
  *
  * This function actually does the work of determining
  * what gets executed.
+ *
+ *
+ * Cron subexpressions currently supported (where N,M are numbers):
+ *
+ * 1. N
+ * 2. N,N,..
+ * 3. N/M
+ * 4. *
+ * 5. * /M
+ * 6. @startup
+ * 7. @dawn
+ * 8. @sunrise
+ * 9. @sunset
+ * 10.@dusk
+ *
+ * Arguments:
+ *
+ * 1. Pointer to main schedule information data structure
+ *
+ * Return value:
+ *
+ * None
  */
  
 
@@ -451,7 +473,19 @@ static void schedulerWalk(SchedInfoPtr_t sch)
 }
 
 /* 
- * Scheduler 
+ * Scheduler polling function 
+ *
+ * This function should be called once per second by a timer handler of some sort.
+ *
+ * Arguments:
+ *
+ * 1. Generic pointer to main scheduler data structure.
+ *
+ * Return value:
+ *
+ * None
+ *
+ *
  */
 
 void SchedulerDo(void *schedInfo)
@@ -497,8 +531,18 @@ void SchedulerDo(void *schedInfo)
 
 /*
  * Initialize scheduler master data structure.
+ *
+ * Record the latitude and longitude to be used to calculate dawn/dusk/sunrise/sunset times.
  * 
  * Scheduler data structures can be freed by calling talloc_free on the returned generic pointer.
+ *
+ * 1. A talloc context to use for the scheduler data structures and transitory data.
+ * 2. The latitude expressed as a double precision decimal number.
+ * 3. The longitude expressed as a double precision decimal number.
+ *
+ * Return value:
+ *
+ * None.
  */
 
 void *SchedulerInit(TALLOC_CTX *ctx, double lat, double lon)
@@ -516,6 +560,14 @@ void *SchedulerInit(TALLOC_CTX *ctx, double lat, double lon)
 
 /*
  * Start the scheduler
+ *
+ * Arguments:
+ *
+ * 1. A generic pointer to the main scheduler data struture.
+ *
+ * Return value:
+ *
+ * None
  */
  
 void SchedulerStart(void *schedInfo)
@@ -533,6 +585,14 @@ void SchedulerStart(void *schedInfo)
 
 /*
  * Stop the scheduler
+ *
+ * Arguments:
+ *
+ * 1. A generic pointer to the main scheduler data struture.
+ *
+ * Return value:
+ *
+ * None
  */
  
 void SchedulerStop(void *schedInfo)
@@ -545,6 +605,14 @@ void SchedulerStop(void *schedInfo)
 
 /*
  * Remove all active schedular entries
+ *
+ * Arguments:
+ *
+ * 1. A generic pointer to the main scheduler data struture.
+ *
+ * Return value:
+ *
+ * None
  */
  
 void SchedularRemoveAllEntries(void *schedInfo)
@@ -560,9 +628,27 @@ void SchedularRemoveAllEntries(void *schedInfo)
 
 /*
  * Add a scheduler list entry.
+ *
+ *
+ * Arguments:
+ *
+ * 1. A generic pointer to the main scheduler data struture.
+ * 2. A string containing the name of this entry.
+ * 3. A string with the Cron Expression to be evaluated.
+ * 4. A pointer to a callback function to execute when the expression matches. (See Below)
+ * 5. A string to be passed to the execution function upon match.
+ *
+ * Return value:
+ *
+ * None
+ *
+ * Callback:
+ *
+ * Please see function SchedulerDefaultHandler() for argument descriptions.
+ *
  */
  
-void SchedulerAdd(void *schedInfo, String entryName, String typeParam,  
+void SchedulerAdd(void *schedInfo, String entryName, String cronExp,  
 	void (*exec)(TALLOC_CTX *ctx, const String entryName, const String execParam),  String execParam)
 {
 	SchedInfoPtr_t sch = schedInfo;
@@ -571,19 +657,19 @@ void SchedulerAdd(void *schedInfo, String entryName, String typeParam,
 	ASSERT_FAIL(sch);
 	ASSERT_FAIL(sch->magic == SI_MAGIC)
 	ASSERT_FAIL(entryName)
-	ASSERT_FAIL(typeParam)
+	ASSERT_FAIL(cronExp)
 	ASSERT_FAIL(exec)
 	ASSERT_FAIL(execParam)
 	
 	/* Allocate new list entry structure */
 	ASSERT_FAIL(l = talloc_zero(sch->listContext, SchedListEntry_t))
 	ASSERT_FAIL(l->entryName = talloc_strdup(l, entryName))
-	ASSERT_FAIL(l->typeParam = talloc_strdup(l, typeParam))
+	ASSERT_FAIL(l->typeParam = talloc_strdup(l, cronExp))
 	ASSERT_FAIL(l->execParam = talloc_strdup(l, execParam))
 	l->exec = exec;
 	l->magic = SE_MAGIC;
 	
-	l->cronSubstrs = UtilSplitWhite(l, typeParam);
+	l->cronSubstrs = UtilSplitWhite(l, cronExp);
 	
 	/* Insert on end of list */
 
@@ -600,6 +686,17 @@ void SchedulerAdd(void *schedInfo, String entryName, String typeParam,
 
 /*
  * Scheduler default handler (for testing)
+ *
+ * Arguments:
+ *
+ * 1. Talloc context used for transitory data.
+ * 2. The name of the schedule entry as a string.
+ * 3. the execution parameter as a string. 
+ *
+ * Return value:
+ *
+ * None.
+ * 
  */
 
 void SchedulerDefaultHandler(TALLOC_CTX *ctx, const String entryName, const String execParam)
