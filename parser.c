@@ -550,7 +550,7 @@ Bool ParserSplitXPLTag(TALLOC_CTX *ctx, const String tag, String *vendor, String
 					}
 					if(res != FAIL && device){
 							*instance = talloc_strndup(ctx, tag + begin, j - 1);
-							MALLOC_FAIL(*device);
+							MALLOC_FAIL(*instance);
 					}
 					done = TRUE;
 				}
