@@ -623,7 +623,7 @@ void SchedularRemoveAllEntries(void *schedInfo)
 	sch->head = NULL;
 	sch->tail = NULL;
 	talloc_free(sch->listContext); /* Buh-Bye */
-	ASSERT_FAIL(sch->listContext = talloc_new(schedInfo))
+	MALLOC_FAIL(sch->listContext = talloc_new(schedInfo))
 }
 
 /*
@@ -662,10 +662,10 @@ void SchedulerAdd(void *schedInfo, String entryName, String cronExp,
 	ASSERT_FAIL(execParam)
 	
 	/* Allocate new list entry structure */
-	ASSERT_FAIL(l = talloc_zero(sch->listContext, SchedListEntry_t))
-	ASSERT_FAIL(l->entryName = talloc_strdup(l, entryName))
-	ASSERT_FAIL(l->typeParam = talloc_strdup(l, cronExp))
-	ASSERT_FAIL(l->execParam = talloc_strdup(l, execParam))
+	MALLOC_FAIL(l = talloc_zero(sch->listContext, SchedListEntry_t))
+	MALLOC_FAIL(l->entryName = talloc_strdup(l, entryName))
+	MALLOC_FAIL(l->typeParam = talloc_strdup(l, cronExp))
+	MALLOC_FAIL(l->execParam = talloc_strdup(l, execParam))
 	l->exec = exec;
 	l->magic = SE_MAGIC;
 	
