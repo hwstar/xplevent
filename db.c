@@ -634,7 +634,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s','%lld')",
 		"hbeatlog", source, (long long) now);
 	
-		ASSERT_FAIL(sql)
+		MALLOC_FAIL(sql)
 	
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
@@ -738,7 +738,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (scriptname,scriptcode) VALUES ('%s','%s')",
 		"scripts", name, scriptBuf);
 	
-		ASSERT_FAIL(sql)
+		MALLOC_FAIL(sql)
 	
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
