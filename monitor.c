@@ -1,5 +1,6 @@
 /*
-*    
+*    monitor.c
+*
 *    Copyright (C) 2013  Stephen A. Rodgers
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -692,6 +693,16 @@ static void xplShutdown(void)
 
 /*
  * Scheduler handler for executing scripts
+ *
+ * Arguments:
+ *
+ * 1. Talloc context to hang transitory data off of.
+ * 2. Scheduler entry name as a string.
+ * 3. Name of the script to execute as a string.
+ *
+ * Return value:
+ *
+ * None
  */
 
 void schedulerExec(TALLOC_CTX *ctx, const String entryName, const String scriptName)
@@ -715,7 +726,18 @@ void schedulerExec(TALLOC_CTX *ctx, const String entryName, const String scriptN
 
 
 /*
- * Callback to add a scheduler entry to the scheduler
+ * Callback from sqlite3 exec to add a scheduler entry to the scheduler
+ *
+ * Arguments:
+ *
+ * 1. Talloc context to hang transitory data off of.
+ * 2. Number of fields
+ * 3. Field values as an array of strings.
+ * 4. Field names as an array of strings.
+ *
+ * Return value:
+ *
+ * Integer. Always zero to ensure that sqlite exec does not abort.
  */
 
 static int addScheduleEntry(void *data, int argc, String *argv, String *colnames)
