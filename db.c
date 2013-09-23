@@ -706,7 +706,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		/* Grow the buffer if necessary */
 		if(scriptBufSize - scriptByteCount <= 3){
 			scriptBufSize <<= 1;
-			MALLOC_FAIL(scriptBuf = talloc_realloc(ctx, scriptBuf, 'char', scriptBufSize))
+			MALLOC_FAIL(scriptBuf = talloc_realloc(ctx, scriptBuf, char, scriptBufSize))
 		}
 		/* Look for a single quote, and if found, and repeat it in the output buffer */
 		if(script[i] == '\''){
