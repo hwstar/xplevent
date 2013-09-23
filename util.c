@@ -257,6 +257,7 @@ String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
   
 	if(fclose(file)){
 		debug(DEBUG_UNEXPECTED, "%s: Close error on file: %s: %s",id, filename, strerror(errno));
+		talloc_free(str);
 		return NULL;
 	}
 
