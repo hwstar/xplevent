@@ -1,3 +1,28 @@
+/*
+*
+* scheduler.c
+*
+* Copyright (C) 2013 Stephen A. Rodgers
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program. If not, see <http://www.gnu.org/licenses/>.
+*
+*
+*
+*
+*
+*/
+
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <ctype.h>
@@ -59,7 +84,16 @@ typedef SchedInfo_t * SchedInfoPtr_t;
 
 
 /*
- * Calculate sunrise/sunset times
+ * Calculate dawn/sunrise/sunset/disk times
+ *
+ * Arguments:
+ *
+ * 1. Pointer to main schedule structure.
+ *
+ * Return value:
+ *
+ * None
+ *
  */
 
 static void calcDawnDusk(SchedInfoPtr_t sch)
@@ -93,6 +127,7 @@ static void calcDawnDusk(SchedInfoPtr_t sch)
 	debug(DEBUG_ACTION, "UTC offset in hours: %2.3e", sch->utcOffset);
 	debug(DEBUG_ACTION, "Latitude used: %2.5e", sch->lat);
 	debug(DEBUG_ACTION, "Longitude used: %3.5e", sch->lon);
+	
 	/* Calculate civil day length */
 	res  = civil_twilight( 1900.0 + localtm.tm_year, localtm.tm_mon, localtm.tm_mday,
 		sch->lon, sch->lat, &civ_start_utc, &civ_end_utc );
@@ -122,7 +157,7 @@ static void calcDawnDusk(SchedInfoPtr_t sch)
 	}	
 	res  = sun_rise_set( 1900.0 + localtm.tm_year, localtm.tm_mon, localtm.tm_mday,
 		sch->lon, sch->lat, &sunrise_utc, &sunset_utc );
-	if(!res){
+	if(!res){ /* Calculate sunrise and sunset */
 /*		debug(DEBUG_ACTION, "UTC Sunrise: %2.5e", sunrise_utc); */
 /*		debug(DEBUG_ACTION, "UTC Sunset: %3.5e", sunset_utc); */
 		sch->ssValid = TRUE;
@@ -154,21 +189,34 @@ static void calcDawnDusk(SchedInfoPtr_t sch)
 
 
 /*
- * Do a straight numeric eval of the string expr against the field value. Supports commas but not ranges.
+ * Do a straight numeric eval of the string expr against the field value. 
+ * Currently supports commas but not ranges.
+ *
+ * Arguments:
+ *
+ * 1. A talloc context to use for allocating transitory data.
+ * 2. The value for the current time, date, or day of week.
+ * 3. The subexpression from the full cron expression.
+ * 4. The index (0-4) of which cron field is being processed.
+ * 5. A pointer to an integer counter tallying the number of matches in the cron expression.
+ *
+ * Return value:
+ *
+ * None.
  */
 
-static void cronNumEval(TALLOC_CTX *ctx, int fieldValue, String expr, int fieldIndex, int *matchCountPtr)
+static void cronNumEval(TALLOC_CTX *ctx, int timeValue, String subExpr, int fieldIndex, int *matchCountPtr)
 {
 	String *values;
 	int i;
 		
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(expr)
+	ASSERT_FAIL(subExpr)
 	ASSERT_FAIL(matchCountPtr)
 	
-	values = UtilSplitString(ctx, expr, ',');
+	values = UtilSplitString(ctx, subExpr, ',');
 	for(i = 0; values[i]; i++){
-		if(atoi(values[i]) == fieldValue){
+		if(atoi(values[i]) == timeValue){
 			(*matchCountPtr)++;
 			break;
 		}
@@ -179,29 +227,52 @@ static void cronNumEval(TALLOC_CTX *ctx, int fieldValue, String expr, int fieldI
 
 /*
  * Do a wildcard eval of the string expr against the field value. Also supports / interval operator.
+ *
+ * Arguments:
+ *
+ * 1. A talloc context to use for allocating transitory data.
+ * 2. The value for the current time, date, or day of week.
+ * 3. The subexpression from the full cron expression.
+ * 4. The index (0-4) of which cron field is being processed.
+ * 5. A pointer to an integer counter tallying the number of matches in the cron expression.
+ *
+ * Return value:
+ *
+ * None
+ *
  */
  
-static void cronWildCardEval(TALLOC_CTX *ctx, int fieldValue, String expr, int fieldIndex, int *matchCountPtr)
+static void cronWildCardEval(TALLOC_CTX *ctx, int timeValue, String subExpr, int fieldIndex, int *matchCountPtr)
 {
 	int val;
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(expr)
+	ASSERT_FAIL(subExpr)
 	ASSERT_FAIL(matchCountPtr)
 	
-	if(expr[1] == '/'){
-		val = atoi(expr + 2);
+	if(subExpr[1] == '/'){
+		val = atoi(subExpr + 2);
 		if(!val){
 			return;
 		}
-		if(!(fieldValue % val)){
+		if(!(timeValue % val)){
 			(*matchCountPtr)++;
 		}
 	}
 }
 
 /*
- * Evaluate cron '@' style command
+ * Evaluate cron '@' style command.
+ * Execute the action function if there is a match.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to the main schedule structure.
+ * 2. Pointer to the schedule entry to evaluate and execute the action function if the condition matches.
+ *
+ * Return value:
+ *
+ * None
  */
 
 static void cronAtCommand(SchedInfoPtr_t sch, SchedListEntryPtr_t l)
