@@ -1,15 +1,28 @@
 xplevent is a program which reponds to xPL trigger messages, and executes
-a tiny perl-like language to send xPL commands. It also keeps track of
-heartbeat messages received from other xPL devices and it updates a 
-sqlite3 data base with this information.
+a tiny perl-like language to send xPL commands. It contains a built in scheduler
+to send xPL commands on a certain time/date or an event like sunrise, sunset,
+dusk, dawn, or startup. The scheduler uses cron-like expressions to trigger
+scripts to be executed. 
 
-This is a program in the very early stages of its development. It is nowhere
-near complete.
+The database keeps track of the most recent heartbeat and trigger messages
+received. The database also contains a trigger table which matches trigger
+messages to an appropriate script to execute. The scripts are stored
+in the database to keep them in one central location. 
+
+This is a program in development. It is nowhere near complete.
 
 It can be run as a daemon, or in the foreground. There are command line options
 to select the, log file, debug level, and broadcast interface. For a complete
 list of command line options, type ./xplevent --help once the program is built.
 
-To compile xplevent, compile and install xPLLib on your system first. 
-Make sure you have talloc-devel and sqlite3-devel installed as well.
+Dependencies:
 
+1. Lemon parser
+2. Flex
+3. xPLLib
+4. libtalloc_devel
+5. sqlite3_devel
+
+To compile xplevent use the provided Makefile.
+
+Only Linux 2.6.30 or later is supported by the Makefile at this time
