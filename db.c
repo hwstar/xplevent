@@ -679,6 +679,11 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String script)
 {
 	Bool res = PASS;
+	int i;
+	unsigned scriptBufSize = 2048;
+	unsigned scriptByteCount = 0;
+	
+	String scriptBuf;
 	String errorMessage;
 	static const String id = "DBUpdateScript";
 	String sql = NULL;
@@ -690,10 +695,33 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	ASSERT_FAIL(name)
 	ASSERT_FAIL(script)
 
+	
+	/* Copy the script into a new buffer and escape any single quote so that sqlite doesn't get confused */
+	
+	/* Allocate an initial buffer size */
+	MALLOC_FAIL(scriptBuf = talloc(ctx, 'char', scriptBufSize))
+	
+	/* Copy script. Escape the single quote */
+	for(i = 0; script[i]; i++){
+		/* Grow the buffer if necessary */
+		if(scriptBufSize - scriptByteCount <= 2){
+			scriptBufSize <<= 1;
+			MALLOC_FAIL(scriptBuf = talloc_realloc(ctx, 'char', scriptBufSize))
+		}
+		/* Look for a single quote, and if found, and repeat it in the output buffer */
+		if(script[i] == '\''){
+			scriptBuf[scriptByteCount++] = '\'';
+		}
+		/* Copy the byte to the output buffer */
+		scriptBuf[scriptByteCount++] = script[i];
+
+	}
+	
 		
 	/* Transaction begin */
 	
 	if(dbTxBegin(db, id) != PASS){
+		talloc_free(scriptBuf);
 		return FAIL;
 	}
 	
@@ -705,7 +733,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	
 	if(res == PASS){
 		sql = talloc_asprintf(ctx, "INSERT INTO %s (scriptname,scriptcode) VALUES ('%s','%s')",
-		"scripts", name, script);
+		"scripts", name, scriptBuf);
 	
 		ASSERT_FAIL(sql)
 	
@@ -714,13 +742,18 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
 			sqlite3_free(errorMessage);
+			talloc_free(scriptBuf);
 			res = FAIL;
 		}
 	}
 	
+	/* Free our local copy of the script */
+	talloc_free(scriptBuf);
+	
 	if(sql){
 		talloc_free(sql);
 	}
+	
 
 	/* Transaction end */
 	
