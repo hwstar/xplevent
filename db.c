@@ -704,9 +704,9 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	/* Copy script. Escape the single quote */
 	for(i = 0; script[i]; i++){
 		/* Grow the buffer if necessary */
-		if(scriptBufSize - scriptByteCount <= 2){
+		if(scriptBufSize - scriptByteCount <= 3){
 			scriptBufSize <<= 1;
-			MALLOC_FAIL(scriptBuf = talloc_realloc(ctx, 'char', scriptBufSize))
+			MALLOC_FAIL(scriptBuf = talloc_realloc(ctx, scriptBuf, 'char', scriptBufSize))
 		}
 		/* Look for a single quote, and if found, and repeat it in the output buffer */
 		if(script[i] == '\''){
@@ -716,6 +716,9 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		scriptBuf[scriptByteCount++] = script[i];
 
 	}
+	
+	/* Terminate the end of the new string */
+	scriptBuf[scriptByteCount] = 0;
 	
 		
 	/* Transaction begin */
