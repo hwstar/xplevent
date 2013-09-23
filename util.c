@@ -1,4 +1,3 @@
-
 /*
 * util.c 
 *
@@ -243,9 +242,15 @@ String UtilFileReadString(TALLOC_CTX *ctx, const String filename)
 	MALLOC_FAIL(str);
   
 	if(size != fread(str, sizeof(char), (int) size, file)){
-		debug(DEBUG_UNEXPECTED, "%s: Read error on file: %s: %s",id, filename, strerror(errno));
-		talloc_free(str);
-		return NULL;
+		if(ferror(file)){
+			debug(DEBUG_UNEXPECTED, "%s: Read error on file: %s: %s",id, filename, strerror(errno));
+			talloc_free(str);
+			return NULL;
+		}
+		if(feof(file)){
+			debug(DEBUG_UNEXPECTED, "%s: Unexpected EOF on file: %s", id, filename);
+		}
+	
 	}
   
 	str[arraylen - 1] = 0;
@@ -290,13 +295,17 @@ Bool UtilFileWriteString(const String filename, const String str)
 	len = strlen(str);
   
 	if(len != fwrite(str, sizeof(char), len, file)){
-		debug(DEBUG_UNEXPECTED, "%s: Write error on file: %s: %s",id, filename, strerror(errno));
+		if(ferror(file)){
+			debug(DEBUG_UNEXPECTED, "%s: Write error on file: %s: %s",id, filename, strerror(errno));
+			return FAIL;
+		}
+		debug(DEBUG_UNEXPECTED, "%s: Device full error on file: %s: %s",id, filename);
 		return FAIL;
 	}
   
 	if(fclose(file)){
-	debug(DEBUG_UNEXPECTED, "%s: Close error on file: %s: %s",id, filename, strerror(errno));
-	return FAIL;
+		debug(DEBUG_UNEXPECTED, "%s: Close error on file: %s: %s",id, filename, strerror(errno));
+		return FAIL;
 	}
 
 	return PASS;
