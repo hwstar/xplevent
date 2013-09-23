@@ -1,0 +1,13 @@
+#Script to send outside temperature to thermostat
+#
+#The xplnvin hash contains the "current" key with the latest
+#temperature value. 
+#
+# This script builds an hvac.basic command, inserts the
+# temperature value and then sends the command to the
+# thermostat device.
+ 
+$xplnvout{command} = "display";
+$xplnvout{zone} = "thermostat";
+$xplnvout{outsidetemp} = $xplnvin{current};
+xplcmd("hwstar-rcs.hvac","hvac","basic",\%xplnvout);
