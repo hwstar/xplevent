@@ -55,6 +55,9 @@
 
 typedef struct connectionData_s {
 	MonRcvInfoPtr_t rcvInfo;
+	struct sockaddr_storage clientAddr;
+    	socklen_t clientAddrSize;
+	
 } connectionData_t;
 
 typedef connectionData_t * connectionDataPtr_t;
@@ -974,18 +977,31 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 static void commandSocketListener(int fd, int revents, int uservalue)
 {
 	connectionDataPtr_t cdp;
+	struct sockaddr_storage clientAddr;
+    	socklen_t clientAddrSize = sizeof(theirAddr);
 	int userSock;
 	
 	debug(DEBUG_ACTION, "Accepting socket connection");
 	/* Accept the user connection. */
-	userSock = accept4(fd, NULL, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
+	userSock = accept4(fd, &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
 	if(userSock == -1) {
 		debug(DEBUG_UNEXPECTED, "Could not accept socket");
+		return;
+	}
+	
+	/* Check to see if client is permitted */
+	if(FAIL == SocketPermitDeny(Globals, NULL, NULL, &clientAddr, clientAddrSize)){
+		/* Denied */
+		close(fd);
 		return;
 	}
 
 	/* Allocate a data structure for connection persistent data for use by the listener */
 	ASSERT_FAIL(cdp = talloc_zero(Globals, connectionData_t))
+	
+	/* Save client address data */
+	cdp->clientAddrSize = clientAddrSize;
+	memcpy(cdp->clientAddr, clientAddr, sizeof(struct sockaddr_storage));
 	
 	/* Add the accepted socket to the polling list */
 	xPL_addIODevice(clientCommandListener, (int) cdp, userSock, TRUE, FALSE, FALSE);
