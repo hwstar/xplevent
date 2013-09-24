@@ -59,17 +59,17 @@
 #include "xplevent.h"
 
 
-enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD};
+enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERATE};
 
 
-#define SHORT_OPTIONS "b:C:cd:ef:g:Hh:i:L:no:P:p:s:S:Vx:"
+#define SHORT_OPTIONS "b:C:cd:ef:Fg:GHh:i:L:no:P:p:s:S:Vx:"
 
 #define WS_SIZE 256
 
 
 #define DEF_CONFIG_FILE		"./xplevent.conf"
 #define DEF_PID_FILE		"./xplevent.pid"
-#define DEF_DB_FILE		"./xplevent.sqlite3"
+#define DEF_DB_FILE			"./xplevent.sqlite3"
 #define DEF_LOG_FILE		""
 
 #define DEF_INTERFACE		"eth1"
@@ -99,6 +99,7 @@ typedef union cloverrides{
 XPLEvGlobalsPtr_t Globals = NULL;
 static volatile sig_atomic_t exitRequest, gotHup;
 static clOverride_t clOverride;
+static Bool forceFlag = FALSE;
 static int utilityCommand = 0;
 static String utilityArg = NULL;
 static String utilityFile = NULL;
@@ -117,7 +118,9 @@ static struct option longOptions[] = {
 	{"debug", 1, 0, 'd'},
 	{"exitonerr",0, 0, 'e'},
 	{"file", 0, 0, 'f'},
+	{"force", 0, 0, 'F'},
 	{"get", 1, 0, 'g'},
+	{"generate", 0, 0, 'G'},
 	{"help", 0, 0, 'H'},
 	{"host", 1, 0, 'h'},
 	{"interface", 1, 0, 'i'},
@@ -205,7 +208,9 @@ static void showHelp(void)
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
 	printf("  -f, --file PATH         Set file path for utility functions\n");
+	printf("  -F, --force             Force option\n");
 	printf("  -g, --get scriptname    Utility function: Get script name from database and write to file\n");
+	printf("  -G, --generate          Utility function: Generate an empty database file\n");
 	printf("  -H, --help              Shows this\n");
 	printf("  -h, --host HOST         Set host name for utility client mode\n");
 	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
@@ -502,6 +507,18 @@ static void putScript(String utilityArg, String utilityFile)
 	}
 }
 
+/* 
+ * Generate an empty DB file
+ */
+ 
+static void generateDBFile(String theFile)
+{
+	if(!theFile){
+		fatal("Path to database file must be specified");
+	}
+	DBGenFile(Globals, theFile, forceFlag);
+}
+
 
 /*
  * Do utility command and exit
@@ -551,8 +568,12 @@ static void doUtilityCommand(int utilityCommand, String utilityArg, String utili
 			putScript(utilityArg, utilityFile);
 			break;	
 			
-		case UC_SEND_CMD:
+		case UC_SEND_CMD: /* Send a command to the server */
 			utilitySendCmd(utilityArg);
+			break;
+			
+		case UC_GENERATE: /* Generate an empty database file */
+			generateDBFile(utilityFile);
 			break;
 
 		default:
@@ -584,7 +605,7 @@ static void prepareUtilityCommand(int command, String optarg)
 		}
 	}
 	else{
-		fatal("Only one of -c -p -s -x may be specified on the command line. These switches are mutually exclusive");
+		fatal("Only one of -c -p -s -x -G may be specified on the command line. These switches are mutually exclusive");
 	}
 }
 
@@ -715,10 +736,17 @@ int main(int argc, char *argv[])
 				debug(DEBUG_ACTION,"New utility file path is: %s", utilityFile);
 				break;
 				
+			case 'F': /* Force flag */
+				forceFlag = TRUE;
+				break;
+				
 			case 'g': /* Get script */
 				prepareUtilityCommand(UC_GET_SCRIPT, optarg);
 				break;
 			
+			case 'G': /* Generate database file */
+				prepareUtilityCommand(UC_GENERATE, NULL);
+				break;
 			
 				/* Was it a help request? */
 			case 'H':
@@ -897,12 +925,13 @@ int main(int argc, char *argv[])
 	sa_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
 	sigaction(SIGCHLD, &sa_chld, NULL);
 
- 	
-	/* Open the database */
-	if(!(Globals->db = DBOpen(Globals->dbFile))){
-		fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
+ 	if(utilityCommand != UC_GENERATE){
+		/* Open the database */
+		if(!(Globals->db = DBOpen(Globals->dbFile))){
+			fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
+		}
 	}
-
+	
 	/* Check for utility commands */
 	if(utilityCommand){
 		if((clOverride.instance_id) ||

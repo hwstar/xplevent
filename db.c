@@ -699,7 +699,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	/* Copy the script into a new buffer and escape any single quote so that sqlite doesn't get confused */
 	
 	/* Allocate an initial buffer size */
-	MALLOC_FAIL(scriptBuf = talloc(ctx, 'char', scriptBufSize))
+	MALLOC_FAIL(scriptBuf = talloc_array(ctx, char, scriptBufSize))
 	
 	/* Copy script. Escape the single quote */
 	for(i = 0; script[i]; i++){
@@ -821,6 +821,110 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 	return res;		
 	
 }
+
+/*
+ * Generate an empty database file with the correct tables in it
+ * 
+ * Note: This function will refuse to overwrite an existing file unless the force flag is set
+ */
+
+void DBGenFile(TALLOC_CTX *ctx, String theFile, Bool forceFlag)
+{
+	sqlite3 *db;
+	String errorMessage = NULL;
+	String sql;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(theFile)
+	
+	if(!forceFlag){
+		if(!access(theFile, F_OK)){
+			fatal("File %s exists.", theFile);
+		}
+	}
+	else{
+		unlink(theFile);
+	}
+
+	/* Open a new database */
+	if((sqlite3_open_v2(theFile, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL))){
+			fatal("Sqlite3 file create error on file: %s", theFile);
+	}
+	
+	/* Create heartbeat log table */
+	sql = "CREATE TABLE \"hbeatlog\" (\"source\" TEXT NOT NULL,\"timestamp\" INTEGER NOT NULL);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on hbeatlog: %s", errorMessage);
+	}
+	
+	/* Create triglog table */
+	sql = "CREATE TABLE \"triglog\" ( \"source\" TEXT NOT NULL, \"schema\" TEXT NOT NULL,\"nvpairs\" TEXT,\"timestamp\" INTEGER NOT NULL);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on triglog: %s", errorMessage);
+	}	
+	
+	/* Create nvstate table */
+	sql = "CREATE TABLE nvstate (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"key\" TEXT NOT NULL,\"value\" TEXT,\"timestamp\" INTEGER NOT NULL);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on nvstate: %s", errorMessage);
+	}	
+	
+	/* Create index for nvstate table */
+	sql = "CREATE UNIQUE INDEX \"idx-key\" on nvstate (key ASC);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on nvstate index: %s", errorMessage);
+	}
+	
+	/* Create scripts table */
+	sql = "CREATE TABLE \"scripts\" (\"ID\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"scriptname\" TEXT NOT NULL,\"scriptcode\" TEXT NOT NULL);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on scripts: %s", errorMessage);
+	}	
+
+	/* Create index for script table */
+	sql = "CREATE UNIQUE INDEX \"idx-scriptname\" on scripts (scriptname ASC);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on script index: %s", errorMessage);
+	}	
+
+	/* Create trigaction table */
+	sql = "CREATE TABLE trigaction (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"source\" TEXT NOT NULL,\"action\" TEXT NOT NULL);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on trigaction: ", errorMessage);
+		}	
+	
+	/* Create index for trigaction table */
+	sql = "CREATE UNIQUE INDEX \"idx-source\" on trigaction (source ASC);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on trigaction index: %s", errorMessage);
+	}	
+
+	/* Create schedule table */
+	sql = "CREATE TABLE schedule (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"name\" TEXT NOT NULL,\"param\" TEXT NOT NULL,\"scriptname\" TEXT NOT NULL);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on schedule: ", errorMessage);
+		}	
+
+	/* Create index for schedule table */
+	sql = "CREATE UNIQUE INDEX \"idx-name\" on schedule (name ASC);";
+	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+	if(errorMessage){
+		fatal("Sqlite create table error on schedule index: %s", errorMessage);
+	}	
+	/* Close the database */
+	sqlite3_close(db);
+	note("sqlite3 database file created successfully");	
+}
+
 
 	
 
