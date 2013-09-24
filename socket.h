@@ -17,6 +17,8 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	int (*addsock)(int sock, void *addr, int family, int socktype));
 Bool SocketWaitReadReady(int socket, int msTimeout);
 Bool SocketWaitWriteReady(int socket, int msTimeout);
+Bool SocketPermitDeny(TALLOC_CTX *ctx, String permit, String deny, 
+struct sockaddr_storage *clientAddr, sockelen_t clientAddrSize);
 
 
 #endif
