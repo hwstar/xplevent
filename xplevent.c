@@ -509,6 +509,14 @@ static void putScript(String utilityArg, String utilityFile)
 
 /* 
  * Generate an empty DB file
+ *
+ * Arguments:
+ *
+ * 1. The path to the file to generate as a string.
+ *
+ * Return value:
+ *
+ * None
  */
  
 static void generateDBFile(String theFile)
@@ -720,7 +728,8 @@ int main(int argc, char *argv[])
 
 				/* Save the value. */
 				Globals->debugLvl=atoi(optarg);
-				if(Globals->debugLvl < 0 || Globals->debugLvl > DEBUG_MAX) {
+				if((FAIL == UtilStoi(optarg, &Globals->debugLvl) ||
+					Globals->debugLvl < 0 || Globals->debugLvl > DEBUG_MAX) {
 					fatal("Invalid debug level");
 				}
 
@@ -879,11 +888,11 @@ int main(int argc, char *argv[])
 		
 		/* latitude */
 		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "lat"))){
-			Globals->lat = atof(p);
+			UtilStod(p, &Globals->lat);
 		}
 		/* longitude */
 		if((!clOverride.dbfile) && (p = ConfReadValueBySectKey(configInfo, "general", "lon"))){
-			Globals->lon = atof(p);
+			UtilStod(p, &Globals->lon);
 		}
 		
 		
