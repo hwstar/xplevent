@@ -40,21 +40,34 @@
 
 /*
  * Convert a string to a double.
+ * 
+ * Arguments:
+ * 
+ * 1. String to examine.
+ * 2. Pointer to variable to store the value.
+ *
+ * Return value:
+ *
+ * PASS indicates success, FAIL indicates failure.
+ *
  */
  
 
 Bool UtilStod(const String val, double *res)
 {
 	String endp;
+	double v;
 	
 	ASSERT_FAIL(val)
 	ASSERT_FAIL(res)
 	
-	*res = strtod(val, &endp);
+	v = strtod(val, &endp);
 	if(*val && !*endp){
+		*res = v;
 		return PASS;
 	}
 	else{
+		*res = 0.0;
 		return FAIL;
 	}
 	
@@ -62,6 +75,16 @@ Bool UtilStod(const String val, double *res)
 
 /*
  * Convert a string to an integer
+ *
+ * Arguments:
+ * 
+ * 1. String to examine.
+ * 2. Pointer to variable to store the value.
+ *
+ * Return value:
+ *
+ * PASS indicates success, FAIL indicates failure.
+ *
  */
  
 Bool UtilStoi(const String val, int *res)
@@ -73,16 +96,53 @@ Bool UtilStoi(const String val, int *res)
 	ASSERT_FAIL(res)
 	
 	l = strtoll(val, &endp, 10);
-	*res = (int) l;
-	if(*val && !*endp && (l <= INT_MAX)){
+
+	if(*val && !*endp && (l <= INT_MAX) && (l >= INT_MIN)){
+		*res = (int) l;
 		return PASS;
 	}
 	else{
+		*res = 0;
 		return FAIL;
 	}
 	
 }
 
+/*
+ * Convert a string to an unsigned integer
+ *
+ * Arguments:
+ * 
+ * 1. String to examine.
+ * 2. Pointer to variable to store the value.
+ *
+ * Return value:
+ *
+ * PASS indicates success, FAIL indicates failure.
+ *
+ */
+ 
+Bool UtilStou(const String val, unsigned *res)
+{
+	String endp;
+	long long l;
+	
+	ASSERT_FAIL(val)
+	ASSERT_FAIL(res)
+
+	
+	l = strtoll(val, &endp, 10);
+
+	if(*val && !*endp && (l <= UNSIGNED_MAX) && (l >= 0)){
+		*res = (unsigned) l;
+		return PASS;
+	}
+	else{
+		*res = 0;
+		return FAIL;
+	}
+	
+}
 
 
 /*
