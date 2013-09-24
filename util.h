@@ -13,6 +13,7 @@ String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep);
 String *UtilSplitWhite(TALLOC_CTX *ctx, String input);
 Bool UtilStod(const String val, double *res);
 Bool UtilStoi(const String val, int *res);
+Bool UtilStou(const String val, unsigned *res);
 
 
 #endif
