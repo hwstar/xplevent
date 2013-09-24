@@ -1165,15 +1165,21 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 					break;
 				}
 				debug(DEBUG_ACTION,"Left string: %s", value);				
-				leftNum = atof(value);
+				if(FAIL == UtilStod(value, &leftNum)){
+					ph->failReason = talloc_asprintf(ph, "Invalid numeric string on line %d", pe->lineNo);
+					break;
+				}
 				p = pe->prev;
 				if(ParserPcodeGetValue(ctx, ph, p, &rvalue)){ /* Right */
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}	
 				debug(DEBUG_ACTION,"Right string: %s", rvalue);					
-				rightNum = atof(rvalue);
-				debug(DEBUG_ACTION,"leftNum = %f, rightNum = %f", leftNum, rightNum);
+				if(FAIL == UtilStod(rvalue, &rightNum)){
+					ph->failReason = talloc_asprintf(ph, "Invalid numeric string on line %d", pe->lineNo);
+					break;
+				}
+				debug(DEBUG_ACTION,"leftNum = %e, rightNum = %e", leftNum, rightNum);
 				
 				switch(pe->operand){
 					case OPRT_NUMEQUALITY:

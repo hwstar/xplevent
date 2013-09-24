@@ -11,6 +11,8 @@ Bool UtilPIDWrite(const String filename, pid_t pid);
 Bool UtilSpawn(const String command, pid_t *pid);
 String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep);
 String *UtilSplitWhite(TALLOC_CTX *ctx, String input);
+Bool UtilStod(const String val, double *res);
+Bool UtilStoi(const String val, int *res);
 
 
 #endif

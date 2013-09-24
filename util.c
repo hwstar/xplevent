@@ -28,6 +28,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <limits.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -36,6 +37,53 @@
 #include "types.h"
 #include "notify.h"
 #include "util.h"
+
+/*
+ * Convert a string to a double.
+ */
+ 
+
+Bool UtilStod(const String val, double *res)
+{
+	String endp;
+	
+	ASSERT_FAIL(val)
+	ASSERT_FAIL(res)
+	
+	*res = strtod(val, &endp);
+	if(*val && !*endp){
+		return PASS;
+	}
+	else{
+		return FAIL;
+	}
+	
+}
+
+/*
+ * Convert a string to an integer
+ */
+ 
+Bool UtilStoi(const String val, int *res)
+{
+	String endp;
+	long long l;
+	
+	ASSERT_FAIL(val)
+	ASSERT_FAIL(res)
+	
+	l = strtoll(val, &endp, 10);
+	*res = (int) l;
+	if(*val && !*endp && (l <= INT_MAX)){
+		return PASS;
+	}
+	else{
+		return FAIL;
+	}
+	
+}
+
+
 
 /*
  * Split a string into a array of substrings using either space or tab as the split character
