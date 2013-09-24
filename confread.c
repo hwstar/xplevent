@@ -645,16 +645,21 @@ const String ConfReadValueBySectKey(ConfigEntryPtr_t ce, const String section, c
 
 Bool ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section, const String key, unsigned *res)
 {
-	const char *num = ConfReadValueBySectKey(ce, section, key);
-	if(num && res){
-		long val = strtol(num, NULL, 0);
-		if((errno != ERANGE) && (val > 0) && (val <= UINT_MAX)){
-			*res = (unsigned) val;
-			return PASS;
-		}
+	String num;
+	ASSERT_FAIL(ce)
+	ASSERT_FAIL(section)
+	ASSERT_FAIL(key)
+	ASSERT_FAIL(res)
+	
+	num = ConfReadValueBySectKey(ce, section, key);
+	
+	
+	if((!num) || (FAIL == UtilStou(num, res)){
+		*res = 0;
+		return FAIL;
 	}
+	return PASS;
 
-	return FAIL;
 }
 
 
