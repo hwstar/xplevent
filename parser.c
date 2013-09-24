@@ -1159,13 +1159,14 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 				
 			case OP_TEST: /* Variable test */
 				ASSERT_FAIL(ph->pushCount == 2)
+				leftNum = rightNum = 0.0;
 				p = pe->prev->prev;
 				if(ParserPcodeGetValue(ctx, ph, p, &value)){ /* Left */
 					undefVar(ph, p->data1, pe->lineNo); 
 					break;
 				}
 				debug(DEBUG_ACTION,"Left string: %s", value);				
-				if(FAIL == UtilStod(value, &leftNum)){
+				if((pe->operand != OPRT_STREQUALITY) && (FAIL == UtilStod(value, &leftNum))){
 					ph->failReason = talloc_asprintf(ph, "Invalid numeric string on line %d", pe->lineNo);
 					break;
 				}
@@ -1175,7 +1176,7 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 					break;
 				}	
 				debug(DEBUG_ACTION,"Right string: %s", rvalue);					
-				if(FAIL == UtilStod(rvalue, &rightNum)){
+				if((pe->operand != OPRT_STREQUALITY) && (FAIL == UtilStod(rvalue, &rightNum))){
 					ph->failReason = talloc_asprintf(ph, "Invalid numeric string on line %d", pe->lineNo);
 					break;
 				}
