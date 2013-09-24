@@ -44,6 +44,29 @@
 #include "socket.h"
 
 
+/*
+* Permit or deny a socket connection
+*/
+
+Bool SocketPermitDeny(TALLOC_CTX *ctx, String permit, String deny, 
+struct sockaddr_storage *clientAddr, sockelnt_t clientAddrSize))
+{
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(clientAddr)
+	
+	if((!permit) && (!deny)){
+		return PASS;
+	}
+	
+	
+	return FAIL;
+	
+}
+
+
+
+
+
 /* 
  * Wait for a read data to become readable.
  *
