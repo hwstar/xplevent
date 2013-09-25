@@ -981,6 +981,9 @@ static void commandSocketListener(int fd, int revents, int uservalue)
     socklen_t clientAddrSize = sizeof(clientAddr);
 	int userSock;
 	
+	/* Zero the socket address storage area */
+	memset(&clientAddr, sizeof(sockaddr_storage));
+	
 	debug(DEBUG_ACTION, "Accepting socket connection");
 	/* Accept the user connection. */
 	userSock = accept4(fd, (struct sockaddr *) &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
