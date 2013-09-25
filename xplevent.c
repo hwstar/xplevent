@@ -375,11 +375,12 @@ static void getScript(String utilityArg, String utilityFile)
 	if(utilityFile){
 		if(dbDirectFlag){
 			/* Access the local database file */
-			if(!(script = DBFetchScript(TALLOC_CTX *ctx, void *db, utilityArg))){
+			if(!(script = DBFetchScript(Globals, void *db, utilityArg))){
 				fatal("%s: Problem retreiving script: %s from database", id, utilityArg);
 			}
 			
 			if(FAIL == UtilFileWriteString(utilityFile, script)){ /* Save the script */
+				talloc_free(script); /* Free the script */
 				fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
 			}
 			talloc_free(script); /* Free the script */
