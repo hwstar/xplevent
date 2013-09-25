@@ -368,13 +368,21 @@ static void getScript(String utilityArg, String utilityFile)
 	Bool done;
 	unsigned length;
 	int daemonSocket;
-	String line;
+	String line, script;
 	String id = "xplevent:getScript";
 	MonRcvInfoPtr_t ri;
 	
 	if(utilityFile){
 		if(dbDirectFlag){
 			/* Access the local database file */
+			if(!(script = DBFetchScript(TALLOC_CTX *ctx, void *db, utilityArg))){
+				fatal("%s: Problem retreiving script: %s from database", id, utilityArg);
+			}
+			
+			if(FAIL == UtilFileWriteString(utilityFile, script)){ /* Save the script */
+				fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
+			}
+			talloc_free(script); /* Free the script */
 		
 		}
 		else{
@@ -473,7 +481,9 @@ static void putScript(String utilityArg, String utilityFile)
 
 		if(dbDirectFlag){
 			/* Access the local database */
-			
+			if(FAIL == DBIRScript(Globals, Globals->db, utilityArg, script)){
+				fatal("%s: Could not insert or replace script %s", id, utilityArg)
+			}
 		}
 		else{
 			/* Connect to a daemon */
@@ -960,13 +970,14 @@ int main(int argc, char *argv[])
 	sigaction(SIGCHLD, &sa_chld, NULL);
 
 
+	/* See if database needs to be opened */
  	if(utilityCommand != UC_GENERATE){ /* If not generating a new database file AND ... */
  		if((!utilityCommand) ||  /* If server mode OR... */
  		((dbDirectFlag) && ((utilityCommand == UC_GET_SCRIPT) || /* Direct script get OR ...*/
  		((dbDirectFlag) && (utilityCommand == UC_PUT_SCRIPT)))))){ /* Direct script put */
 			/* Open the database */
 			if(!(Globals->db = DBOpen(Globals->dbFile))){
-				fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
+				fatal("Database file does not exist or is not writaeble: %s", Globals->dbFile);
 			}
  		}
 	}
