@@ -44,6 +44,23 @@
 #include "socket.h"
 
 
+typedef struct SockAclListEntry_s {
+unsigned magic;
+struct SockAclListEntry_s prev;
+struct SockAclListEntry_s next;
+} SockAclListEntry_t;
+
+typedef SockAclListEntry_t * SoclAclListEntryPtr_t;
+
+
+typedef struct SockAclListPtr_s {
+SockAclListEntryPtr_t head;
+SockAckListEntryPtr_t tail;
+} SockAclList_t;
+
+typedef SockAclList_t * SockAclListPtr_t;
+
+
 /*
 * Permit or deny a socket connection.
 *
@@ -61,7 +78,7 @@
 * Boolean: PASS = accept, FAIL = reject
 */
 
-Bool SocketCheckACL(TALLOC_CTX *ctx, SockAclListPtr_t acl, 
+Bool SocketCheckACL(TALLOC_CTX *ctx, void *acl, 
 struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
 {
 	ASSERT_FAIL(ctx)
