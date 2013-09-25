@@ -48,13 +48,13 @@
 * Permit or deny a socket connection
 */
 
-Bool SocketPermitDeny(TALLOC_CTX *ctx, String permit, String deny, 
+Bool SocketPermitDeny(TALLOC_CTX *ctx, SockAclListPtr_t acl, 
 struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
 {
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(clientAddr)
 	
-	if((!permit) && (!deny)){
+	if(!acl){
 		return PASS;
 	}
 	
