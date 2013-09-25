@@ -78,8 +78,7 @@ typedef SockAclList_t * SockAclListPtr_t;
 * Boolean: PASS = accept, FAIL = reject
 */
 
-Bool SocketCheckACL(TALLOC_CTX *ctx, void *acl, 
-struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
+Bool SocketCheckACL(void *acl, struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
 {
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(clientAddr)
