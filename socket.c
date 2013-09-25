@@ -45,10 +45,23 @@
 
 
 /*
-* Permit or deny a socket connection
+* Permit or deny a socket connection.
+*
+* This is just a stub at this point in development.
+*
+* Arguments:
+*
+* 1. A talloc context to use for transitory data
+* 2. A pointer to the access Control list
+* 3. A pointer to the incoming socket data
+* 4. The size of the address information in the socket data
+*
+* Return value:
+*
+* Boolean: PASS = accept, FAIL = reject
 */
 
-Bool SocketPermitDeny(TALLOC_CTX *ctx, SockAclListPtr_t acl, 
+Bool SocketCheckACL(TALLOC_CTX *ctx, SockAclListPtr_t acl, 
 struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
 {
 	ASSERT_FAIL(ctx)
