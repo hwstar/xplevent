@@ -728,8 +728,8 @@ int main(int argc, char *argv[])
 
 				/* Save the value. */
 				Globals->debugLvl=atoi(optarg);
-				if((FAIL == UtilStoi(optarg, &Globals->debugLvl) ||
-					Globals->debugLvl < 0 || Globals->debugLvl > DEBUG_MAX) {
+				if((FAIL == UtilStoi(optarg, &Globals->debugLvl)) ||
+					(Globals->debugLvl < 0) || (Globals->debugLvl > DEBUG_MAX)) {
 					fatal("Invalid debug level");
 				}
 

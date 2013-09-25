@@ -978,12 +978,12 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 {
 	connectionDataPtr_t cdp;
 	struct sockaddr_storage clientAddr;
-    	socklen_t clientAddrSize = sizeof(theirAddr);
+    socklen_t clientAddrSize = sizeof(clientAddr);
 	int userSock;
 	
 	debug(DEBUG_ACTION, "Accepting socket connection");
 	/* Accept the user connection. */
-	userSock = accept4(fd, &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
+	userSock = accept4(fd, (struct sockaddr *) &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
 	if(userSock == -1) {
 		debug(DEBUG_UNEXPECTED, "Could not accept socket");
 		return;
@@ -1001,7 +1001,7 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	
 	/* Save client address data */
 	cdp->clientAddrSize = clientAddrSize;
-	memcpy(cdp->clientAddr, clientAddr, sizeof(struct sockaddr_storage));
+	memcpy(&cdp->clientAddr, &clientAddr, sizeof(struct sockaddr_storage));
 	
 	/* Add the accepted socket to the polling list */
 	xPL_addIODevice(clientCommandListener, (int) cdp, userSock, TRUE, FALSE, FALSE);

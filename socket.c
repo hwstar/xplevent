@@ -49,7 +49,7 @@
 */
 
 Bool SocketPermitDeny(TALLOC_CTX *ctx, String permit, String deny, 
-struct sockaddr_storage *clientAddr, sockelen_t clientAddrSize)
+struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
 {
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(clientAddr)

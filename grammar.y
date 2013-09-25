@@ -241,12 +241,22 @@ assignment ::= hash EQUALS hash .
 
 test ::= hash testop(A) rvalue .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
+	ParserPcodeEmit(parseCtrl, OP_TEST2, A->operand, "test", A->anno);
 }
 
 test ::= rvalue testop(A) hash .
 {
-	ParserPcodeEmit(parseCtrl, OP_TEST, A->operand, "test", A->anno);
+	ParserPcodeEmit(parseCtrl, OP_TEST2, A->operand, "test", A->anno);
+}
+
+test ::= hash testop(A) hash .
+{
+	ParserPcodeEmit(parseCtrl, OP_TEST2, A->operand, "test", A->anno);
+}
+
+test ::= rvalue testop(A) rvalue .
+{
+	ParserPcodeEmit(parseCtrl, OP_TEST2, A->operand, "test", A->anno);
 }
 
 /*

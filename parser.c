@@ -145,10 +145,12 @@ static void printOpcode(PcodePtr_t p)
 		case OP_IF:
 			op = "If";
 			break;	
+		
 				
-		case OP_TEST:
-			op = "Test";
+		case OP_TEST2:
+			op = "Test 2";
 			break;
+			
 			
 		case OP_EXISTS:
 			op = "Exists";
@@ -1017,7 +1019,7 @@ void ParserSetJumps(ParseCtrlPtr_t this, int tokenID)
 	/* Look for test or exists instruction */		
 	for(; (p); p = p->prev){
 		ASSERT_FAIL(p->ctrlStructRefCount >= myCBRC);
-		if((p->ctrlStructRefCount == myCBRC) && ((p->opcode == OP_TEST)||(p->opcode == OP_EXISTS))){
+		if((p->ctrlStructRefCount == myCBRC) && ((p->opcode == OP_TEST2)||(p->opcode == OP_EXISTS))){
 			if(tokenID == TOK_IF){
 				debug(DEBUG_ACTION,"Set Jumps TOK_IF, line = %d, seq = %d, CBRC = %d", p->lineNo, p->seq, p->ctrlStructRefCount);
 				ASSERT_FAIL(tail)
@@ -1157,7 +1159,8 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 				debug(DEBUG_ACTION,"Assign successful on line %d", pe->lineNo);
 				break;
 				
-			case OP_TEST: /* Variable test */
+				
+			case OP_TEST2: /* Double Variable test */
 				ASSERT_FAIL(ph->pushCount == 2)
 				leftNum = rightNum = 0.0;
 				p = pe->prev->prev;
@@ -1167,7 +1170,7 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 				}
 				debug(DEBUG_ACTION,"Left string: %s", value);				
 				if((pe->operand != OPRT_STREQUALITY) && (FAIL == UtilStod(value, &leftNum))){
-					ph->failReason = talloc_asprintf(ph, "Invalid numeric string on line %d", pe->lineNo);
+					ph->failReason = talloc_asprintf(ph, "Invalid numeric value on line %d", pe->lineNo);
 					break;
 				}
 				p = pe->prev;
@@ -1177,7 +1180,7 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 				}	
 				debug(DEBUG_ACTION,"Right string: %s", rvalue);					
 				if((pe->operand != OPRT_STREQUALITY) && (FAIL == UtilStod(rvalue, &rightNum))){
-					ph->failReason = talloc_asprintf(ph, "Invalid numeric string on line %d", pe->lineNo);
+					ph->failReason = talloc_asprintf(ph, "Invalid numeric value on line %d", pe->lineNo);
 					break;
 				}
 				debug(DEBUG_ACTION,"leftNum = %e, rightNum = %e", leftNum, rightNum);

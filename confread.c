@@ -654,7 +654,7 @@ Bool ConfReadValueBySectKeyAsUnsigned(ConfigEntryPtr_t ce, const String section,
 	num = ConfReadValueBySectKey(ce, section, key);
 	
 	
-	if((!num) || (FAIL == UtilStou(num, res)){
+	if((!num) || (FAIL == UtilStou(num, res))){
 		*res = 0;
 		return FAIL;
 	}

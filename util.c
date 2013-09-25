@@ -133,7 +133,7 @@ Bool UtilStou(const String val, unsigned *res)
 	
 	l = strtoll(val, &endp, 10);
 
-	if(*val && !*endp && (l <= UNSIGNED_MAX) && (l >= 0)){
+	if(*val && !*endp && (l <= UINT_MAX) && (l >= 0)){
 		*res = (unsigned) l;
 		return PASS;
 	}
