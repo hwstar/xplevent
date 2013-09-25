@@ -62,7 +62,7 @@
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERATE};
 
 
-#define SHORT_OPTIONS "b:C:cd:ef:Fg:GHh:i:L:no:P:p:s:S:Vx:"
+#define SHORT_OPTIONS "b:C:cd:Def:Fg:GHh:i:L:no:P:p:s:S:Vx:"
 
 #define WS_SIZE 256
 
@@ -100,6 +100,7 @@ XPLEvGlobalsPtr_t Globals = NULL;
 static volatile sig_atomic_t exitRequest, gotHup;
 static clOverride_t clOverride;
 static Bool forceFlag = FALSE;
+static Bool dbDirectFlag = FALSE;
 static int utilityCommand = 0;
 static String utilityArg = NULL;
 static String utilityFile = NULL;
@@ -116,6 +117,7 @@ static struct option longOptions[] = {
 	{"check",0 ,0 ,'c'},
 	{"config-file", 0, 0, 'C'},
 	{"debug", 1, 0, 'd'},
+	{"dbdirect",0 0, 'D'},
 	{"exitonerr",0, 0, 'e'},
 	{"file", 0, 0, 'f'},
 	{"force", 0, 0, 'F'},
@@ -204,6 +206,7 @@ static void showHelp(void)
 	printf("  -C, --config-file PATH  Set the path to the config file\n");
 	printf("  -c, --check             Utility Function: Check script file syntax\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
+	printf("  -D, --dbdirect          Connect to the database directly, (i.e. not over TCP)")
 	printf("                          compiled-in default is %d and the max\n", Globals->debugLvl);
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
@@ -370,49 +373,57 @@ static void getScript(String utilityArg, String utilityFile)
 	MonRcvInfoPtr_t ri;
 	
 	if(utilityFile){
-
-		/* Receive script from daemon */
-		if(( daemonSocket = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
-			fatal("%s:Could not connect to daemon at address: %s",id, Globals->cmdHostName);
-		}
-		/* Allocate the receive info structure */
-		MALLOC_FAIL(ri = talloc_zero(Globals, MonRcvInfo_t))
-		/* Initialize the structure */
-		ri->scriptBufSize = 2048;
-		ri->scriptSizeLimit = 65536;
-		MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize))
-		ri->script[0] = 0; /* Set to zero length */
-		/* Send the send script comment */
-		SocketPrintf(Globals, daemonSocket, "ss:%s\n", utilityArg);
-		/* Loop while getting the contents of the script from the server */
-		for(done = FALSE;!done;){
-			/* Read one line at a time, then process it */
-			ASSERT_FAIL(line = SocketReadLine(Globals, daemonSocket, &length))
-			if(!length){
-				/* empty line from file */
-				break;
-			}
-			done = MonitorRecvScript(ri, line);
-			/* Free the line */
-			talloc_free(line);
-		}
-	
-		/* Close the socket */
-		if(close(daemonSocket) < 0){
-			fatal("%s: Close error on socket: %s", id, strerror(errno));
-		}
-		/* Check for errors */
-		if(ri->state != RS_ERROR){	
-			if(UtilFileWriteString(utilityFile, ri->script) == FAIL){ /* Error free, save the script */
-				fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
-			}
-			note("Script received successfully");
+		if(dbDirectFlag){
+			/* Access the local database file */
+		
 		}
 		else{
-			talloc_free(ri); /* Error detected */
-			fatal("Script receive error"); /* FIXME */
-		}	
-		talloc_free(ri); /* Free the receive info structure */	
+
+			/* Receive script from daemon */
+			if(( daemonSocket = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
+				fatal("%s:Could not connect to daemon at address: %s",id, Globals->cmdHostName);
+			}
+			/* Allocate the receive info structure */
+			MALLOC_FAIL(ri = talloc_zero(Globals, MonRcvInfo_t))
+			/* Initialize the structure */
+			ri->scriptBufSize = 2048;
+			ri->scriptSizeLimit = 65536;
+			MALLOC_FAIL(ri->script = talloc_array(ri, char, ri->scriptBufSize))
+			ri->script[0] = 0; /* Set to zero length */
+		
+
+			/* Send the send script comment */
+			SocketPrintf(Globals, daemonSocket, "ss:%s\n", utilityArg);
+			/* Loop while getting the contents of the script from the server */
+			for(done = FALSE;!done;){
+				/* Read one line at a time, then process it */
+				ASSERT_FAIL(line = SocketReadLine(Globals, daemonSocket, &length))
+				if(!length){
+					/* empty line from file */
+					break;
+				}
+				done = MonitorRecvScript(ri, line);
+				/* Free the line */
+				talloc_free(line);
+			}
+	
+			/* Close the socket */
+			if(close(daemonSocket) < 0){
+				fatal("%s: Close error on socket: %s", id, strerror(errno));
+			}
+			/* Check for errors */
+			if(ri->state != RS_ERROR){	
+				if(UtilFileWriteString(utilityFile, ri->script) == FAIL){ /* Error free, save the script */
+					fatal_with_reason(errno, "%s: Could not write file: %s", id, utilityFile);
+				}
+				note("Script received successfully");
+			}
+			else{
+				talloc_free(ri); /* Error detected */
+				fatal("Script receive error"); /* FIXME */
+			}	
+			talloc_free(ri); /* Free the receive info structure */
+		}
 	}
 	else{
 		/* File not specified */
@@ -460,45 +471,54 @@ static void putScript(String utilityArg, String utilityFile)
 			fatal_with_reason(errno, "%s: Could not read file: %s", id, utilityFile);
 		}
 
-		/* Send script to daemon */
-		if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
-			fatal("%s: Could not connect to daemon at address: %s",id, Globals->cmdHostName);
+		if(dbDirectFlag){
+			/* Access the local database */
+			
 		}
+		else{
+			/* Connect to a daemon */
+			/* Send script to daemon */
+			if(( daemonSock = SocketConnectIP(Globals->cmdHostName, Globals->cmdService, AF_UNSPEC, SOCK_STREAM)) < 0){
+				fatal("%s: Could not connect to daemon at address: %s",id, Globals->cmdHostName);
+			}
 
-		/* Send the command */
-		debug(DEBUG_ACTION,"Sending recieve script request");
-		SocketPrintf(Globals, daemonSock, "rs:%s\n", utilityArg);	
+			/* Send the command */
+			debug(DEBUG_ACTION,"Sending recieve script request");
+			SocketPrintf(Globals, daemonSock, "rs:%s\n", utilityArg);	
 		
-		/* Send the script */
-		MonitorSendScript(Globals, daemonSock, script, utilityArg);
-		
-		/* Get the response */
-		debug(DEBUG_ACTION,"Waiting for response...");
-		if((ack = SocketReadLine(Globals, daemonSock, &length)) == NULL){
-			fatal("%s: Failed to get acknowlgement of receipt of script");
+			/* Send the script */
+			MonitorSendScript(Globals, daemonSock, script, utilityArg);
+			
+			/* Get the response */
+			debug(DEBUG_ACTION,"Waiting for response...");
+			if((ack = SocketReadLine(Globals, daemonSock, &length)) == NULL){
+				fatal("%s: Failed to get acknowlgement of receipt of script");
+			}
+			debug(DEBUG_ACTION,"Got response");
 		}
-		debug(DEBUG_ACTION,"Got response");
 		
 		/* Free the script */
 		talloc_free(script);
 		
-		/* Close the socket */
-		if(close(daemonSock) < 0){
-			fatal("%s: Close error on socket: %s", id, strerror(errno));
+	
+		if(!dbDirectFlag){
+			/* Close the socket */
+			if(close(daemonSock) < 0){
+				fatal("%s: Close error on socket: %s", id, strerror(errno));
+			}
+		
+			/* Check the response */
+			if(!strncmp("er:", ack, 3)){
+				error("Error sending script to server: %s", ack + 3);
+			}
+			else{
+				note("Script uploaded successfully");
+			}
+			
+			/* Free the response */
+		
+			talloc_free(ack);
 		}
-		
-		/* Check the response */
-		if(!strncmp("er:", ack, 3)){
-			error("Error sending script to server: %s", ack + 3);
-		}
-		else{
-			note("Script uploaded successfully");
-		}
-		
-		
-		/* Free the response */
-		
-		talloc_free(ack);
 	
 	}
 	else{
@@ -734,6 +754,11 @@ int main(int argc, char *argv[])
 				}
 
 				break;
+				
+			case 'D': /* Database direct flag */
+				dbDirectFlag = TRUE;
+				break;
+				
 				
 			case 'e':
 				Globals->exitOnErr = TRUE;
