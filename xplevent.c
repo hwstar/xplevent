@@ -959,9 +959,11 @@ int main(int argc, char *argv[])
 	sa_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
 	sigaction(SIGCHLD, &sa_chld, NULL);
 
- 	if(utilityCommand != UC_GENERATE){
- 		if((!utilityCommand) || 
- 		((dbDirectFlag) && ((utilityCommand == UC_GET_SCRIPT) || (utilityCommand == UC_PUT_SCRIPT))))){
+
+ 	if(utilityCommand != UC_GENERATE){ /* If not generating a new database file AND ... */
+ 		if((!utilityCommand) ||  /* If server mode OR... */
+ 		((dbDirectFlag) && ((utilityCommand == UC_GET_SCRIPT) || /* Direct script get OR ...*/
+ 		((dbDirectFlag) && (utilityCommand == UC_PUT_SCRIPT)))))){ /* Direct script put */
 			/* Open the database */
 			if(!(Globals->db = DBOpen(Globals->dbFile))){
 				fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
