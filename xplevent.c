@@ -960,10 +960,13 @@ int main(int argc, char *argv[])
 	sigaction(SIGCHLD, &sa_chld, NULL);
 
  	if(utilityCommand != UC_GENERATE){
-		/* Open the database */
-		if(!(Globals->db = DBOpen(Globals->dbFile))){
-			fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
-		}
+ 		if((!utilityCommand) || 
+ 		((dbDirectFlag) && ((utilityCommand == UC_GET_SCRIPT) || (utilityCommand == UC_PUT_SCRIPT))))){
+			/* Open the database */
+			if(!(Globals->db = DBOpen(Globals->dbFile))){
+				fatal("Database file does not exist or is not writeble: %s", Globals->dbFile);
+			}
+ 		}
 	}
 	
 	/* Check for utility commands */
