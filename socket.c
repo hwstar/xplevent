@@ -60,6 +60,7 @@ typedef SockAclListEntry_t * SockAclListEntryPtr_t;
 
 typedef struct SockAclListPtr_s {
 	unsigned magic;
+	Bool denyAll;
 	SockAclListEntryPtr_t allowHead;
 	SockAclListEntryPtr_t allowTail;
 	SockAclListEntryPtr_t denyHead;
@@ -172,9 +173,9 @@ static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_st
 		struct sockaddr_in6 ip2_6 = *(const struct sockaddr_in6 *)ip2;
 		struct sockaddr_in6 mask_6 = *(const struct sockaddr_in6 *)mask;
 		/* Make pointers to the local copies */
-		char *p1 = (char *)&ip1_6.sin6_addr;
-		char *p2 = (char *)&ip2_6.sin6_addr;
-		char *m = (char *)&mask_6.sin6_addr;
+		uint8_t *p1 = (uint8_t *)&ip1_6.sin6_addr;
+		uint8_t *p2 = (uint8_t *)&ip2_6.sin6_addr;
+		uint8_t *m = (uint8_t *)&mask_6.sin6_addr;
 		
 		int i;
 		
@@ -266,22 +267,36 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
  * Arguments:
  *
  * 1. The talloc context to hang the access control list off of.
- * 2. A comma delimited set of V4 and/or V6 IP addresses with optional CIDR notation to allow.
- * 3. A comma delimited set of V4 and/or V6 IP addresses with optional CIDR notation to deny, 
- *    or the keyword ALL to deny everything and only accept IP addresses on the allow list.
+ * 2. A pointer to a place to store the ACL list object 
+ * 3. A comma delimited set of V4 and/or V6 IP addresses with optional CIDR notation to allow, or NULL
+ * 4. A comma delimited set of V4 and/or V6 IP addresses with optional CIDR notation to deny, 
+ *    or the keyword ALL to deny everything and only accept IP addresses on the allow list, or NULL
  *
  * Returns:
  * 
- * ACL list or NULL if error. Use talloc_free to free the list when done
+ * Boolean: PASS indicates no parse errors were detected. FAIL indicates a parse error.
  */ 
 
-void *SocketGenACL(TALLOC_CTX *ctx, String allowList, String denyList)
+Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList)
 {
 	String s;
 	String *addrs;
 	unsigned i;
+	SockAclListPtr_t al;
+	SockAclListEntryPtr_t e;
 	
+
+	ASSERT_FAIL(acl)
 	ASSERT_FAIL(ctx)
+	
+	
+	if(allowList || denyList){
+		MALLOC_FAIL(al = talloc_zero(ctx, SockAclListPtr_t))
+	}
+	else{
+		al = NULL;
+	}
+	
 
 	if(allowList){
 		s = UtilStripWhite(ctx, allowList);
@@ -289,9 +304,24 @@ void *SocketGenACL(TALLOC_CTX *ctx, String allowList, String denyList)
 		talloc_free(s);
 		for(i = 0; addrs[i]; i++){
 		}
+		talloc_free(addrs);
 	}
 	
-	return NULL;
+	if(denyList){
+		if(!strcmp("ALL", denyList)){
+			al->denyAll = TRUE;
+		}
+		else{
+			s = UtilStripWhite(ctx, denyList);
+			addrs = UtilSplitString(ctx, s, ',');
+			talloc_free(s);
+			for(i = 0; addrs[i]; i++){
+			}
+			talloc_free(addrs);
+		}
+	}
+	
+	return FALSE;
 }
 
 
