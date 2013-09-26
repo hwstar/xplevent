@@ -254,13 +254,13 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	
 	/* Free the address structure */
 	if(ai){
-		freeaddrinfo(ai)	
+		freeaddrinfo(ai);	
 	}
 	
 
 	/* Free the split strings */
 	
-	talloc_free(parts)
+	talloc_free(parts);
 
 	/* Test for errors, and clean up if so. */
 	
