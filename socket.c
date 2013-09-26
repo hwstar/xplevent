@@ -220,6 +220,8 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(e)
+	ASSERT_FAIL(cidrString)
+
 	
 	/* Split the mask and address portions */
 	
@@ -228,7 +230,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	/* Allocate a holding structure */
 	
 	MALLOC_FAIL(new = talloc_zero(ctx, SockAclListEntryPtr_t))
-	
+	new->magic = SE_MAGIC;
 	
 	/* Parse the address portion */
 	
@@ -238,6 +240,16 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	}
 	
 	
+	/* Copy the binary address info to our holding struct */
+	
+	new->check = (struct sockaddr_storage) *(ai->ai_addr);
+	
+	if(!parts[1]){ /* If no mask bits specified */
+		masklen = 128; /* set to the max */
+	}
+	
+	/* Initialize the mask */
+	addrMaskInit(&new->mask, new->check.ss_family, maskLen)
 	
 	
 	/* Free the address structure */
@@ -311,13 +323,15 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 		allow = sameNet(clientAddr, &e->check, &e->mask);
 	}
 	
-	if(!deny && !allow){
+	if((!deny && !denyAll && !allow){ /* Nothing specified, so accept it all */
 		return PASS;
 	}
 	
-	if(allow){
+	if(allow){ /* If something was allowed, then accept it */
 		return PASS;
 	}
+	
+	/*  Denied, so fail */
 		
 	return FAIL;
 	
@@ -372,6 +386,15 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 				res = FAIL;
 				break;
 			}
+			/* Insert into list */
+			if(!al.allowHead){
+				al->allowHead = al->allowTail = e;
+			}
+			else{
+				e->prev = al->allowTail;
+				e->prev->next = e;
+				al->allowTail = e;
+			}
 		}
 		talloc_free(addrs);
 	}
@@ -389,6 +412,15 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 				if(FAIL == parseCIDR(al, addrs[i], &e)){
 					res = FAIL;
 					break;
+				}
+				/* Insert into list */
+				if(!al.denyHead){
+					al->denyHead = al->denyTail = e;
+				}
+				else{
+					e->prev = al->denyTail;
+					e->prev->next = e;
+					al->denyTail = e;
 				}
 			}
 			talloc_free(addrs);
