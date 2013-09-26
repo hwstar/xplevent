@@ -993,7 +993,7 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	}
 	
 	/* Check to see if client is permitted */
-	if(FAIL == SocketCheckACL(NULL, &clientAddr, clientAddrSize)){
+	if(FAIL == SocketCheckACL(NULL, &clientAddr)){
 		/* Denied */
 		close(fd);
 		return;

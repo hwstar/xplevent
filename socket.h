@@ -19,7 +19,8 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	int (*addsock)(int sock, void *addr, int family, int socktype));
 Bool SocketWaitReadReady(int socket, int msTimeout);
 Bool SocketWaitWriteReady(int socket, int msTimeout);
-Bool SocketCheckACL(void *acl, struct sockaddr_storage *clientAddr, socklen_t clientAddrSize);
+void *SocketGenACL(TALLOC_CTX *ctx, String allowList, String denyList);
+Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr);
 
 
 #endif

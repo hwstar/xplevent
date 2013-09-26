@@ -41,58 +41,172 @@
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
+#include "util.h"
 #include "socket.h"
 
+#define SE_MAGIC 0xE20A6491
+#define SH_MAGIC 0x04A8C3D6
 
 typedef struct SockAclListEntry_s {
-unsigned magic;
-struct SockAclListEntry_s *prev;
-struct SockAclListEntry_s *next;
+	unsigned magic;
+	struct sockaddr_storage mask;
+	struct sockaddr_storage check;
+	struct SockAclListEntry_s *prev;
+	struct SockAclListEntry_s *next;
 } SockAclListEntry_t;
 
 typedef SockAclListEntry_t * SockAclListEntryPtr_t;
 
 
 typedef struct SockAclListPtr_s {
-	SockAclListEntryPtr_t head;
-	SockAclListEntryPtr_t tail;
+	unsigned magic;
+	SockAclListEntryPtr_t allowHead;
+	SockAclListEntryPtr_t allowTail;
+	SockAclListEntryPtr_t denyHead;
+	SockAclListEntryPtr_t denyTail;
 } SockAclList_t;
 
 typedef SockAclList_t * SockAclListPtr_t;
+
+/*
+ * Are 2 IPV4 addresses the same
+ * (From the Samba project)
+ */
+
+static Bool sameNetV4(struct in_addr ip1, struct in_addr ip2, struct in_addr mask)
+{
+	uint32_t net1,net2,nmask;
+
+	nmask = ntohl(mask.s_addr);
+	net1 = ntohl(ip1.s_addr);
+	net2 = ntohl(ip2.s_addr);
+            
+	return((net1 & nmask) == (net2 & nmask));
+}
+
+/*
+* Are two IPs on the same subnet?
+* (Inspired from the Samba project)
+*/
+
+static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_storage *ip2, const struct sockaddr_storage *mask)
+{
+	if (ip1->ss_family != ip2->ss_family) {
+		/* Never on the same net. */
+		return FALSE;
+	}
+
+
+	if (ip1->ss_family == AF_INET6) {
+		struct sockaddr_in6 ip1_6 = *(const struct sockaddr_in6 *)ip1;
+		struct sockaddr_in6 ip2_6 = *(const struct sockaddr_in6 *)ip2;
+		struct sockaddr_in6 mask_6 = *(const struct sockaddr_in6 *)mask;
+		char *p1 = (char *)&ip1_6.sin6_addr;
+		char *p2 = (char *)&ip2_6.sin6_addr;
+		char *m = (char *)&mask_6.sin6_addr;
+		int i;
+
+		for (i = 0; i < sizeof(struct in6_addr); i++) {
+			*p1++ &= *m;
+			*p2++ &= *m;
+			m++;
+		}
+		return (memcmp(&ip1_6.sin6_addr,
+		&ip2_6.sin6_addr,
+		sizeof(struct in6_addr)) == 0);
+	}
+
+
+	if (ip1->ss_family == AF_INET) {
+		return sameNetV4(((const struct sockaddr_in *)ip1)->sin_addr,
+		((const struct sockaddr_in *)ip2)->sin_addr,
+		((const struct sockaddr_in *)mask)->sin_addr);
+	}
+	return FALSE;
+}
 
 
 /*
 * Permit or deny a socket connection.
 *
-* This is just a stub at this point in development.
 *
 * Arguments:
 *
-* 1. A talloc context to use for transitory data
-* 2. A pointer to the access Control list
-* 3. A pointer to the incoming socket data
-* 4. The size of the address information in the socket data
+* 1. A pointer to the access Control list
+* 2. A pointer to the incoming socket data
 *
 * Return value:
 *
 * Boolean: PASS = accept, FAIL = reject
 */
 
-Bool SocketCheckACL(void *acl, struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
+Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 {
+	SockAclListPtr_t al = acl;
+	SockAclListEntryPtr_t e;
+	Bool allow = FALSE;
+	Bool deny = FALSE;
+	
+	
 	ASSERT_FAIL(clientAddr)
 	
-	if(!acl){
+	if(!al){
 		return PASS;
 	}
 	
+	ASSERT_FAIL(SH_MAGIC == al->magic)
 	
+	/* Check deny */
+	for(e = al->denyHead; e && !deny; e = e->next){
+		ASSERT_FAIL(SE_MAGIC == e->magic)
+		deny = sameNet(clientAddr, &e->check, &e->mask);
+	}
+	
+	/* Check allow */
+	
+	for(e = al->allowHead; e && !allow; e = e->next){
+		ASSERT_FAIL(SE_MAGIC == e->magic)
+		allow = sameNet(clientAddr, &e->check, &e->mask);
+	}
+	
+	if(!deny && !allow){
+		return PASS;
+	}
+	
+	if(allow){
+		return PASS;
+	}
+		
 	return FAIL;
 	
 }
 
+/*
+ * Generate an access control list from a comma separated list of of Allow and Deny IP addresses (IPV4 and/or IPV6)
+ * 
+ * Returns:
+ * 
+ * ACL list or NULL if error. Use talloc_free to free the list when done
+ */ 
 
+void *SocketGenACL(TALLOC_CTX *ctx, String allowList, String denyList)
+{
+	String s;
+	String *addrs;
+	unsigned i;
+	
+	ASSERT_FAIL(ctx)
 
+	if(allowList){
+		s = UtilStripWhite(ctx, allowList);
+		addrs = UtilSplitString(ctx, s, ',');
+		talloc_free(s);
+		for(i = 0; addrs[i]; i++){
+		}
+	}
+	
+	return NULL;
+}
 
 
 /* 

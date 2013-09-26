@@ -39,6 +39,32 @@
 #include "util.h"
 
 /*
+ * Duplicate a string stripping out all of the white space
+ */
+
+String UtilStripWhite(TALLOC_CTX *ctx, String orig)
+{
+	String new;
+	unsigned bufSize = 64;
+	unsigned i,j;
+
+	MALLOC_FAIL(new = talloc_array(ctx, char, bufSize))
+	new[0] = 0;
+	for(i = j = 0; orig[i]; i++, j++){
+		if((bufSize - j) >= 2){
+			bufSize <<= 1;
+			MALLOC_FAIL(new = talloc_realloc(ctx, new, char, bufSize))
+		}
+		if((orig[i] == ' ') || (orig[i] == '\t') || (orig[i] == '\n') || (orig[i] == '\r')){
+			continue;
+		}
+		new[j] = orig[i];
+	}
+	return new;
+}
+
+
+/*
  * Convert a string to a double.
  * 
  * Arguments:
