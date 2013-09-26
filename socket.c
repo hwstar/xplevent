@@ -68,6 +68,30 @@ typedef struct SockAclListPtr_s {
 
 typedef SockAclList_t * SockAclListPtr_t;
 
+
+/*
+* Initialize a V4 or V6 address mask 
+*/
+
+static void maskInit(struct sockaddr_storage *mask, unsigned numLsbs)
+{
+	unsigned i;
+	if(AF_INET6 == mask->ss_family){
+		if(numLsbs > 128){ /* Clip to 128 */
+			numLsbs = 128;
+		}
+		
+	}
+	else if (AF_INET4 == mask->ss_family){
+		if(numLsbs > 32){
+			numLsbs = 32; /* Clip to 32 */
+		}
+	}
+	
+
+}
+
+
 /*
  * Are 2 IPV4 addresses the same
  * (From the Samba project)
