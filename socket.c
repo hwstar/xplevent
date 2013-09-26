@@ -72,6 +72,16 @@ typedef SockAclList_t * SockAclListPtr_t;
 
 /*
 * Initialize a V4 or V6 address mask 
+*
+* Arguments:
+*
+* 1. A pointer to the address storage where the mask bits will be saved.
+* 2. The address family to use during mask bit generation.
+* 3. The number of mask bits to generate starting from the most significant bit.
+*
+* Return value:
+*
+* None
 */
 
 static void addrMaskInit(struct sockaddr_storage *mask, sa_family_t family, uint8_t num)
@@ -206,6 +216,17 @@ static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_st
 
 /*
 * Parse a IPV4 or IPV6 CIDR address and generate a new list entry if the address is valid
+*
+* Arguments:
+*
+* 1. A talloc context to use for the result, and for internal transitory data.
+* 2. The CIDR string in IPADDRESS/MASKBITS format.
+* 3. A pointer to a pointer variable where the resulting holding structure can be saved.
+*
+*
+* Return value:
+*
+* PASS if parse was successful, otherwise FAIL
 */
 
 
@@ -370,6 +391,7 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 	
 	if(allowList || denyList){
 		MALLOC_FAIL(al = talloc_zero(ctx, SockAclListPtr_t))
+		al->magic = SH_MAGIC;
 	}
 	else{
 		al = NULL;
