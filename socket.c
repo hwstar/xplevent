@@ -365,14 +365,14 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 	/* Check deny */
 	for(e = al->denyHead; e && !deny; e = e->next){
 		ASSERT_FAIL(SE_MAGIC == e->magic)
-		deny = sameNet(clientAddr, &e->check, &e->mask);
+		deny |= sameNet(clientAddr, &e->check, &e->mask);
 	}
 	
 	/* Check allow */
 	
 	for(e = al->allowHead; e && !allow; e = e->next){
 		ASSERT_FAIL(SE_MAGIC == e->magic)
-		allow = sameNet(clientAddr, &e->check, &e->mask);
+		allow |= sameNet(clientAddr, &e->check, &e->mask);
 	}
 	
 	if((!deny && !al->denyAll && !allow){ /* Nothing specified, so accept it all */
