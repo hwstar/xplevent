@@ -204,6 +204,35 @@ static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_st
 	return FALSE;
 }
 
+/*
+* Parse a IPV4 or IPV6 CIDR address and generate a new list entry if the address is valid
+*/
+
+
+static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t *e))
+{
+	String *parts;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(e)
+	
+	MALLOC_FAIL(parts = UtilSplitString(ctx, s, '/');
+	
+	
+	
+	
+	MALLOC_FAIL(*e = talloc_zero(ctx, SockAclListEntryPtr_t))
+	
+	
+	
+	if(parts){
+		talloc_free(parts)
+	}
+		
+	return PASS;	
+}
+
+
 
 /*
 * Permit or deny a socket connection.
@@ -280,7 +309,8 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList)
 {
 	String s;
-	String *addrs;
+	String *addrs, *addrparts;
+	Bool res = PASS;
 	unsigned i;
 	SockAclListPtr_t al;
 	SockAclListEntryPtr_t e;
@@ -297,31 +327,54 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 		al = NULL;
 	}
 	
-
+	/* Parse the allow list */
 	if(allowList){
-		s = UtilStripWhite(ctx, allowList);
-		addrs = UtilSplitString(ctx, s, ',');
+		s = UtilStripWhite(al, allowList);
+		addrs = UtilSplitString(al, s, ',');
+
 		talloc_free(s);
 		for(i = 0; addrs[i]; i++){
+			if(FAIL == parseCIDR(al, addrs[i], &e)){
+				res = FAIL;
+				break;
+			}
 		}
 		talloc_free(addrs);
 	}
 	
-	if(denyList){
+	/* If no parse errors in the allow list, parse the deny list if it exists */
+	if((res == PASS) && denyList){
 		if(!strcmp("ALL", denyList)){
 			al->denyAll = TRUE;
 		}
 		else{
-			s = UtilStripWhite(ctx, denyList);
-			addrs = UtilSplitString(ctx, s, ',');
+			s = UtilStripWhite(al, denyList);
+			addrs = UtilSplitString(al, s, ',');
 			talloc_free(s);
 			for(i = 0; addrs[i]; i++){
+				if(FAIL == parseCIDR(al, addrs[i], &e)){
+					res = FAIL;
+					break;
+				}
 			}
 			talloc_free(addrs);
 		}
 	}
 	
-	return FALSE;
+	/* Check for errors */
+	if(res == FAIL){
+		/* Clean up the mess */
+		*acl = NULL;
+		if(al){
+			talloc_free(al);
+		}
+	}
+	else{
+		/* Give the caller the opaque aCL object */
+		*acl = al;
+	}
+		
+	return res;
 }
 
 
