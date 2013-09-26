@@ -71,25 +71,48 @@ typedef SockAclList_t * SockAclListPtr_t;
 /*
  * Are 2 IPV4 addresses the same
  * (From the Samba project)
+ *
+ * Arguments:
+ *
+ * 1. First IPV4 address
+ * 2. Second IPV4 address
+ * 3. IPV4 Mask
+ *
+ * Return value:
+ *
+ * Boolean. TRUE if addresses match.
  */
 
 static Bool sameNetV4(struct in_addr ip1, struct in_addr ip2, struct in_addr mask)
 {
 	uint32_t net1,net2,nmask;
 
+	/* Make local copies of the addresses and mask */
 	nmask = ntohl(mask.s_addr);
 	net1 = ntohl(ip1.s_addr);
 	net2 = ntohl(ip2.s_addr);
             
+        /* Mask each address and compare, then return the result */
 	return((net1 & nmask) == (net2 & nmask));
 }
 
 /*
 * Are two IPs on the same subnet?
 * (Inspired from the Samba project)
+*
+* Arguments:
+* 
+* 1. First V4/V6 IP address.
+* 2. Second V4/V6 IP address.
+* 3. V4/V6 address mask
+* 
+* Return value
+*
+* Boolean. TRUE if addresses match, FALSE otherwise.
 */
 
-static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_storage *ip2, const struct sockaddr_storage *mask)
+static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_storage *ip2, 
+	const struct sockaddr_storage *mask)
 {
 	if (ip1->ss_family != ip2->ss_family) {
 		/* Never on the same net. */
@@ -97,31 +120,40 @@ static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_st
 	}
 
 
-	if (ip1->ss_family == AF_INET6) {
+	if (ip1->ss_family == AF_INET6) { /* IPV6? */
+		/* Make local copies of the IPV6 addresses and the mask */
 		struct sockaddr_in6 ip1_6 = *(const struct sockaddr_in6 *)ip1;
 		struct sockaddr_in6 ip2_6 = *(const struct sockaddr_in6 *)ip2;
 		struct sockaddr_in6 mask_6 = *(const struct sockaddr_in6 *)mask;
+		/* Make pointers to the local copies */
 		char *p1 = (char *)&ip1_6.sin6_addr;
 		char *p2 = (char *)&ip2_6.sin6_addr;
 		char *m = (char *)&mask_6.sin6_addr;
+		
 		int i;
+		
+		/* Apply the mask to the addresses... */
 
 		for (i = 0; i < sizeof(struct in6_addr); i++) {
 			*p1++ &= *m;
 			*p2++ &= *m;
 			m++;
 		}
+		/* Return the comparison */
+		
 		return (memcmp(&ip1_6.sin6_addr,
 		&ip2_6.sin6_addr,
 		sizeof(struct in6_addr)) == 0);
 	}
 
 
-	if (ip1->ss_family == AF_INET) {
+	if (ip1->ss_family == AF_INET) { /* IPV4?*/
+		/* Return the comparison of the IPV4 addresses */
 		return sameNetV4(((const struct sockaddr_in *)ip1)->sin_addr,
 		((const struct sockaddr_in *)ip2)->sin_addr,
 		((const struct sockaddr_in *)mask)->sin_addr);
 	}
+	/* Not something we understand */
 	return FALSE;
 }
 
@@ -184,6 +216,14 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 /*
  * Generate an access control list from a comma separated list of of Allow and Deny IP addresses (IPV4 and/or IPV6)
  * 
+ *
+ * Arguments:
+ *
+ * 1. The talloc context to hang the access control list off of.
+ * 2. A comma delimited set of V4 and/or V6 IP addresses with optional CIDR notation to allow.
+ * 3. A comma delimited set of V4 and/or V6 IP addresses with optional CIDR notation to deny, 
+ *    or the keyword ALL to deny everything and only accept IP addresses on the allow list.
+ *
  * Returns:
  * 
  * ACL list or NULL if error. Use talloc_free to free the list when done
