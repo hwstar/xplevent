@@ -78,7 +78,7 @@ static void addrMaskInit(struct sockaddr_storage *mask, sa_family_t family, uint
 	uint8_t i, octet, bit;
 	
 	/* Initialize mask data */
-	*mask = (struct sockaddr_storage){family};
+	*mask = (struct sockaddr_storage){.ss_family = family};
 	
 	if(AF_INET6 == family){ /* IPV6 */
 		sockaddr_in6 *m6 = (sockaddr_in6 *) mask;
