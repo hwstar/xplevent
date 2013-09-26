@@ -211,25 +211,59 @@ static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_st
 
 static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t *e))
 {
-	String *parts;
+	String *parts = NULL;
+	struct addrinfo *ai = NULL;
+	struct addrinfo hints = (struct addrinfo){.ai_family = AF_UNSPEC, .ai_flags = AI_NUMERICHOST};
+	SockAclListEntryPtr_t new;
+	Bool res = PASS;
+	int rv;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(e)
 	
-	MALLOC_FAIL(parts = UtilSplitString(ctx, s, '/');
+	/* Split the mask and address portions */
+	
+	MALLOC_FAIL(parts = UtilSplitString(ctx, s, '/')
+	
+	/* Allocate a holding structure */
+	
+	MALLOC_FAIL(new = talloc_zero(ctx, SockAclListEntryPtr_t))
 	
 	
+	/* Parse the address portion */
 	
-	
-	MALLOC_FAIL(*e = talloc_zero(ctx, SockAclListEntryPtr_t))
-	
-	
-	
-	if(parts){
-		talloc_free(parts)
+	if((rv = getaddrinfo(parts[0], NULL, &hints, &ai))){
+		res = FAIL;
+		debug(DEBUG_UNEXPECTED, "Invalid IP address: %s: %s", parts[0], gai_strerror(rv))
 	}
-		
-	return PASS;	
+	
+	
+	
+	
+	/* Free the address structure */
+	if(ai){
+		freeaddrinfo(ai)	
+	}
+	
+
+	/* Free the split strings */
+	
+	talloc_free(parts)
+
+	/* Test for errors, and clean up if so. */
+	
+	if(res == FAIL){
+		talloc_free(new);
+		*e = NULL;
+	}
+	else{
+		*e = new;
+	}
+
+	
+	/* Return PASS/FAIL result */
+	
+	return res;	
 }
 
 
