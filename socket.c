@@ -238,6 +238,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	SockAclListEntryPtr_t new;
 	Bool res = PASS;
 	int rv;
+	uint8_t masklen;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(e)
@@ -268,10 +269,40 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	if(!parts[1]){ /* If no mask bits specified */
 		masklen = 128; /* set to the max */
 	}
+	else{
+		unsigned ml; 
+		/* Get the number of bits to mask from the second substring */
+		if(FAIL == UtilStou( parts[1], unsigned &ml){
+			res = FAIL;
+		}
+		else{
+			/* Sanity check the mask length */
+			if(AF_INET6 == new->check.ss_family){
+				if(ml > 128){
+					res = FAIL;
+				}
+				else{
+					masklen = (uint8_t) ml;
+				}
+			}
+			else if(AF_INET4 == new->check.ss_family){
+				if(ml > 32)){
+					res = FAIL;
+				}
+				else{
+					masklen = (uint8_t) ml;
+				}
+			}
+			else{ /* Don't know what it is, so fail */
+				res = FAIL;
+			}
+		}
+	}
 	
-	/* Initialize the mask */
-	addrMaskInit(&new->mask, new->check.ss_family, maskLen)
-	
+	if(res != FAIL){
+		/* Initialize the mask */
+		addrMaskInit(&new->mask, new->check.ss_family, masklen)
+	}
 	
 	/* Free the address structure */
 	if(ai){
