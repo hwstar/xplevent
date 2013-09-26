@@ -21,6 +21,7 @@ Bool SocketWaitReadReady(int socket, int msTimeout);
 Bool SocketWaitWriteReady(int socket, int msTimeout);
 void *SocketGenACL(TALLOC_CTX *ctx, String allowList, String denyList);
 Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr);
+Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList);
 
 
 #endif
