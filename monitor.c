@@ -982,7 +982,7 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	int userSock;
 	
 	/* Zero the socket address storage area */
-	memset(&clientAddr, sizeof(sockaddr_storage));
+	memset(&clientAddr, 0, sizeof(struct sockaddr_storage));
 	
 	debug(DEBUG_ACTION, "Accepting socket connection");
 	/* Accept the user connection. */

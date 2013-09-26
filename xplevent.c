@@ -117,7 +117,7 @@ static struct option longOptions[] = {
 	{"check",0 ,0 ,'c'},
 	{"config-file", 0, 0, 'C'},
 	{"debug", 1, 0, 'd'},
-	{"dbdirect",0 0, 'D'},
+	{"dbdirect",0, 0, 'D'},
 	{"exitonerr",0, 0, 'e'},
 	{"file", 0, 0, 'f'},
 	{"force", 0, 0, 'F'},
@@ -206,7 +206,7 @@ static void showHelp(void)
 	printf("  -C, --config-file PATH  Set the path to the config file\n");
 	printf("  -c, --check             Utility Function: Check script file syntax\n");
 	printf("  -d, --debug LEVEL       Set the debug level, 0 is off, the\n");
-	printf("  -D, --dbdirect          Connect to the database directly, (i.e. not over TCP)")
+	printf("  -D, --dbdirect          Connect to the database directly, (i.e. not over TCP)");
 	printf("                          compiled-in default is %d and the max\n", Globals->debugLvl);
 	printf("                          level allowed is %d\n", DEBUG_MAX);
 	printf("  -e --exitonerr          Exit on parse or execution error\n");
@@ -375,7 +375,7 @@ static void getScript(String utilityArg, String utilityFile)
 	if(utilityFile){
 		if(dbDirectFlag){
 			/* Access the local database file */
-			if(!(script = DBFetchScript(Globals, void *db, utilityArg))){
+			if(!(script = DBFetchScript(Globals, Globals->db, utilityArg))){
 				fatal("%s: Problem retreiving script: %s from database", id, utilityArg);
 			}
 			
@@ -483,7 +483,7 @@ static void putScript(String utilityArg, String utilityFile)
 		if(dbDirectFlag){
 			/* Access the local database */
 			if(FAIL == DBIRScript(Globals, Globals->db, utilityArg, script)){
-				fatal("%s: Could not insert or replace script %s", id, utilityArg)
+				fatal("%s: Could not insert or replace script %s", id, utilityArg);
 			}
 		}
 		else{
@@ -975,7 +975,7 @@ int main(int argc, char *argv[])
  	if(utilityCommand != UC_GENERATE){ /* If not generating a new database file AND ... */
  		if((!utilityCommand) ||  /* If server mode OR... */
  		((dbDirectFlag) && ((utilityCommand == UC_GET_SCRIPT) || /* Direct script get OR ...*/
- 		((dbDirectFlag) && (utilityCommand == UC_PUT_SCRIPT)))))){ /* Direct script put */
+ 		((dbDirectFlag) && (utilityCommand == UC_PUT_SCRIPT))))){ /* Direct script put */
 			/* Open the database */
 			if(!(Globals->db = DBOpen(Globals->dbFile))){
 				fatal("Database file does not exist or is not writaeble: %s", Globals->dbFile);

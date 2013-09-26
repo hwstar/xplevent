@@ -46,16 +46,16 @@
 
 typedef struct SockAclListEntry_s {
 unsigned magic;
-struct SockAclListEntry_s prev;
-struct SockAclListEntry_s next;
+struct SockAclListEntry_s *prev;
+struct SockAclListEntry_s *next;
 } SockAclListEntry_t;
 
-typedef SockAclListEntry_t * SoclAclListEntryPtr_t;
+typedef SockAclListEntry_t * SockAclListEntryPtr_t;
 
 
 typedef struct SockAclListPtr_s {
-SockAclListEntryPtr_t head;
-SockAckListEntryPtr_t tail;
+	SockAclListEntryPtr_t head;
+	SockAclListEntryPtr_t tail;
 } SockAclList_t;
 
 typedef SockAclList_t * SockAclListPtr_t;
@@ -80,7 +80,6 @@ typedef SockAclList_t * SockAclListPtr_t;
 
 Bool SocketCheckACL(void *acl, struct sockaddr_storage *clientAddr, socklen_t clientAddrSize)
 {
-	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(clientAddr)
 	
 	if(!acl){
