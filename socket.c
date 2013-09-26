@@ -375,7 +375,7 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 		allow = sameNet(clientAddr, &e->check, &e->mask);
 	}
 	
-	if((!deny && !denyAll && !allow){ /* Nothing specified, so accept it all */
+	if((!deny && !al->denyAll && !allow){ /* Nothing specified, so accept it all */
 		return PASS;
 	}
 	
