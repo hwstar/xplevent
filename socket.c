@@ -73,13 +73,15 @@ typedef SockAclList_t * SockAclListPtr_t;
 * Initialize a V4 or V6 address mask 
 */
 
-static void addrMaskInit(struct sockaddr_storage *mask, uint8_t num)
+static void addrMaskInit(struct sockaddr_storage *mask, sa_family_t family, uint8_t num)
 {
 	uint8_t i, octet, bit;
-	if(AF_INET6 == mask->ss_family){ /* IPV6 */
+	
+	/* Initialize mask data */
+	*mask = (struct sockaddr_storage){family};
+	
+	if(AF_INET6 == family){ /* IPV6 */
 		sockaddr_in6 *m6 = (sockaddr_in6 *) mask;
-		/* Iniialize the mask to all zeroes */
-		m6->sin6_addr = (in6_addr){0};
 		
 		if(num > 128){ /* Clip to 128 */
 			num = 128;
@@ -94,9 +96,9 @@ static void addrMaskInit(struct sockaddr_storage *mask, uint8_t num)
 		
 		
 	}
-	else if (AF_INET4 == mask->ss_family){ /* IPV4 */
+	else if (AF_INET4 == family){ /* IPV4 */
 		sockaddr_in *m4 (sockaddr_in *) mask;
-		m4->sin_addr = (in_addr){0};
+	
 		if(num > 32){
 			num = 32; /* Clip to 32 */
 		}
