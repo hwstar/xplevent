@@ -272,7 +272,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	else{
 		unsigned ml; 
 		/* Get the number of bits to mask from the second substring */
-		if(FAIL == UtilStou( parts[1], unsigned &ml){
+		if(FAIL == UtilStou( parts[1], &ml){
 			res = FAIL;
 		}
 		else{
@@ -316,7 +316,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 
 	/* Test for errors, and clean up if so. */
 	
-	if(res == FAIL){
+	if(FAIL == res){
 		talloc_free(new);
 		*e = NULL;
 	}
