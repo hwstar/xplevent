@@ -92,7 +92,7 @@ static void addrMaskInit(struct sockaddr_storage *mask, sa_family_t family, uint
 	*mask = (struct sockaddr_storage){.ss_family = family};
 	
 	if(AF_INET6 == family){ /* IPV6 */
-		sockaddr_in6 *m6 = (sockaddr_in6 *) mask;
+		struct sockaddr_in6 *m6 = (struct sockaddr_in6 *) mask;
 		
 		if(num > 128){ /* Clip to 128 */
 			num = 128;
@@ -107,8 +107,8 @@ static void addrMaskInit(struct sockaddr_storage *mask, sa_family_t family, uint
 		
 		
 	}
-	else if (AF_INET4 == family){ /* IPV4 */
-		sockaddr_in *m4 (sockaddr_in *) mask;
+	else if (AF_INET == family){ /* IPV4 */
+		struct sockaddr_in *m4 = (struct sockaddr_in *) mask;
 	
 		if(num > 32){
 			num = 32; /* Clip to 32 */
@@ -230,7 +230,7 @@ static Bool sameNet(const struct sockaddr_storage *ip1, const struct sockaddr_st
 */
 
 
-static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t *e))
+static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t *e)
 {
 	String *parts = NULL;
 	struct addrinfo *ai = NULL;
@@ -247,24 +247,24 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	
 	/* Split the mask and address portions */
 	
-	MALLOC_FAIL(parts = UtilSplitString(ctx, s, '/')
+	MALLOC_FAIL(parts = UtilSplitString(ctx, cidrString, '/'))
 	
 	/* Allocate a holding structure */
 	
-	MALLOC_FAIL(new = talloc_zero(ctx, SockAclListEntryPtr_t))
+	MALLOC_FAIL(new = talloc_zero(ctx, SockAclListEntry_t))
 	new->magic = SE_MAGIC;
 	
 	/* Parse the address portion */
 	
 	if((rv = getaddrinfo(parts[0], NULL, &hints, &ai))){
 		res = FAIL;
-		debug(DEBUG_UNEXPECTED, "Invalid IP address: %s: %s", parts[0], gai_strerror(rv))
+		debug(DEBUG_UNEXPECTED, "Invalid IP address: %s: %s", parts[0], gai_strerror(rv));
 	}
 	
 	
 	/* Copy the binary address info to our holding struct */
 	
-	new->check = (struct sockaddr_storage) *(ai->ai_addr);
+	new->check = *((struct sockaddr_storage *) (ai[0].ai_addr));
 	
 	if(!parts[1]){ /* If no mask bits specified */
 		masklen = 128; /* set to the max */
@@ -272,7 +272,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	else{
 		unsigned ml; 
 		/* Get the number of bits to mask from the second substring */
-		if(FAIL == UtilStou( parts[1], &ml){
+		if(FAIL == UtilStou( parts[1], &ml)){
 			res = FAIL;
 		}
 		else{
@@ -285,8 +285,8 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 					masklen = (uint8_t) ml;
 				}
 			}
-			else if(AF_INET4 == new->check.ss_family){
-				if(ml > 32)){
+			else if(AF_INET == new->check.ss_family){
+				if(ml > 32){
 					res = FAIL;
 				}
 				else{
@@ -301,7 +301,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	
 	if(res != FAIL){
 		/* Initialize the mask */
-		addrMaskInit(&new->mask, new->check.ss_family, masklen)
+		addrMaskInit(&new->mask, new->check.ss_family, masklen);
 	}
 	
 	/* Free the address structure */
@@ -375,7 +375,7 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 		allow |= sameNet(clientAddr, &e->check, &e->mask);
 	}
 	
-	if((!deny && !al->denyAll && !allow){ /* Nothing specified, so accept it all */
+	if(!deny && !al->denyAll && !allow){ /* Nothing specified, so accept it all */
 		return PASS;
 	}
 	
@@ -409,7 +409,7 @@ Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr)
 Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList)
 {
 	String s;
-	String *addrs, *addrparts;
+	String *addrs;
 	Bool res = PASS;
 	unsigned i;
 	SockAclListPtr_t al;
@@ -421,7 +421,7 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 	
 	
 	if(allowList || denyList){
-		MALLOC_FAIL(al = talloc_zero(ctx, SockAclListPtr_t))
+		MALLOC_FAIL(al = talloc_zero(ctx, SockAclList_t))
 		al->magic = SH_MAGIC;
 	}
 	else{
@@ -440,7 +440,7 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 				break;
 			}
 			/* Insert into list */
-			if(!al.allowHead){
+			if(!al->allowHead){
 				al->allowHead = al->allowTail = e;
 			}
 			else{
@@ -467,7 +467,7 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 					break;
 				}
 				/* Insert into list */
-				if(!al.denyHead){
+				if(!al->denyHead){
 					al->denyHead = al->denyTail = e;
 				}
 				else{
