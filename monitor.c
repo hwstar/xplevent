@@ -979,18 +979,23 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	connectionDataPtr_t cdp;
 	struct sockaddr_storage clientAddr;
     socklen_t clientAddrSize = sizeof(clientAddr);
+    String addrString;
 	int userSock;
 	
 	/* Zero the socket address storage area */
 	memset(&clientAddr, 0, sizeof(struct sockaddr_storage));
 	
-	debug(DEBUG_ACTION, "Incoming connection");
+	debug(DEBUG_ACTION, "Incoming control connection");
 	/* Accept the user connection. */
 	userSock = accept4(fd, (struct sockaddr *) &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
 	if(userSock == -1) {
 		debug(DEBUG_UNEXPECTED, "Could not accept socket");
 		return;
 	}
+	/* Log the address of the peer */
+	addrString = SocketPrintableAddress(Globals, &clientAddr);
+	debug(DEBUG_EXPECTED, "Client Address: %s", addrString);
+	talloc_free(addrString);
 	
 	/* Check to see if client is permitted */
 	if(FAIL == SocketCheckACL(Globals->controlACL, &clientAddr)){

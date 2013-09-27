@@ -1,0 +1,12 @@
+[general]
+pid-file = /home/srodgers/projects/xpl/xplevent/xplevent.pid
+lat =  33.75
+lon =  -116.97
+
+[control]
+deny=ALL
+allow=127.0.0.1, ::1
+bind-addr=ALL
+#service=1130
+#host = ::1
+

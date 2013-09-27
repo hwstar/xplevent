@@ -336,6 +336,51 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	return res;	
 }
 
+/*
+ * Convert the address passed in to a printable string, return a talloc'd string.
+ * 
+ * Arguments:
+ * 
+ * 1. A talloc context to hang the string off of.
+ * 2. A pointer to the address to convert.
+ * 
+ * Return value:
+ * 
+ * A string with the printable address. This must be freed with talloc_free to
+ * avoid memory leaks.
+ */
+ 
+String SocketPrintableAddress(TALLOC_CTX *ctx, struct sockaddr_storage *theAddr)
+{
+	String s;
+	
+	ASSERT_FAIL(ctx)
+	ASSERT_FAIL(theAddr)
+	
+	
+	MALLOC_FAIL(s = talloc_array(ctx, char, INET6_ADDRSTRLEN))
+	
+	s[0] = 0;
+	
+	
+	switch(theAddr->ss_family) {
+        case AF_INET:
+            inet_ntop(AF_INET, &(((struct sockaddr_in *)theAddr)->sin_addr),
+                    s, INET6_ADDRSTRLEN);
+            break;
+
+        case AF_INET6:
+            inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)theAddr)->sin6_addr),
+                    s, INET6_ADDRSTRLEN);
+            break;
+
+        default:
+             strncpy(s, "Unknown Address Family", 22);
+            break;
+	}
+	return s;
+		
+}
 
 
 /*
@@ -673,7 +718,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	struct addrinfo hints, *list, *p;
 	int sock = -1, res;
 	int sockcount = 0;
-
+	String ba = (bindaddr && strcmp(bindaddr,"ALL")) ? bindaddr : NULL;
 	
 	ASSERT_FAIL(service)
 	ASSERT_FAIL(addsock);
@@ -685,11 +730,12 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 
 	hints.ai_family = family;
 	hints.ai_socktype = socktype;
-	if(bindaddr == NULL)	
+	if(ba == NULL){
 		hints.ai_flags = AI_PASSIVE;
+	}
 
 	/* Get the address list */
-	if((res = getaddrinfo(bindaddr, service, &hints, &list)) == -1){
+	if((res = getaddrinfo(ba, service, &hints, &list)) == -1){
 		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", __func__, gai_strerror(res));
 		return FAIL;
 	}
@@ -738,7 +784,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	freeaddrinfo(list);
 
 	if(!sockcount){
-		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s", __func__, bindaddr, service);
+		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s", __func__, ba, service);
 		return FAIL;
 	}
 

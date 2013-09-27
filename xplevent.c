@@ -67,8 +67,8 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERAT
 #define WS_SIZE 256
 
 
-#define DEF_CONFIG_FILE		"./xplevent.conf"
-#define DEF_PID_FILE		"./xplevent.pid"
+#define DEF_CONFIG_FILE		"./xplevent.conf,/etc/xplevent/xplevent.conf"
+#define DEF_PID_FILE		"/tmp/xplevent.pid"
 #define DEF_DB_FILE			"./xplevent.sqlite3"
 #define DEF_LOG_FILE		""
 
@@ -698,9 +698,16 @@ int main(int argc, char *argv[])
 {
 	int longindex;
 	int optchar;
+	int i;
 	String p;
+	String maxPath, fullPath;
+	String configFiles;
+	String *configPaths;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
+
+	configFiles = DEF_CONFIG_FILE;
+	
 	/* Set up Globals before notify functions can be used */
 	
 	if(!(Globals = talloc_zero(NULL, XPLEvGlobals_t))){
@@ -719,7 +726,6 @@ int main(int argc, char *argv[])
 	Globals->logFile = DEF_LOG_FILE;
 	Globals->interface = DEF_INTERFACE;
 	Globals->instanceID = DEF_INSTANCE_ID;
-	Globals->configFile = DEF_CONFIG_FILE;
 	Globals->lat = 33.0;
 	Globals->lon = -117.0;
 	
@@ -732,13 +738,10 @@ int main(int argc, char *argv[])
 		/* Handle each argument. */
 		switch(optchar) {
 			
-				/* Was it a long option? */
 			case 0:
-				
 				/* Hrmm, something we don't know about? */
 				fatal("Unhandled long getopt option '%s'", longOptions[longindex].name);
 			
-				/* If it was an error, exit right here. */
 			case '?':
 				exit(1);
 				
@@ -749,8 +752,8 @@ int main(int argc, char *argv[])
 		
 				/* Was it a config file switch? */
 			case 'C':
-				MALLOC_FAIL(Globals->configFile = talloc_strdup(Globals, optarg));
-				debug(DEBUG_ACTION,"New config file path is: %s", Globals->configFile);
+				MALLOC_FAIL(configFiles = talloc_strdup(Globals, optarg));
+				debug(DEBUG_ACTION,"New config file list is: %s", configFiles);
 				break;
 				
 			case 'c': /* Check syntax of a script file */
@@ -881,34 +884,58 @@ int main(int argc, char *argv[])
 		fatal("Extra argument on command line: %s", argv[optind]);
 	}
 
-	/* Attempt to read a config file */
+	/* Attempt to read in a config file from a comma separated list */
+	MALLOC_FAIL(maxPath = talloc_array(Globals, char, PATH_MAX))
+	for(i = 0, configInfo = NULL, configPaths = UtilSplitString(Globals, configFiles, ','); configPaths[i]; i++){
+		/* Determine the real path name */
+		if(!realpath(configPaths[i], maxPath)){
+			debug(DEBUG_UNEXPECTED, "Can't resolve full path to: %s", configPaths[i]);
+			continue;
+		}
+		/* Make a copy with a more reasonable size */
+		MALLOC_FAIL(fullPath = talloc_strdup(Globals, maxPath))
+		/* Try to open the config file */
+		debug(DEBUG_ACTION,"Trying config file path: %s", fullPath);	
+		if((configInfo = ConfReadScan(Globals, fullPath, confDefErrorHandler))){
 	
-	if((configInfo = ConfReadScan(Globals, Globals->configFile, confDefErrorHandler))){
+			debug(DEBUG_ACTION,"Using config file: %s", fullPath);
+			break;
+		}
+		free(fullPath); /* Wasn't this path */
+	}
+	/* Free working strings */
+	talloc_free(maxPath);
+	talloc_free(configPaths);
+			
+	if(configInfo){
 		String allow, deny;
 		
-		debug(DEBUG_ACTION,"Using config file: %s", Globals->configFile);
+		/* Note the full path to the config file if it is needed in the future */
+		
+		Globals->configFile = fullPath;
+		
 		/* Instance ID */
 		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id"))){
 			MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, p));
 		}
 		
-		/* Interface */
+		/* xPL Interface */
 		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface"))){
 			MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, p));
 		}
 			
-		/* Bind Address */
-		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(configInfo, "general", "bind-addr"))){
+		/* Control Bind Address */
+		if((!clOverride.bindaddress) && (p = ConfReadValueBySectKey(configInfo, "control", "bind-addr"))){
 			MALLOC_FAIL(Globals->cmdBindAddress = talloc_strdup(Globals, p));
 		}
 		
-		/* Host name */
-		if((!clOverride.hostname) && (p = ConfReadValueBySectKey(configInfo, "general", "host"))){
+		/* Control Host name */
+		if((!clOverride.hostname) && (p = ConfReadValueBySectKey(configInfo, "control", "host"))){
 			MALLOC_FAIL(Globals->cmdHostName = talloc_strdup(Globals, p));
 		}
 		
-		/* Service name or port */
-		if((!clOverride.service) && (p = ConfReadValueBySectKey(configInfo, "general", "service"))){
+		/* Control Service name or port */
+		if((!clOverride.service) && (p = ConfReadValueBySectKey(configInfo, "control", "service"))){
 			MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, p));
 		}
 			
@@ -946,7 +973,8 @@ int main(int argc, char *argv[])
 		}
 	}
 	else{
-		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", Globals->configFile);
+		talloc_free(fullPath);
+		debug(DEBUG_UNEXPECTED, "No config file found");
 	}
 	
 	
