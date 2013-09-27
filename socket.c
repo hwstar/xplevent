@@ -258,46 +258,52 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	
 	if((rv = getaddrinfo(parts[0], NULL, &hints, &ai))){
 		res = FAIL;
-		debug(DEBUG_UNEXPECTED, "Invalid IP address: %s: %s", parts[0], gai_strerror(rv));
+		debug(DEBUG_UNEXPECTED, "%s: Invalid IP address: %s: %s", __func__, parts[0], gai_strerror(rv));
 	}
 	
 	
 	/* Copy the binary address info to our holding struct */
-	
-	new->check = *((struct sockaddr_storage *) (ai[0].ai_addr));
-	
-	if(!parts[1]){ /* If no mask bits specified */
-		masklen = 128; /* set to the max */
-	}
-	else{
-		unsigned ml; 
-		/* Get the number of bits to mask from the second substring */
-		if(FAIL == UtilStou( parts[1], &ml)){
-			res = FAIL;
+	if(res != FAIL){
+		new->check = *((struct sockaddr_storage *) (ai[0].ai_addr));
+		
+		if(!parts[1]){ /* If no mask bits specified */
+			masklen = 128; /* set to the max */
 		}
 		else{
-			/* Sanity check the mask length */
-			if(AF_INET6 == new->check.ss_family){
-				if(ml > 128){
-					res = FAIL;
-				}
-				else{
-					masklen = (uint8_t) ml;
-				}
-			}
-			else if(AF_INET == new->check.ss_family){
-				if(ml > 32){
-					res = FAIL;
-				}
-				else{
-					masklen = (uint8_t) ml;
-				}
-			}
-			else{ /* Don't know what it is, so fail */
+			unsigned ml; 
+			/* Get the number of bits to mask from the second substring */
+			if(FAIL == UtilStou( parts[1], &ml)){
+				debug(DEBUG_UNEXPECTED, "%s: Not a number", __func__);
 				res = FAIL;
+			}
+			else{
+				/* Sanity check the mask length */
+				if(AF_INET6 == new->check.ss_family){
+					if(ml > 128){
+						debug(DEBUG_UNEXPECTED, "%s: 128 mask bits max", __func__);
+						res = FAIL;
+					}
+					else{
+						masklen = (uint8_t) ml;
+					}
+				}
+				else if(AF_INET == new->check.ss_family){
+					if(ml > 32){
+						debug(DEBUG_UNEXPECTED, "%s: 32 mask bits max", __func__);
+						res = FAIL;
+					}
+					else{
+						masklen = (uint8_t) ml;
+					}
+				}
+				else{ /* Don't know what it is, so fail */
+					debug(DEBUG_UNEXPECTED, "%s: Unknown address family", __func__);
+					res = FAIL;
+				}
 			}
 		}
 	}
+
 	
 	if(res != FAIL){
 		/* Initialize the mask */
@@ -430,12 +436,16 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 	
 	/* Parse the allow list */
 	if(allowList){
+		/* Get rid of white space */
 		s = UtilStripWhite(al, allowList);
+		/* Split the strings into substrings, each containing an address and optional CIDR mask */
 		addrs = UtilSplitString(al, s, ',');
-
+		/* Free stripped string */
 		talloc_free(s);
+		/* Process each address */
 		for(i = 0; addrs[i]; i++){
 			if(FAIL == parseCIDR(al, addrs[i], &e)){
+				debug(DEBUG_UNEXPECTED, "Allow address parse error");
 				res = FAIL;
 				break;
 			}
@@ -458,11 +468,16 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 			al->denyAll = TRUE;
 		}
 		else{
+			/* Get rid of white space */
 			s = UtilStripWhite(al, denyList);
+			/* Split the strings into substrings, each containing an address and optional CIDR mask */
 			addrs = UtilSplitString(al, s, ',');
+			/* Free stripped string */
 			talloc_free(s);
+			/* Process each address */
 			for(i = 0; addrs[i]; i++){
 				if(FAIL == parseCIDR(al, addrs[i], &e)){
+					debug(DEBUG_UNEXPECTED, "Deny address parse error");
 					res = FAIL;
 					break;
 				}
@@ -489,7 +504,7 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
 		}
 	}
 	else{
-		/* Give the caller the opaque aCL object */
+		/* Give the caller the opaque ACL object */
 		*acl = al;
 	}
 		
@@ -658,7 +673,6 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	struct addrinfo hints, *list, *p;
 	int sock = -1, res;
 	int sockcount = 0;
-	static String id = "SocketCreateListenList";
 
 	
 	ASSERT_FAIL(service)
@@ -676,7 +690,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 
 	/* Get the address list */
 	if((res = getaddrinfo(bindaddr, service, &hints, &list)) == -1){
-		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", id, gai_strerror(res));
+		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", __func__, gai_strerror(res));
 		return FAIL;
 	}
 
@@ -684,7 +698,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 		int sockopt = 1;
 	
 		if((sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol)) == -1){
-			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...",id, strerror(errno));
+			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...", __func__, strerror(errno));
 			continue;
 		}		
 
@@ -693,7 +707,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 
 		if(p->ai_family == PF_INET6){
 			setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
-			debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", id);
+			debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", __func__);
 		}
 			
 		/* Set to reuse socket address when program exits */
@@ -702,13 +716,13 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 
 
 		if(bind(sock, p->ai_addr, p->ai_addrlen) == -1){
-			debug(DEBUG_EXPECTED,"%s: Bind failed with %s, continuing...", id, strerror(errno));
+			debug(DEBUG_EXPECTED,"%s: Bind failed with %s, continuing...", __func__, strerror(errno));
 			close(sock);
 			continue;
 		}
 
 		if(listen(sock, SOMAXCONN) == -1){
-			debug(DEBUG_EXPECTED, "%s: Listen failed with %s, continuing...", id, strerror(errno));
+			debug(DEBUG_EXPECTED, "%s: Listen failed with %s, continuing...", __func__, strerror(errno));
 			close(sock);
 			continue;
 			}
@@ -724,7 +738,7 @@ Bool SocketCreateListenList(String bindaddr, String service, int family, int soc
 	freeaddrinfo(list);
 
 	if(!sockcount){
-		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s", id, bindaddr, service);
+		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s", __func__, bindaddr, service);
 		return FAIL;
 	}
 
@@ -757,7 +771,6 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 	struct addrinfo hints, *list = NULL, *p = NULL, *ipv6 = NULL, *ipv4 = NULL;
 	int sock, res;
-	static String id = "SocketConnectIP";
 
 	ASSERT_FAIL(host)
 	ASSERT_FAIL(service)
@@ -769,7 +782,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	
 	/* Get the address list */
 	if((res = getaddrinfo(host, service, &hints, &list)) == -1){
-		debug(DEBUG_ACTION, "%s: getaddrinfo failed: %s", id, gai_strerror(res));
+		debug(DEBUG_ACTION, "%s: getaddrinfo failed: %s", __func__, gai_strerror(res));
 		return -1;
 	}
 	for(p = list; p ; p = p->ai_next){
@@ -780,7 +793,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	}
 
 	if(!ipv4 && !ipv6){
-		debug(DEBUG_ACTION,"%s: Could not find a suitable IP address to connect to", id);
+		debug(DEBUG_ACTION,"%s: Could not find a suitable IP address to connect to", __func__);
 		return -1;
 	}
 	
@@ -791,7 +804,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 	sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC, p->ai_protocol );
 	if(sock == -1) {
 		freeaddrinfo(list);
-		debug(DEBUG_ACTION, "%s: Could not create ip socket: %s", id, strerror(errno));
+		debug(DEBUG_ACTION, "%s: Could not create ip socket: %s", __func__, strerror(errno));
 		return -1;
 	}
 	
@@ -799,7 +812,7 @@ int SocketConnectIP(const String host, const String service, int family, int soc
 
 	if(connect(sock, (struct sockaddr *) p->ai_addr, p->ai_addrlen)) {
 		freeaddrinfo(list);
-		debug(DEBUG_ACTION, "%s: Could not connect to inet host:port '%s:%s'.", id, host, service);
+		debug(DEBUG_ACTION, "%s: Could not connect to inet host:port '%s:%s'.", __func__, host, service);
 		return -1;
 	}
 	
@@ -834,7 +847,6 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, unsigned *length)
 	int res;
 	char c;
 	String line;
-	static String id = "SocketReadLine";
 	
 	ASSERT_FAIL(length)
 	ASSERT_FAIL(ctx)
@@ -847,7 +859,7 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, unsigned *length)
 		if(*length >= (lsize - 2)){
 			/* Double the buffer size and re-allocate */
 			lsize <<= 1;
-			debug(DEBUG_ACTION, "%s: Doubling the line buffer to %d", id, lsize);
+			debug(DEBUG_ACTION, "%s: Doubling the line buffer to %d", __func__, lsize);
 			MALLOC_FAIL(line = talloc_realloc(ctx, line, char, lsize))
 		}
 		
@@ -860,13 +872,13 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, unsigned *length)
 			}
 			if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
 				if(SocketWaitReadReady(socket, 5000) == FAIL){
-					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", id);
+					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", __func__);
 					talloc_free(line);
 					return NULL;
 				}
 				continue;
 			}
-			debug(DEBUG_UNEXPECTED, "%s: Read error on fd %d: %s", id, socket, strerror(errno));
+			debug(DEBUG_UNEXPECTED, "%s: Read error on fd %d: %s", __func__, socket, strerror(errno));
 			talloc_free(line);
 			return NULL;
 			
@@ -885,7 +897,7 @@ String SocketReadLine(TALLOC_CTX *ctx, int socket, unsigned *length)
 			}
 		}
 		else{ /* EOF */
-			debug(DEBUG_ACTION,"%s: EOF on line", id);
+			debug(DEBUG_ACTION,"%s: EOF on line", __func__);
 			*length = 0;
 			line[0] = 0;
 			return line;
@@ -918,7 +930,6 @@ Bool SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 	int res = PASS;
 	int len;
 	String string, sp;
-	static String id = "SocketPrintf";
 
 	ASSERT_FAIL(format)
 	ASSERT_FAIL(ctx)
@@ -938,9 +949,9 @@ Bool SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 					if(SocketWaitWriteReady(socket, 5000) == PASS){
 						continue;
 					}
-					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", id);
+					debug(DEBUG_UNEXPECTED, "%s: Time out on socket", __func__);
 				}
-				debug(DEBUG_UNEXPECTED, "%s: Socket write error: %s", id, strerror(errno));
+				debug(DEBUG_UNEXPECTED, "%s: Socket write error: %s", __func__, strerror(errno));
 				res = FAIL;
 				break;
 			}

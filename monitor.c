@@ -984,7 +984,7 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	/* Zero the socket address storage area */
 	memset(&clientAddr, 0, sizeof(struct sockaddr_storage));
 	
-	debug(DEBUG_ACTION, "Accepting socket connection");
+	debug(DEBUG_ACTION, "Incoming connection");
 	/* Accept the user connection. */
 	userSock = accept4(fd, (struct sockaddr *) &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
 	if(userSock == -1) {
@@ -993,11 +993,16 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	}
 	
 	/* Check to see if client is permitted */
-	if(FAIL == SocketCheckACL(NULL, &clientAddr)){
+	if(FAIL == SocketCheckACL(Globals->controlACL, &clientAddr)){
 		/* Denied */
-		close(fd);
+		debug(DEBUG_UNEXPECTED, "Refusing connection");
+		shutdown(userSock, 2);
 		return;
 	}
+	else{
+		debug(DEBUG_UNEXPECTED, "Accepting connection");
+	}
+	
 
 	/* Allocate a data structure for connection persistent data for use by the listener */
 	ASSERT_FAIL(cdp = talloc_zero(Globals, connectionData_t))

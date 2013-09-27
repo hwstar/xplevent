@@ -32,19 +32,19 @@ all: $(PACKAGE)
 
 
 
-$(PACKAGE).o: Makefile $(PACKAGE).c notify.h confread.h parser.h types.h defs.h db.h xplevent.h monitor.h util.h socket.h scheduler.h sunriset.h
+$(PACKAGE).o: Makefile $(PACKAGE).c
 
 
 #Rules
 
 
-grammar.c grammar.h:	grammar.y parse.h parser.h types.h defs.h notify.h xplevent.h util.h
+grammar.c grammar.h:	grammar.y
 	$(ACC) grammar.y
 
-lex.c:	lex.l lex.h grammar.c grammar.y parse.h parser.h types.h defs.h notify.h xplevent.h util.h
+lex.c:	lex.l lex.h grammar.c grammar.y 
 	$(LEX) -o lex.c lex.l
 	
-parser.o:	parser.c grammar.c lex.c lex.l grammar.y parser.h parse.h defs.h types.h notify.h db.h xplevent.h
+parser.o:	parser.c grammar.c lex.c lex.l grammar.y 
 
 
 $(PACKAGE): $(PACKAGE_OBJS)

@@ -340,9 +340,12 @@ static void utilitySendCmd(String utilityArg)
 		fatal("Could not connect to daemon at address: %s", Globals->cmdHostName);
 	}	
 	SocketPrintf(Globals, daemonSock, "cl:%s\n", utilityArg);
-	MALLOC_FAIL(line = SocketReadLine(Globals, daemonSock, &length))	
+	line = SocketReadLine(Globals, daemonSock, &length);	
 	if(line && length){
 		printf("Result = %s\n", line);
+	}
+	else{
+		printf("Error getting result\n");
 	}
 	talloc_free(line);
 	close(daemonSock); /* Done */
@@ -881,6 +884,8 @@ int main(int argc, char *argv[])
 	/* Attempt to read a config file */
 	
 	if((configInfo = ConfReadScan(Globals, Globals->configFile, confDefErrorHandler))){
+		String allow, deny;
+		
 		debug(DEBUG_ACTION,"Using config file: %s", Globals->configFile);
 		/* Instance ID */
 		if((!clOverride.instance_id) && (p = ConfReadValueBySectKey(configInfo, "general", "instance-id"))){
@@ -931,11 +936,19 @@ int main(int argc, char *argv[])
 			UtilStod(p, &Globals->lon);
 		}
 		
+		/* Control ACL */
 		
+		allow = ConfReadValueBySectKey(configInfo, "control", "allow");
+		deny = ConfReadValueBySectKey(configInfo, "control", "deny");
+		
+		if(FAIL == SocketGenACL(Globals, &Globals->controlACL, allow, deny)){
+			fatal("Error parsing control allow/deny IP addresses");
+		}
 	}
 	else{
 		debug(DEBUG_UNEXPECTED, "Config file %s not found or not readable", Globals->configFile);
 	}
+	
 	
 	/* Free the config info */
 	ConfReadFree(configInfo);

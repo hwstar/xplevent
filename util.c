@@ -51,8 +51,9 @@ String UtilStripWhite(TALLOC_CTX *ctx, String orig)
 	MALLOC_FAIL(new = talloc_array(ctx, char, bufSize))
 	new[0] = 0;
 	for(i = j = 0; orig[i]; i++, j++){
-		if((bufSize - j) >= 2){
+		if((bufSize - j) <= 2){
 			bufSize <<= 1;
+			debug(DEBUG_ACTION,"Increasing buffer to %d bytes", bufSize);
 			MALLOC_FAIL(new = talloc_realloc(ctx, new, char, bufSize))
 		}
 		if((orig[i] == ' ') || (orig[i] == '\t') || (orig[i] == '\n') || (orig[i] == '\r')){
@@ -60,6 +61,7 @@ String UtilStripWhite(TALLOC_CTX *ctx, String orig)
 		}
 		new[j] = orig[i];
 	}
+	new[j] = 0;
 	return new;
 }
 
