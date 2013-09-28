@@ -65,12 +65,13 @@ typedef connectionData_t * connectionDataPtr_t;
 
 /* Client command codes */
 
-enum {CC_EXEC = 0 };
+enum {CC_EXEC = 0, CC_SCHRELOAD};
 
 /*  Client command table */
 
 static String clientCommands[]  = {
 	"exec",
+	"schreload",
 	NULL
 };
 
@@ -694,7 +695,6 @@ static void xplShutdown(void)
 		xPL_releaseService(Globals->xplEventService);
 		xPL_shutdown();
 }
-
 /*
  * Scheduler handler for executing scripts
  *
@@ -751,6 +751,27 @@ static int addScheduleEntry(void *data, int argc, String *argv, String *colnames
 	return 0;
 }
 
+/*
+ * Load the values from the schedule table into the scheduler
+ * 
+ * Arguments:
+ * 
+ * None
+ * 
+ * Return value:
+ * 
+ * PASS if database was loaded successfully, FAIL otherwise.
+ */
+ 
+static Bool schedulerLoad(void)
+{
+	
+	if(DBReadRecords(Globals->sch, Globals->db, Globals->sch, "schedule", 32, addScheduleEntry)){
+			debug(DEBUG_UNEXPECTED, "Can't read scheduler table in database. Disabling scheduler");
+			return FAIL;
+	}
+	return PASS;
+}
 
 /*
 * Our tick handler. Called by xPL Library once per second.
@@ -772,21 +793,15 @@ static void tickHandler(int userVal, xPL_ObjectPtr obj)
 {
 
 	
-	if(!Globals->schInitTried){
-		/* Attempt to start the scheduler */
-		Globals->schInitTried = TRUE;
+	if(!Globals->sch){ /* If scheduler not initialized */
 		/* Initialize scheduler */
 		Globals->sch = SchedulerInit(Globals, Globals->lat, Globals->lon);
-		if(DBReadRecords(Globals->sch, Globals->db, Globals->sch, "schedule", 32, addScheduleEntry)){
-			debug(DEBUG_UNEXPECTED, "Can't read scheduler table in database. Disabling scheduler");
-			talloc_free(Globals->sch);
-			Globals->sch = NULL;
-		}
-		else{
+		/* Load schedule entries from the database */
+		if(PASS == schedulerLoad()){
 			SchedulerStart(Globals->sch);
 		}
 	}
-	if(Globals->sch){ /* If scheduler initialized */
+	else{ /* If scheduler initialized */
 		/* Run each tick through the scheduler */
 		SchedulerDo(Globals->sch);
 	}
@@ -829,7 +844,7 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 	}
 	if(clientCommands[i]){
 		switch(i){
-			case CC_EXEC:
+			case CC_EXEC: /* Execute specified script */
 				if(argv[1]){
 					debug(DEBUG_EXPECTED, "Exec: %s", argv[1]);
 					if(!(script = DBFetchScript(cdp, Globals->db, argv[1]))){
@@ -844,6 +859,14 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 				}	
 				break;
 				
+			case CC_SCHRELOAD: /* Reload the scheduler */
+				ASSERT_FAIL(Globals->sch)
+				SchedulerStop(Globals->sch);
+				SchedulerRemoveAllEntries(Globals->sch);
+				if(PASS == schedulerLoad()){
+					SchedulerStart(Globals->sch);
+				}
+				break;
 			default:
 				ASSERT_FAIL(0);
 		}
@@ -978,13 +1001,11 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 static void commandSocketListener(int fd, int revents, int uservalue)
 {
 	connectionDataPtr_t cdp;
-	struct sockaddr_storage clientAddr;
+	struct sockaddr_storage clientAddr = (struct sockaddr_storage) {0};
     socklen_t clientAddrSize = sizeof(clientAddr);
     String addrString;
 	int userSock;
 	
-	/* Zero the socket address storage area */
-	memset(&clientAddr, 0, sizeof(struct sockaddr_storage));
 	
 	debug(DEBUG_ACTION, "Incoming control connection");
 	/* Accept the user connection. */

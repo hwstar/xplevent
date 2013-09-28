@@ -542,7 +542,7 @@ void SchedulerDo(void *schedInfo)
  *
  * Return value:
  *
- * None.
+ * Pointer to schedule object.
  */
 
 void *SchedulerInit(TALLOC_CTX *ctx, double lat, double lon)
@@ -615,7 +615,7 @@ void SchedulerStop(void *schedInfo)
  * None
  */
  
-void SchedularRemoveAllEntries(void *schedInfo)
+void SchedulerRemoveAllEntries(void *schedInfo)
 {
 	SchedInfoPtr_t sch = schedInfo;
 	ASSERT_FAIL(sch);
@@ -660,6 +660,8 @@ void SchedulerAdd(void *schedInfo, String entryName, String cronExp,
 	ASSERT_FAIL(cronExp)
 	ASSERT_FAIL(exec)
 	ASSERT_FAIL(execParam)
+	
+	debug(DEBUG_ACTION,"Adding schedule entry: %s", entryName);
 	
 	/* Allocate new list entry structure */
 	MALLOC_FAIL(l = talloc_zero(sch->listContext, SchedListEntry_t))

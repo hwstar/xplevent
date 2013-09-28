@@ -336,10 +336,47 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	return res;	
 }
 
+
+/* 
+*
+* Create a listening socket list for a single bind address.
+* Supports both IPV4 and IPV6 sockets.
+* 
+* 
+* Parameters:
+*
+* 1. Bind address string. If NULL is passed in, or it matches the keyword ALL, all interfaces will be bound 
+*    Multiple interfaces may be specified with a comma.
+* 2. Service name string. Can be either a service name or a port number.
+* 3. Address family. Usually set to AF_UNSPEC.
+* 4. Socket type. Set to SOCK_STREAM for a TCP connection.
+* 4. Callback function (see below)
+*
+* Return value:
+*
+* PASS indicates success. FAIL indicates failure.
+*
+*************** Callback Function ***************
+*
+* Parameters:
+*
+* 1. Socket FD
+* 2. Socket address as a void pointer
+* 3. Socket family
+* 4. Socket type.
+*
+* Return Value:
+*
+* PASS if list creation is to continue, FAIL if list creation is to be aborted.
+*
+*/
+	
+
 static Bool socketCreateLL(String bindaddr, String service, int family, int socktype, 
 	int (*addsock)(int sock, void *addr, int family, int socktype))
 {
-	struct addrinfo hints, *list, *p;
+	struct addrinfo hints = (struct addrinfo){0};
+	struct addrinfo *list, *p;
 	int sock = -1, res;
 	int sockcount = 0;
 
@@ -347,8 +384,6 @@ static Bool socketCreateLL(String bindaddr, String service, int family, int sock
 	ASSERT_FAIL(service)
 	ASSERT_FAIL(addsock);	
 
-
-	memset(&hints, 0, sizeof hints);
 
 	/* Init the hints struct for getaddrinfo */
 
@@ -648,7 +683,7 @@ Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList
  *
  * Return value:
  * 
- * Boolean. Return PASS if sucessful,
+ * Boolean. Return PASS if successful,
  * otherwise FAIL.
  *
  *
@@ -769,7 +804,7 @@ void *SocketFixAddrPointer(void *p)
 *
 * 1. Talloc context for transitory data
 * 2. Bind address string. If NULL is passed in, or it matches the keyword ALL, all interfaces will be bound 
-*    Multiple interfaces may be specified with a comma.
+*    Multiple interfaces may be specified by using a comma to delimit each one.
 * 3. Service name string. Can be either a service name or a port number.
 * 4. Address family. Usually set to AF_UNSPEC.
 * 5. Socket type. Set to SOCK_STREAM for a TCP connection.
@@ -860,16 +895,13 @@ Bool SocketCreateListenList(TALLOC_CTX *ctx, String bindaddr, String service, in
 int SocketConnectIP(const String host, const String service, int family, int socktype)
 {
 
-	struct addrinfo hints, *list = NULL, *p = NULL, *ipv6 = NULL, *ipv4 = NULL;
+	struct addrinfo hints = (struct addrinfo) {.ai_family = family, .ai_socktype = socktype};
+	struct addrinfo *list = NULL, *p = NULL, *ipv6 = NULL, *ipv4 = NULL;
 	int sock, res;
 
 	ASSERT_FAIL(host)
 	ASSERT_FAIL(service)
 
-  	memset(&hints, 0, sizeof hints);
-	
-	hints.ai_family = family;
-	hints.ai_socktype = socktype;
 	
 	/* Get the address list */
 	if((res = getaddrinfo(host, service, &hints, &list)) == -1){

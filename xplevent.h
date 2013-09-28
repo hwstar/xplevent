@@ -6,7 +6,6 @@
 typedef struct XPLEvGlobals_s {
 	Bool exitOnErr;
 	Bool noBackground;
-	Bool schInitTried;
 	int debugLvl;
 	String progName;
 	String cmdBindAddress;
