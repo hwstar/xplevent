@@ -1,7 +1,7 @@
 # Makefile
 
 PACKAGE = xplevent
-VERSION = 0.0.2
+VERSION = 0.0.3
 CONTACT = <hwstar@rodgers.sdcoxmail.com>
 
 CC = gcc
