@@ -71,7 +71,7 @@ enum {CC_EXEC = 0 };
 
 static String clientCommands[]  = {
 	"exec",
-	"NULL"
+	NULL
 };
 
 /* Instance ID */
@@ -1238,7 +1238,7 @@ void MonitorRun(void)
   	
 
 	/* Add a listener for the command socket */
-	if(SocketCreateListenList(Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
+	if(SocketCreateListenList(Globals, Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
 		fatal("Can't create listening socket(s)");
 	}	
 

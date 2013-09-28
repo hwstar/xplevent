@@ -36,6 +36,7 @@ interface = eth1
 # There are 2 configuration options: allow, and deny.
 #
 # Both allow and deny take comma-delimited CIDR annotated IP addresses.
+#
 # Example:
 # deny = 192.2.0.0/24, 2001:0DB8:0000:0000::0/64
 # 
@@ -50,17 +51,24 @@ deny=ALL
 #
 allow=127.0.0.1, ::1 # Allows connections only from local interfaces.
 #
-# Specify the bind IP address for the server.
+# Specify the bind IP address(es) for the server.
+# Each interface is specified by its IP address separated by a comma
 #
-# ALL means bind to all available interfaces.
-# 
+# ALL implies every interface will be used. 
+#
+# Examples
+#
+# bind-addr=ALL
+# bind-addr=::1, 127.0.0.1, 192.2.0.0
+#
 bind-addr=ALL
 #
 # Default port to bind to.
 #
 service=1130
 #
-# Used in client mode to connect to the server. change this to the address or host name of the server
+# Used in client mode to connect to the server. Change this to the address or host name of the server.
+# This option may be overridden on the command line with the -h switch.
 #
 host = ::1
 
