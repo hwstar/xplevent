@@ -240,7 +240,7 @@ static void deleteHashContents(ParseHashSTEPtr_t se)
 static ParseHashSTEPtr_t findHash(PcodeHeaderPtr_t ph, const String hashName, ParseHashSTEPtrPtr_t tail)
 {
 	unsigned hashVal;
-	ParseHashSTEPtr_t se,p;
+	ParseHashSTEPtr_t se,p = NULL;
 	
 	ASSERT_FAIL(ph)
 	ASSERT_FAIL(hashName)
@@ -320,7 +320,7 @@ static void hashAppend(TALLOC_CTX *ctx, ParseHashSTEPtrPtr_t ptail, String name)
 static void spawn(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
 	PcodePtr_t pa;
-	String command;
+	String command = NULL;
 	TALLOC_CTX *ctx;
 	
 	ASSERT_FAIL(ph)
@@ -367,15 +367,15 @@ end:
 
 static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
-	String tag;
-	String class;
-	String schema;
-	String hash;
+	String tag = NULL;
+	String class = NULL;
+	String schema = NULL;
+	String hash = NULL;
 	TALLOC_CTX *ctx;
 	String vendor, device, instance;
 	ParseHashSTEPtr_t se = NULL;
 	ParseHashKVPtr_t kvp;
-	xPL_MessagePtr msg;
+	xPL_MessagePtr msg = NULL;
 	PcodePtr_t pa;
 
 
@@ -644,7 +644,7 @@ const String ParserHashGetValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const Stri
  
 Bool ParserHashAddKeyValue(TALLOC_CTX *ctx, PcodeHeaderPtr_t ph, const String hashName, const String key, const String value)
 {
-	ParseHashSTEPtr_t h;
+	ParseHashSTEPtr_t h = NULL;
 	ParseHashKVPtr_t ke, keNew, kePrev;
 	
 
@@ -1099,7 +1099,7 @@ Bool ParserExecPcode(PcodeHeaderPtr_t ph)
 	PcodePtr_t pe,p;
 	String value,rvalue;
 	double leftNum, rightNum;
-	Bool testRes;
+	Bool testRes = FALSE;
 	TALLOC_CTX *ctx;
 	int res = PASS;
 

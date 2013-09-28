@@ -253,6 +253,7 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 	
 	if(res == PASS){
 		execPcode(ph);	
+		debug(DEBUG_ACTION, "***Execute complete***");
 	}
 	
 	talloc_free(ph);
@@ -664,7 +665,7 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 			logHeartBeatMessage(theMessage);
 		}
 		else if(mtype == xPL_MESSAGE_TRIGGER){
-			String sourceDevice;
+			String sourceDevice = NULL;
 			/* Process trigger message */
 			checkTriggerMessage(theMessage, &sourceDevice);
 			logTriggerMessage(theMessage, sourceDevice);

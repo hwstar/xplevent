@@ -794,7 +794,7 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 {
 	Bool res;
 	String errorMessage;
-	String sql;
+	String sql = NULL;
 	String id = "DBReadRecords";
 	
 	ASSERT_FAIL(ctx)
@@ -815,8 +815,9 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 	
 	dbTxEnd(db, id, res);
 	
-	talloc_free(sql);
-	
+	if(sql){
+		talloc_free(sql);
+	}
 	
 	return res;		
 	
@@ -832,7 +833,7 @@ void DBGenFile(TALLOC_CTX *ctx, String theFile, Bool forceFlag)
 {
 	sqlite3 *db;
 	String errorMessage = NULL;
-	String sql;
+	String sql = NULL;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(theFile)

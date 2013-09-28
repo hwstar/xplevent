@@ -460,7 +460,7 @@ static void getScript(String utilityArg, String utilityFile)
 
 static void putScript(String utilityArg, String utilityFile)
 {
-	int daemonSock;
+	int daemonSock = -1;
 	unsigned length;
 	String id = "xplevent:putScript";
 	String ack = NULL;
@@ -700,7 +700,7 @@ int main(int argc, char *argv[])
 	int optchar;
 	int i;
 	String p;
-	String maxPath, fullPath;
+	String maxPath = NULL, fullPath = NULL;
 	String configFiles;
 	String *configPaths;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;

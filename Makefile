@@ -6,8 +6,10 @@ CONTACT = <hwstar@rodgers.sdcoxmail.com>
 
 CC = gcc
 LIBS = -lm -lxPL -lsqlite3 -ltalloc
-#CFLAGS = -O2 -Wall  -D'PACKAGE="$(PACKAGE)"' -D'VERSION="$(VERSION)"' -D'EMAIL="$(CONTACT)"'
-CFLAGS = -g3 -Wall  -D'PACKAGE="$(PACKAGE)"' -D'VERSION="$(VERSION)"' -D'EMAIL="$(CONTACT)"'
+
+DBGFLAGS ?= -O3 -Wall
+
+CFLAGS = $(DBGFLAGS)  -D'PACKAGE="$(PACKAGE)"' -D'VERSION="$(VERSION)"' -D'EMAIL="$(CONTACT)"'
 LEX=flex
 ACC=lemon
 

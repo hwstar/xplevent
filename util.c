@@ -193,7 +193,7 @@ String *UtilSplitWhite(TALLOC_CTX *ctx, String input)
 {
 	String start,p;
 	String *strings;
-	int len;
+	int len = 0;
 	int count = 0;
 	int apsize = 8;
 	int state = 0;
@@ -271,7 +271,7 @@ String *UtilSplitString(TALLOC_CTX *ctx, String input, char sep)
 {
 	String start,p;
 	String *strings;
-	int len;
+	int len = 0;
 	int count = 0;
 	int apsize = 8;
 	int state = 0;
