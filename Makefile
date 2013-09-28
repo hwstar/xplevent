@@ -1,7 +1,7 @@
 # Makefile
 
 PACKAGE = xplevent
-VERSION = 0.0.1
+VERSION = 0.0.2
 CONTACT = <hwstar@rodgers.sdcoxmail.com>
 
 CC = gcc
@@ -34,9 +34,19 @@ all: $(PACKAGE)
 
 $(PACKAGE).o: Makefile $(PACKAGE).c
 
+# pull in dependency info for *existing* .o files
+-include $(OBJS:.o=.d)
 
 #Rules
 
+%.o: %.c
+	$(CC)  -c $(CFLAGS) $*.c -o $*.o
+	@$(CC) -MM $(CFLAGS) $*.c > $*.d
+	@mv -f $*.d $*.d.tmp
+	@sed -e 's|.*:|$*.o:|' < $*.d.tmp > $*.d
+	@sed -e 's/.*://' -e 's/\\$$//' < $*.d.tmp | fmt -1 | \
+	sed -e 's/^ *//' -e 's/$$/:/' >> $*.d
+	@rm -f $*.d.tmp
 
 grammar.c grammar.h:	grammar.y
 	$(ACC) grammar.y
@@ -52,11 +62,12 @@ $(PACKAGE): $(PACKAGE_OBJS)
 	
 
 clean:
-	-rm -f $(PACKAGE)  *.o lex.c grammar.c grammar.h grammar.out core
+	-rm -f $(PACKAGE)  *.o *.d lex.c grammar.c grammar.h grammar.out core
 
 install:
 	cp $(PACKAGE) $(DAEMONDIR)
 
 dist:
-	(cd ..; tar cvzf $(PACKAGE).tar.gz $(PACKAGE) --exclude *.o --exclude $(PACKAGE)/$(PACKAGE) --exclude .git --exclude .*.swp)
+	(cd ..; tar cvzf $(PACKAGE).tar.gz $(PACKAGE) --exclude *.o --exclude $(PACKAGE)/$(PACKAGE)\
+	 --exclude .git --exclude .*.swp --exclude *.d --exclude *.conf --exclude *.sqlite3)
 

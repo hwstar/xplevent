@@ -1,6 +1,8 @@
 #ifndef XPLEVENT_H
 #define XPLEVENT_H
 
+/* Variables which need to be accessed across modules */
+
 typedef struct XPLEvGlobals_s {
 	Bool exitOnErr;
 	Bool noBackground;

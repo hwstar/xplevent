@@ -1,12 +1,66 @@
+#
+# General configuration options
+#
 [general]
-pid-file = /home/srodgers/projects/xpl/xplevent/xplevent.pid
+# A place to store the .pid file when operating in server mode.
+pid-file = /tmp/xplevent.pid
+# Location of database file (This is required, and you probably need to change this)
+db-file = ./xplevent.sqlite3
+# If you want logging when operating in background mode specify
+# a path to file to write the log statements into here. The
+# default is to log nothing when operating in background mode.
+#log-file = /tmp/xplevent.log
+#
+#
+# Latitude for calculating sunrise, sunset, dusk and dawn
+# This needs to be in decimal form.
 lat =  33.75
+# Longitude for calculating sunrise, sunset, dusk and dawn
+# This needs to be in decimal form.
 lon =  -116.97
+#
+#
+# xPL Instance id for hwstar-xplevent
+instance-id = main
+# xPL interface to use
+interface = eth1
+#
+
+
+#
+# Control connections
+#
 
 [control]
+# Access control list for control connections.
+# There are 2 configuration options: allow, and deny.
+#
+# Both allow and deny take comma-delimited CIDR annotated IP addresses.
+# Example:
+# deny = 192.2.0.0/24, 2001:0DB8:0000:0000::0/64
+# 
+#
+# Deny will deny a list of IP addresses separated by commas.
+# deny=ALL denies all incoming connections not specifically allowed.
+# If deny is not specified, then any host will be able to connect.
+#
 deny=ALL
-allow=127.0.0.1, ::1
+#
+# Allow allows IP addresses specified to connect regardless of whether it is in the deny list or not.
+#
+allow=127.0.0.1, ::1 # Allows connections only from local interfaces.
+#
+# Specify the bind IP address for the server.
+#
+# ALL means bind to all available interfaces.
+# 
 bind-addr=ALL
-#service=1130
-#host = ::1
+#
+# Default port to bind to.
+#
+service=1130
+#
+# Used in client mode to connect to the server. change this to the address or host name of the server
+#
+host = ::1
 
