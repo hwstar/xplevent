@@ -57,6 +57,7 @@
 #include "util.h"
 #include "socket.h"
 #include "xplevent.h"
+#include "xplio.h"
 
 
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERATE};
@@ -1124,6 +1125,7 @@ int main(int argc, char *argv[])
 		fatal("pid file write error");
 	}
 	
+	XplioInit(Globals, "192.168.17.10"); // DEBUG
 
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");
