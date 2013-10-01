@@ -39,6 +39,25 @@
 #include "util.h"
 
 /*
+ * Convert string to upper case
+ */
+
+String UtilUpperCase(String inString)
+{
+	register char c;
+	
+	while((c = *inString)){
+		if((c >= 'a') && (c <= 'z')){
+			*inString -= ' ';
+		}
+		inString++;
+	}
+	return inString;
+}
+
+
+
+/*
  * Duplicate a string stripping out all of the white space
  */
 

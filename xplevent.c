@@ -705,14 +705,13 @@ int main(int argc, char *argv[])
 	String *configPaths;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
+	notify_progname(argv[0]);
 
 	configFiles = DEF_CONFIG_FILE;
 	
-	/* Set up Globals before notify functions can be used */
-	
+	/* Set up Globals */
 	if(!(Globals = talloc_zero(NULL, XPLEvGlobals_t))){
-		fprintf(stderr, "Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
-		exit(1);
+		fatal("Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
 	}
 	
 	
@@ -769,7 +768,7 @@ int main(int argc, char *argv[])
 					(Globals->debugLvl < 0) || (Globals->debugLvl > DEBUG_MAX)) {
 					fatal("Invalid debug level");
 				}
-
+	
 				break;
 				
 			case 'D': /* Database direct flag */
@@ -1011,6 +1010,7 @@ int main(int argc, char *argv[])
 	sa_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
 	sigaction(SIGCHLD, &sa_chld, NULL);
 
+	notify_set_debug_level(Globals->debugLvl);
 
 	/* See if database needs to be opened */
  	if(utilityCommand != UC_GENERATE){ /* If not generating a new database file AND ... */

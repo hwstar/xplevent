@@ -29,8 +29,14 @@
 #define DEBUG_INCOMPLETE 5
 #define DEBUG_MAX 5
 
-// Call to redirect the error and log output to a different file (i.e. /tmp/logfile)
+// Call to set the program name. 
+void notify_progname(const String pgmName);
+
+// Set the path to the log file
 void notify_logpath(const String path);
+
+// Call to set debugging level
+void notify_set_debug_level(int dbglvl);
 
 // Call to enable or disable time reporting in messages
 void notify_timen(Bool ena);

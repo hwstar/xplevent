@@ -1,5 +1,5 @@
 /*
-*    xplevent - an xPL event handler
+*    notify.c
 *    Copyright (C) 2012,2013  Stephen A. Rodgers
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -35,13 +35,17 @@
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
-#include "xplevent.h"
+
 
 #define LOGOUT (output == NULL ? stderr : output)
 
 static FILE *output = NULL;
 
 static Bool timeen = 0;
+
+static String progName = "";
+
+static int debugLvl = 1;
 
 
 /*
@@ -64,12 +68,32 @@ void notify_timen(Bool ena)
 
 
 /*
-* Redirect logging and error output. If a logging file is open,
+* Set up the notify module
+*
+* Arguments:
+* 
+* 1. String with program name (e.g. argv[0])
+*
+* Return value:
+*
+* None
+*/
+
+void notify_progname(const String pgmName)
+{
+
+	if(pgmName){
+		progName = pgmName;
+	}
+}
+
+/*
+* If a logging file is open,
 * close it before opening the new file.
 *
 * Arguments:
 * 
-* String with path to log file
+* 1. String with path to log file
 *
 * Return value:
 *
@@ -78,17 +102,36 @@ void notify_timen(Bool ena)
 
 void notify_logpath(const String path)
 {
-  FILE *f;
-
-  if(output != NULL){
-    fclose(output);
-  } 
-  if((f = fopen(path,"we")) == NULL){
-    fatal_with_reason(errno, "Can't open log file for writing");
-  }
-  output = f;
+	FILE *f;
+	if(path){ 
+		if(output != NULL){
+			fclose(output);
+		} 
+		if((f = fopen(path, "we")) == NULL){
+			fatal_with_reason(errno, "Can't open log file for writing");
+		}
+		output = f;
+	}
 }
 
+
+/*
+* Set the debug level.
+* 
+*
+* Arguments:
+* 
+* 1. debugging level as integer.
+*
+* Return value:
+*
+* None
+*/
+
+void notify_set_debug_level(int dbglvl)
+{
+	debugLvl = dbglvl;
+}
 
 /* 
 * Fatal error handler with strerror(errno) reason
@@ -111,7 +154,7 @@ void fatal_with_reason(int theErrno, const String message, ...)
     
     va_start(ap, message);
 
-    fprintf(LOGOUT, "%s: ", Globals->progName);
+    fprintf(LOGOUT, "%s: ", progName);
     vfprintf(LOGOUT, message, ap);
     fprintf(LOGOUT, ": %s\n",strerror(theErrno));
 
@@ -137,7 +180,7 @@ void fatal(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
-	fprintf(LOGOUT,"%s: Fatal: ", Globals->progName);
+	fprintf(LOGOUT,"%s: Fatal: ", progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -200,7 +243,7 @@ void error(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
-	fprintf(LOGOUT,"%s: Error: ",Globals->progName);
+	fprintf(LOGOUT,"%s: Error: ",progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -226,7 +269,7 @@ void warn(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print warning message. */
-	fprintf(LOGOUT,"%s: Warning: ", Globals->progName);
+	fprintf(LOGOUT,"%s: Warning: ", progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -251,7 +294,7 @@ void note(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print warning message. */
-	fprintf(LOGOUT,"%s: Note: ", Globals->progName);
+	fprintf(LOGOUT,"%s: Note: ", progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
 	
@@ -283,7 +326,7 @@ void debug(int level, const String message, ...) {
 	int l;
  	
 	/* We only do this code if we are at or above the debug level. */
-	if(Globals->debugLvl >= level) {
+	if(debugLvl >= level) {
 		if(timeen){
 			t = time(NULL);
 			strncpy(timenow,ctime(&t), 31);
@@ -293,7 +336,7 @@ void debug(int level, const String message, ...) {
 			timenow[l-1] = '\0';
       
 			/* Print the error message. */
-			fprintf(LOGOUT,"%s [ %s ] (debug): ", Globals->progName, timenow);
+			fprintf(LOGOUT,"%s [ %s ] (debug): ", progName, timenow);
 		}
 		vfprintf(LOGOUT, message, ap);
 		fprintf(LOGOUT,"\n");
@@ -322,8 +365,8 @@ void debug_hexdump(int level, const void *buf, int buflen, const String message,
 	va_list ap;
 	va_start(ap, message);
 
-	if(Globals->debugLvl >= level) {
-		fprintf(LOGOUT,"%s: (debug): ",Globals->progName);
+	if(debugLvl >= level) {
+		fprintf(LOGOUT,"%s: (debug): ",progName);
 		vfprintf(LOGOUT,message,ap);
 		for(i = 0 ; i < buflen ; i++){
 			fprintf(LOGOUT,"%02X ",((int) ((char *)buf)[i]) & 0xFF);
