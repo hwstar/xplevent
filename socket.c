@@ -373,7 +373,7 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 	
 
 static Bool socketCreateLL(String bindaddr, String service, int family, int socktype, 
-	int (*addsock)(int sock, void *addr, int family, int socktype))
+	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
 {
 	struct addrinfo hints = (struct addrinfo){0};
 	struct addrinfo *list, *p;
@@ -400,43 +400,18 @@ static Bool socketCreateLL(String bindaddr, String service, int family, int sock
 	}
 
 	for(p = list; p != NULL; p = p->ai_next){ // Traverse the list
-		int sockopt = 1;
+	
 	
 		if((sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol)) == -1){
 			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...", __func__, strerror(errno));
 			continue;
 		}		
 
-		/* If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket */
-		/* This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound. */
-
-		if(p->ai_family == PF_INET6){
-			setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
-			debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", __func__);
-		}
-			
-		/* Set to reuse socket address when program exits */
-
-		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt));
-
-
-		if(bind(sock, p->ai_addr, p->ai_addrlen) == -1){
-			debug(DEBUG_EXPECTED,"%s: Bind failed with %s, continuing...", __func__, strerror(errno));
-			close(sock);
-			continue;
-		}
-
-		if(listen(sock, SOMAXCONN) == -1){
-			debug(DEBUG_EXPECTED, "%s: Listen failed with %s, continuing...", __func__, strerror(errno));
-			close(sock);
-			continue;
-			}
-
 		/* Callback to have caller do something with the socket */
 
 		sockcount++;
 
-		if((*addsock)(sock, p->ai_addr, p->ai_family, p->ai_socktype) == FALSE)
+		if((*addsock)(sock, p->ai_addr, p->ai_addrlen, p->ai_family, p->ai_socktype) == FALSE)
 			break;
 	}
 
@@ -830,7 +805,7 @@ void *SocketFixAddrPointer(void *p)
 */
 	
 Bool SocketCreateListenList(TALLOC_CTX *ctx, String bindaddr, String service, int family, int socktype, 
-	int (*addsock)(int sock, void *addr, int family, int socktype))
+	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
 {
 	int i;
 	int res;

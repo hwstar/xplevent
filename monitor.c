@@ -1058,15 +1058,41 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 *
 */
  
-static int addIPSocket(int sock, void *addr, int family, int socktype)
+static int addIPSocket(int sock, void *addr, int addrlen, int family, int socktype)
 {
-	void *p;
-	char addrstr[INET6_ADDRSTRLEN];
+	int sockopt = 1;
+	String s;
+
+	
+	
+		/* If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket */
+		/* This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound. */
+
+		if(family == PF_INET6){
+			setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
+			debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", __func__);
+		}
+			
+		/* Set to reuse socket address when program exits */
+
+		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt));
+
+
+		if(bind(sock, addr, addrlen) == -1){
+			debug(DEBUG_UNEXPECTED,"%s: Bind failed with %s", __func__, strerror(errno));
+			close(sock);
+			return -1;
+		}
+
+		if(listen(sock, SOMAXCONN) == -1){
+			debug(DEBUG_UNEXPECTED, "%s: Listen failed with %s", __func__, strerror(errno));
+			close(sock);
+			return -1;
+			}
 
 	if(Globals->debugLvl > 1){
-		p = SocketFixAddrPointer(addr);
-		inet_ntop(family, p, addrstr, sizeof(addrstr));
-		debug(DEBUG_EXPECTED, "Monitor Socket listen ip address: %s", addrstr);
+		debug(DEBUG_EXPECTED, "Monitor Socket listen ip address: %s", (s = SocketPrintableAddress(Globals, addr)));
+		talloc_free(s);
 	}
 	return xPL_addIODevice(commandSocketListener, 0, sock, TRUE, FALSE, FALSE);
 

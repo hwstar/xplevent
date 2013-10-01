@@ -23,7 +23,7 @@ DAEMONDIR = /usr/local/bin
 
 # Object file lists
 
-OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o util.o socket.o scheduler.o sunriset.o
+OBJS = notify.o confread.o parser.o lex.o grammar.o db.o monitor.o poll.o util.o socket.o scheduler.o sunriset.o
 
 PACKAGE_OBJS = $(PACKAGE).o $(OBJS)
 
