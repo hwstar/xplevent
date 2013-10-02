@@ -57,7 +57,7 @@
 #include "util.h"
 #include "socket.h"
 #include "xplevent.h"
-#include "xplio.h"
+#include "xplrx.h"
 
 
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERATE};
@@ -706,7 +706,7 @@ int main(int argc, char *argv[])
 	String *configPaths;
 	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
 
-	notify_progname(argv[0]);
+	notify_init(argv[0]);
 
 	configFiles = DEF_CONFIG_FILE;
 	
@@ -1125,8 +1125,8 @@ int main(int argc, char *argv[])
 		fatal("pid file write error");
 	}
 	
-	XplioInit(Globals, "192.168.17.10"); // DEBUG
-
+	XplRXInit(Globals); // DEBUG
+	
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");
 	

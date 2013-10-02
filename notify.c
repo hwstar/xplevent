@@ -32,10 +32,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <time.h>
+#include <pthread.h>
 #include "defs.h"
 #include "types.h"
 #include "notify.h"
 
+#define NFY_LOCK pthread_mutex_lock(&lock);
+#define NFY_UNLOCK pthread_mutex_unlock(&lock);
 
 #define LOGOUT (output == NULL ? stderr : output)
 
@@ -46,6 +49,8 @@ static Bool timeen = 0;
 static String progName = "";
 
 static int debugLvl = 1;
+
+static pthread_mutex_t lock;
 
 
 /*
@@ -79,9 +84,11 @@ void notify_timen(Bool ena)
 * None
 */
 
-void notify_progname(const String pgmName)
+void notify_init(const String pgmName)
 {
-
+	/* Initialize the guarding mutex */
+	pthread_mutex_init(&lock, NULL);
+	
 	if(pgmName){
 		progName = pgmName;
 	}
@@ -153,10 +160,12 @@ void fatal_with_reason(int theErrno, const String message, ...)
     va_list ap;
     
     va_start(ap, message);
-
+    
+	NFY_LOCK
     fprintf(LOGOUT, "%s: ", progName);
     vfprintf(LOGOUT, message, ap);
     fprintf(LOGOUT, ": %s\n",strerror(theErrno));
+    NFY_UNLOCK
 
     va_end(ap);
     exit(1);
@@ -180,9 +189,11 @@ void fatal(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
+	NFY_LOCK
 	fprintf(LOGOUT,"%s: Fatal: ", progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
+	NFY_UNLOCK
 	
 	/* Exit with an error code. */
 	va_end(ap);
@@ -243,9 +254,11 @@ void error(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print error message. */
+	NFY_LOCK
 	fprintf(LOGOUT,"%s: Error: ",progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
+	NFY_UNLOCK
 	
 	va_end(ap);
 	return;
@@ -269,9 +282,11 @@ void warn(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print warning message. */
+	NFY_LOCK
 	fprintf(LOGOUT,"%s: Warning: ", progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
+	NFY_UNLOCK
 	
 	va_end(ap);
 	return;
@@ -294,9 +309,11 @@ void note(const String message, ...) {
 	va_start(ap, message);
 	
 	/* Print warning message. */
+	NFY_LOCK
 	fprintf(LOGOUT,"%s: Note: ", progName);
 	vfprintf(LOGOUT,message,ap);
 	fprintf(LOGOUT,"\n");
+	NFY_UNLOCK
 	
 	va_end(ap);
 	return;
@@ -327,6 +344,7 @@ void debug(int level, const String message, ...) {
  	
 	/* We only do this code if we are at or above the debug level. */
 	if(debugLvl >= level) {
+		NFY_LOCK
 		if(timeen){
 			t = time(NULL);
 			strncpy(timenow,ctime(&t), 31);
@@ -341,6 +359,7 @@ void debug(int level, const String message, ...) {
 		vfprintf(LOGOUT, message, ap);
 		fprintf(LOGOUT,"\n");
 		fflush(LOGOUT);
+		NFY_UNLOCK
 	}
 	va_end(ap);
 }
@@ -366,12 +385,14 @@ void debug_hexdump(int level, const void *buf, int buflen, const String message,
 	va_start(ap, message);
 
 	if(debugLvl >= level) {
+		NFY_LOCK
 		fprintf(LOGOUT,"%s: (debug): ",progName);
 		vfprintf(LOGOUT,message,ap);
 		for(i = 0 ; i < buflen ; i++){
 			fprintf(LOGOUT,"%02X ",((int) ((char *)buf)[i]) & 0xFF);
 		}
 		fprintf(LOGOUT,"\n");
+		NFY_UNLOCK
 	}
 }
 

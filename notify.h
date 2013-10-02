@@ -29,8 +29,8 @@
 #define DEBUG_INCOMPLETE 5
 #define DEBUG_MAX 5
 
-// Call to set the program name. 
-void notify_progname(const String pgmName);
+// Call to set the program name, and initialize the guarding mutex
+void notify_init(const String pgmName);
 
 // Set the path to the log file
 void notify_logpath(const String path);
