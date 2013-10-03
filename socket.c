@@ -337,94 +337,6 @@ static Bool parseCIDR(TALLOC_CTX *ctx, String cidrString, SockAclListEntryPtr_t 
 }
 
 
-/* 
-*
-* Create a listening socket list for a single bind address.
-* Supports both IPV4 and IPV6 sockets.
-* 
-* 
-* Parameters:
-*
-* 1. Bind address string. If NULL is passed in, or it matches the keyword ALL, all interfaces will be bound 
-*    Multiple interfaces may be specified with a comma.
-* 2. Service name string. Can be either a service name or a port number.
-* 3. Address family. Usually set to AF_UNSPEC.
-* 4. Socket type. Set to SOCK_STREAM for a TCP connection.
-* 4. Callback function (see below)
-*
-* Return value:
-*
-* PASS indicates success. FAIL indicates failure.
-*
-*************** Callback Function ***************
-*
-* Parameters:
-*
-* 1. Socket FD
-* 2. Socket address as a void pointer
-* 3. Socket family
-* 4. Socket type.
-*
-* Return Value:
-*
-* PASS if list creation is to continue, FAIL if list creation is to be aborted.
-*
-*/
-	
-
-static Bool socketCreateLL(String bindaddr, String service, int family, int socktype, 
-	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
-{
-	struct addrinfo hints = (struct addrinfo){0};
-	struct addrinfo *list, *p;
-	int sock = -1, res;
-	int sockcount = 0;
-
-	
-	ASSERT_FAIL(service)
-	ASSERT_FAIL(addsock);	
-
-
-	/* Init the hints struct for getaddrinfo */
-
-	hints.ai_family = family;
-	hints.ai_socktype = socktype;
-	if(bindaddr == NULL){
-		hints.ai_flags = AI_PASSIVE;
-	}
-
-	/* Get the address list */
-	if((res = getaddrinfo(bindaddr, service, &hints, &list)) == -1){
-		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", __func__, gai_strerror(res));
-		return FAIL;
-	}
-
-	for(p = list; p != NULL; p = p->ai_next){ // Traverse the list
-	
-	
-		if((sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol)) == -1){
-			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...", __func__, strerror(errno));
-			continue;
-		}		
-
-		/* Callback to have caller do something with the socket */
-
-		sockcount++;
-
-		if((*addsock)(sock, p->ai_addr, p->ai_addrlen, p->ai_family, p->ai_socktype) == FALSE)
-			break;
-	}
-
-	freeaddrinfo(list);
-
-	if(!sockcount){
-		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s",
-		__func__, bindaddr, service);
-		return FAIL;
-	}
-
-	return PASS;
-}
 
 /*
  * Convert the address passed in to a printable string, return a talloc'd string.
@@ -767,6 +679,94 @@ void *SocketFixAddrPointer(void *p)
 
 }
 
+/* 
+*
+* Create socket(s) for a single bind address.
+* Supports both IPV4 and IPV6 sockets.
+* 
+* 
+* Parameters:
+*
+* 1. Bind address string. If NULL is passed in, or it matches the keyword ALL, all interfaces will be bound 
+*    Multiple interfaces may be specified with a comma.
+* 2. Service name string. Can be either a service name or a port number.
+* 3. Address family. Usually set to AF_UNSPEC.
+* 4. Socket type. Set to SOCK_STREAM for a TCP connection.
+* 4. Callback function (see below)
+*
+* Return value:
+*
+* PASS indicates success. FAIL indicates failure.
+*
+*************** Callback Function ***************
+*
+* Parameters:
+*
+* 1. Socket FD
+* 2. Socket address as a void pointer
+* 3. Socket family
+* 4. Socket type.
+*
+* Return Value:
+*
+* PASS if list creation is to continue, FAIL if list creation is to be aborted.
+*
+*/
+	
+
+Bool SocketCreate(String bindaddr, String service, int family, int socktype, 
+	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
+{
+	struct addrinfo hints = (struct addrinfo){0};
+	struct addrinfo *list, *p;
+	int sock = -1, res;
+	int sockcount = 0;
+
+	
+	ASSERT_FAIL(service)
+	ASSERT_FAIL(addsock);	
+
+
+	/* Init the hints struct for getaddrinfo */
+
+	hints.ai_family = family;
+	hints.ai_socktype = socktype;
+	if(bindaddr == NULL){
+		hints.ai_flags = AI_PASSIVE;
+	}
+
+	/* Get the address list */
+	if((res = getaddrinfo(bindaddr, service, &hints, &list)) == -1){
+		debug(DEBUG_EXPECTED, "%s: getaddrinfo failed: %s", __func__, gai_strerror(res));
+		return FAIL;
+	}
+
+	for(p = list; p != NULL; p = p->ai_next){ // Traverse the list
+	
+	
+		if((sock = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK, p->ai_protocol)) == -1){
+			debug(DEBUG_EXPECTED,"%s: Call to socket failed with %s, continuing...", __func__, strerror(errno));
+			continue;
+		}		
+
+		/* Callback to have caller do something with the socket */
+
+		sockcount++;
+
+		if((*addsock)(sock, p->ai_addr, p->ai_addrlen, p->ai_family, p->ai_socktype) == FALSE)
+			break;
+	}
+
+	freeaddrinfo(list);
+
+	if(!sockcount){
+		debug(DEBUG_EXPECTED, "%s: could not create, bind or listen on a socket. Bindaddr: %s service: %s",
+		__func__, bindaddr, service);
+		return FAIL;
+	}
+
+	return PASS;
+}
 
 
 /* 
@@ -804,7 +804,7 @@ void *SocketFixAddrPointer(void *p)
 *
 */
 	
-Bool SocketCreateListenList(TALLOC_CTX *ctx, String bindaddr, String service, int family, int socktype, 
+Bool SocketCreateMultiple(TALLOC_CTX *ctx, String bindaddr, String service, int family, int socktype, 
 	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
 {
 	int i;
@@ -828,7 +828,7 @@ Bool SocketCreateListenList(TALLOC_CTX *ctx, String bindaddr, String service, in
 		talloc_free(strippedBA);
 		/* Iterate the list creating all the necessary listening sockets */
 		for(i = 0; bindList[i]; i++){
-			res = socketCreateLL(bindList[i], service, family, socktype, addsock);
+			res = SocketCreate(bindList[i], service, family, socktype, addsock);
 			if(FAIL == res){
 				debug(DEBUG_UNEXPECTED, "%s: Failure binding: %s", __func__, bindList[i]);
 				talloc_free(bindList);
@@ -841,7 +841,7 @@ Bool SocketCreateListenList(TALLOC_CTX *ctx, String bindaddr, String service, in
 	}
 	else{
 		/* Create a passive socket */
-		return socketCreateLL(ba, service, family, socktype, addsock);
+		return SocketCreate(ba, service, family, socktype, addsock);
 	}
 
 }
