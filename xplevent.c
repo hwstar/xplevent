@@ -681,6 +681,7 @@ Bool XpleventCheckExit(void)
 }
 
 
+
 /*
 * Program entry point
 *
@@ -733,11 +734,6 @@ int main(int argc, char *argv[])
 	
 	atexit(xpleventShutdown);
 	
-	notify_set_debug_level(4); // DEBUG
-	debug(DEBUG_ACTION,"Main thread PID: %d", getpid());
-	XplRXInit(Globals); // DEBUG
-	for(;;); // DEBUG
-
 
 	/* Parse the arguments. */
 	while((optchar=getopt_long(argc, argv, SHORT_OPTIONS, longOptions, &longindex)) != EOF) {

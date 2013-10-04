@@ -80,8 +80,9 @@ typedef struct rxHead_s {
 	pthread_mutex_t lock;
 	int numRxEntries;
 	int sockFD;
-	int rxEventFD;
-	int rxEventVal;
+	int rxReadyFD;
+	int rxControlFD;
+	int rxControlVal;
 	void *rxStringPool;
 	void *rQEPool;
 	void *rxPoller;
@@ -97,16 +98,47 @@ static void rxCleanup(rxHeadPtr_t xh)
 {
 	XH_LOCK
 	PollDestroy(xh->rxPoller);
-	close(xh->rxEventFD);
+	close(xh->rxReadyFD);
 	talloc_free(xh->rxStringPool);
 	talloc_free(xh->rQEPool);
 	XH_UNLOCK
 }
+
 /*
- * RX Event Action
+ * Send RX ready event to FD passed in at initialization
+ * 
+ * Must be called locked.
+ */
+ 
+Bool rxSendReady(rxHeadPtr_t xh )
+{
+	int evFD;
+	long long incr = 1;
+	
+	evFD = xh->rxReadyFD; /* Copy the fd */
+	
+	/* If FD is not defined, return successful */
+	
+	if(evFD < 0){
+		return PASS;
+	}
+	
+	/* Send the event */
+	if(write(evFD, &incr, sizeof(incr)) < 0){
+		debug (DEBUG_UNEXPECTED, "%s: Could not write event increment",__func__);
+		return FAIL;
+	}
+
+	return PASS;
+}
+
+
+/*
+ * RX Control Action
+ * Called from poller
  */
 
-static void rxEventAction(int fd, int event, void *userObject)
+static void rxControlAction(int fd, int event, void *userObject)
 {
 	rxHeadPtr_t xh = userObject;
 	char buf[8];
@@ -114,11 +146,9 @@ static void rxEventAction(int fd, int event, void *userObject)
 	
 	ASSERT_FAIL(xh);
 	
-	
-	
 	XH_LOCK
 	ASSERT_FAIL(XH_MAGIC == xh->magic);
-	val = xh->rxEventVal;
+	val = xh->rxControlVal;
 	XH_UNLOCK
 	
 	if(read(fd, buf, 8) < 0){
@@ -126,12 +156,12 @@ static void rxEventAction(int fd, int event, void *userObject)
 	}
 	else{	
 
-		debug(DEBUG_EXPECTED, "Ding! event value: %d", val);
+		debug(DEBUG_EXPECTED, "Ding! RX control value: %d", val);
 	}
 }
 
 /*
- * Place new queue entry on at the head of the list.
+ * Place new queue entry on at the end of the list.
  * Make a copy of the string passed in.
  * 
  * Must be called locked
@@ -147,7 +177,7 @@ static void rxQueueRawString(rxHeadPtr_t xh, String rawStr)
 	MALLOC_FAIL(rq->rawStr = talloc_strdup(xh->rxStringPool, rawStr))
 	rq->magic = RQ_MAGIC;
 	
-	if(!xh->head){
+	if(!xh->tail){
 		/* First entry */
 		xh->head = xh->tail = rq;
 	}
@@ -179,17 +209,17 @@ static String rxDQRawString(rxHeadPtr_t xh)
 	}
 	
 	/* Get the entry to remove */
-	rq = xh->tail;
+	rq = xh->head;
 	
 	/* Is it real? */
 	ASSERT_FAIL(RQ_MAGIC == rq->magic)
 	
 	
-	/* Remove the last entry from the queue */
-	if(rq->prev){
-		/* Remove one entry off the end of the queue */
-		rq->prev->next = NULL;
-		xh->tail = rq->prev;
+	/* Remove the first entry from the queue */
+	if(rq->next){
+		/* Remove one entry from the beginning of the queue */
+		rq->next->prev = NULL;
+		xh->head = rq->next;
 	}
 	else{
 		/* Queue is now empty */
@@ -206,7 +236,17 @@ static String rxDQRawString(rxHeadPtr_t xh)
 	/* Return the string */
 	return res;	
 }
+
+/*
+ * RX thread time out handler
+ */
+ 
+static void rxTick(int id, void *userObj)
+{
 	
+	debug(DEBUG_ACTION,"RX thread tick");
+	
+}
 
 /*
  * Rx Thread
@@ -231,8 +271,13 @@ static void *rxThread(void *userObj)
 	}
 
 	/* Add the rxEvent FD to the polling list */
-	if(FAIL == PollRegEvent(xh->rxPoller, xh->rxEventFD, POLL_WT_IN, rxEventAction, xh)){
+	if(FAIL == PollRegEvent(xh->rxPoller, xh->rxControlFD, POLL_WT_IN, rxControlAction, xh)){
 		debug(DEBUG_UNEXPECTED, "Could not register RX eventfd");
+	}
+	
+	/* Add the rxTick to the polling list */
+	if(FAIL == PollRegTimeout(xh->rxPoller, rxTick, xh)){
+		debug(DEBUG_UNEXPECTED, "Could not register timeout");
 	}
 	
 	/* Allocate the receive queue entry pool */
@@ -250,7 +295,7 @@ static void *rxThread(void *userObj)
 	debug(DEBUG_ACTION, "xpl RX thread started");
 	
 
-	PollWait(poller, -1, NULL);
+	PollWait(poller, 1000, NULL);
 	debug(DEBUG_UNEXPECTED, "Poll returned serious error: %d", errno);
 	rxCleanup(xh);
 	exit(1);
@@ -265,7 +310,7 @@ static void *rxThread(void *userObj)
  * Initialization function
  */
 
-void *XplRXInit(TALLOC_CTX *ctx)
+void *XplRXInit(TALLOC_CTX *ctx, int rxReadyFD)
 {
 	pthread_attr_t attrs;
 	int res;
@@ -278,11 +323,14 @@ void *XplRXInit(TALLOC_CTX *ctx)
 	/* Initialize the guarding mutex */
 	ASSERT_FAIL( 0 == pthread_mutex_init(&xh->lock, NULL))
 	
+	/* Note the ready file descriptor */
+	xh->rxReadyFD = rxReadyFD;
+	
 	/* Set the magic number */
 	xh->magic = XH_MAGIC;
 	
-	/* Get an event FD */
-	if((xh->rxEventFD = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)) < 0){
+	/* Get an event FD for control */
+	if((xh->rxControlFD = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)) < 0){
 		debug(DEBUG_UNEXPECTED, "Could not create an event FD");
 		talloc_free(xh);
 		return NULL;
@@ -325,14 +373,14 @@ void *XplRXInit(TALLOC_CTX *ctx)
  * Send an event to the RX thread 
  */
  
-Bool XplrxSendEvent(void *xplrxheader, int val)
+Bool XplrxSendControlMsg(void *xplrxheader, int val)
 {
 	rxHeadPtr_t xh = xplrxheader;
 	int evFD;
 	long long incr = 1;
 	XH_LOCK
-	xh->rxEventVal = val; /* Get the value */
-	evFD = xh->rxEventFD; /* Copy the fd */
+	xh->rxControlVal = val; /* Get the value */
+	evFD = xh->rxControlFD; /* Copy the fd */
 	XH_UNLOCK
 	
 	/* Send the event */
@@ -368,11 +416,8 @@ String XplrxDQRawString(TALLOC_CTX *ctx, void *xplrxheader)
 		XH_UNLOCK
 		return NULL;
 	}
-	/* Copy the string into the supplied context */
-	MALLOC_FAIL(res = talloc_strdup(ctx, pStr));
-	
-	/* Free the pool copy of the string */	
-	talloc_free(pStr);
+	/* Move the string into the supplied context, freeing the original back to the string pool */
+	MALLOC_FAIL(res = UtilMoveString(ctx, pStr, 0))
 	
 	/* Unlock the mutex */
 	XH_UNLOCK
