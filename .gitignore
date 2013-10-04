@@ -1,0 +1,5 @@
+confread.o db.o grammar.o lex.o monitor.o notify.o parser.o poll.o scheduler.o socket.o sunriset.o util.o xplevent.o xplrx.o
+confread.d db.d grammar.d lex.d monitor.d notify.d parser.d poll.d scheduler.d socket.d sunriset.d util.d xplevent.d xplrx.d
+xplevent
+xplevent.sqlite3
+xplevent.conf
