@@ -60,7 +60,7 @@
 #define XH_UNLOCK pthread_mutex_unlock(&xh->lock);
 
 
-
+#define RXBUFFSIZE 1501
 #define RXBUFFPOOLSIZE 1024*128
 #define RXQEPOOLSIZE sizeof(rxQEntry_t) * 1024
 #define RXTHREADSTACKSIZE 32768
@@ -78,33 +78,22 @@ typedef struct rxHead_s {
 	unsigned magic;
 	pthread_t rxThread;
 	pthread_mutex_t lock;
-	int numRxEntries;
-	int port;
-	int sockFD;
+	Bool terminated;
+	unsigned numRxEntries;
+	unsigned localConnPort;
+	int localConnFD;
 	int rxReadyFD;
 	int rxControlFD;
-	int rxControlVal;
+	unsigned rxControlVal;
+	unsigned rxBuffSize;
 	void *rxStringPool;
 	void *rxQEPool;
+	String rxBuff;
 	void *rxPoller;
 	rxQEntryPtr_t head;
 	rxQEntryPtr_t tail;
 } rxHead_t, *rxHeadPtr_t;
 
-/* 
- * Clean up
- */
- 
-static void rxCleanup(rxHeadPtr_t xh)
-{
-	XH_LOCK
-	PollDestroy(xh->rxPoller);
-	close(xh->sockFD);
-	close(xh->rxControlFD);
-	talloc_free(xh->rxStringPool);
-	talloc_free(xh->rxQEPool);
-	XH_UNLOCK
-}
 
 /*
  * Send RX ready event to FD passed in at initialization
@@ -112,7 +101,7 @@ static void rxCleanup(rxHeadPtr_t xh)
  * Must be called locked.
  */
  
-Bool rxSendReady(rxHeadPtr_t xh )
+static Bool rxSendReady(rxHeadPtr_t xh )
 {
 	int evFD;
 	long long incr = 1;
@@ -140,9 +129,9 @@ Bool rxSendReady(rxHeadPtr_t xh )
  * Called from poller
  */
 
-static void rxControlAction(int fd, int event, void *userObject)
+static void rxControlAction(int fd, int event, void *objPtr)
 {
-	rxHeadPtr_t xh = userObject;
+	rxHeadPtr_t xh = objPtr;
 	char buf[8];
 	int val;
 	
@@ -158,7 +147,16 @@ static void rxControlAction(int fd, int event, void *userObject)
 	}
 	else{	
 
-		debug(DEBUG_EXPECTED, "Ding! RX control value: %d", val);
+		debug(DEBUG_EXPECTED, "%s: Ding! RX control value: %d", __func__, val);
+		if(val == XHCM_TERM_REQUEST){
+			debug(DEBUG_ACTION, "Received terminate request");
+			XH_LOCK
+			xh->terminated = TRUE;
+			XH_UNLOCK
+			pthread_exit(0);
+		}
+	
+			
 	}
 }
 
@@ -192,6 +190,51 @@ static void rxQueueRawString(rxHeadPtr_t xh, String rawStr)
 	/* Increment the entry count */
 	xh->numRxEntries++;
 }
+
+/*
+ * RX Incoming Action
+ * Called from poller
+ */
+
+static void rxIncomingAction(int fd, int event, void *objPtr)
+{
+	int bytesRead;
+	rxHeadPtr_t xh = objPtr;
+	char eStr[64];
+	
+	
+	ASSERT_FAIL(xh);
+	
+	XH_LOCK
+	ASSERT_FAIL(XH_MAGIC == xh->magic);
+	XH_UNLOCK
+	
+	/* Get the packet */
+	if ((bytesRead = recvfrom(xh->localConnFD, xh->rxBuff, xh->rxBuffSize - 1, 0, NULL, NULL)) < 0){
+		debug(DEBUG_UNEXPECTED,"%s: recvfrom error: %s", __func__, strerror_r(errno, eStr, 64));
+		return;
+	}
+	
+	XH_LOCK
+	
+	/* Make it a string */
+	xh->rxBuff[bytesRead] = 0;
+	
+	/* Place it in the queue */
+	rxQueueRawString(xh, xh->rxBuff);
+
+	/* Send notification of buffer add */
+	rxSendReady(xh);
+	
+	XH_UNLOCK
+	
+	
+}
+
+
+
+
+
 /*
  * Remove a queue entry from the queue, and return the string.
  * 
@@ -243,70 +286,24 @@ static String rxDQRawString(rxHeadPtr_t xh)
  * RX thread time out handler
  */
  
-static void rxTick(int id, void *userObj)
+static void rxTick(int id, void *objPtr)
 {
+	rxHeadPtr_t xh = objPtr;
+
+	ASSERT_FAIL(xh)
+	ASSERT_FAIL(XH_MAGIC == xh->magic)
 	
 	debug(DEBUG_ACTION,"RX thread tick");
-	
+
 }
-
-/*
- * Add local interface socket 
- */
-
-static int addLocalSock(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
-{
-	rxHeadPtr_t xh = userObj;
-	struct sockaddr_in sockInfo = {0};
-	socklen_t sockInfoSize = sizeof(struct sockaddr_in);
-	char eStr[64];
-	String astr = SocketPrintableAddress(xh, addr);
-	int flag = 1;
-	
-	ASSERT_FAIL(xh);
-	ASSERT_FAIL(XH_MAGIC == xh->magic)
-	ASSERT_FAIL(xh->sockFD == -1)
-	ASSERT_FAIL(astr);
-	
-	/* Mark as a broadcast socket */
-	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &flag, sizeof(flag)) < 0){
-		fatal("%s: Unable to set SO_BROADCAST on socket %s (%d)", __func__, strerror_r(errno, eStr, 64), errno);
-	}
-
-	/* Attempt to bind */
-	if ((bind(sock, addr, addrlen)) < 0){
-		fatal("%s: Unable to bind listener socket to port %d, %s (%d)", __func__, 3865, strerror_r(errno, eStr, 64), errno);
-	}
-
-	/* Retreive the assigned ephemeral socket port # */
-
-	if (getsockname(sock, (struct sockaddr *) &sockInfo, (socklen_t *) &sockInfoSize)){
-		fatal("Unable to fetch socket info for bound listener, %s (%d)", strerror(errno), errno);
-	}
-	
-	/* Extract assigned ephemeral port */
-	xh->port = ntohs(sockInfo.sin_port);
-	
-
-	/* Note the socket and port number */
-	xh->sockFD = sock;
-
-	debug(DEBUG_ACTION,"%s: Local interface Address: %s", __func__, astr);
-	debug(DEBUG_ACTION,"%s: Ephemeral port: %d", __func__, xh->port);
-	talloc_free(astr);
- 
-	return FALSE;
-	
-}
-
 
 /*
  * Rx Thread
  */
  
-static void *rxThread(void *userObj)
+static void *rxThread(void *objPtr)
 {
-	rxHeadPtr_t xh = userObj;
+	rxHeadPtr_t xh = objPtr;
 	void *poller;
 
 		
@@ -323,28 +320,10 @@ static void *rxThread(void *userObj)
 	/* Allocate the queue entry pool */
 	MALLOC_FAIL(xh->rxQEPool = talloc_pool(xh, RXQEPOOLSIZE));
 
+	/* Allocate the receive buffer */
+	xh->rxBuffSize = RXBUFFSIZE;
+	MALLOC_FAIL(xh->rxBuff = talloc_array(xh, char, xh->rxBuffSize))
 	
-	/* Get socket for local interface (Note: IPV4 only for now) */
-	xh->sockFD = -1;
-	if((FAIL == SocketCreate("127.0.0.1", "0", AF_INET, SOCK_DGRAM, xh, addLocalSock)) || (xh->sockFD < 0)){
-		fatal("%s: Could not create socket for local interface", __func__);
-	}	
-	
-	/* Create a polling resource */
-	if(!(xh->rxPoller = PollInit(xh, 4))){
-		debug(DEBUG_UNEXPECTED, "%s: Could not create polling resource", __func__);
-	}
-
-	/* Add the rxEvent FD to the polling list */
-	if(FAIL == PollRegEvent(xh->rxPoller, xh->rxControlFD, POLL_WT_IN, rxControlAction, xh)){
-		debug(DEBUG_UNEXPECTED, "%s: Could not register RX Control eventfd", __func__);
-	}
-	
-	/* Add the rxTick to the polling list */
-	if(FAIL == PollRegTimeout(xh->rxPoller, rxTick, xh)){
-		fatal("%s: Could not register timeout", __func__);
-	}
-
 	
 	/* Copy the polling resource pointer */
 	poller = xh->rxPoller;
@@ -354,13 +333,85 @@ static void *rxThread(void *userObj)
 
 	PollWait(poller, 1000, NULL);
 	debug(DEBUG_UNEXPECTED, "Poll returned serious error: %d", errno);
-	
-	rxCleanup(xh);
 	fatal("%s: Poll error in RX thread", __func__);
 	
 	return NULL;
 }
 
+
+/*
+ * Send an event to the RX thread 
+ */
+ 
+Bool XplrxSendControlMsg(void *objPtr, int val)
+{
+	rxHeadPtr_t xh = objPtr;
+	int evFD;
+	long long incr = 1;
+	ASSERT_FAIL(xh)
+	ASSERT_FAIL(XH_MAGIC == xh->magic)
+	XH_LOCK
+	xh->rxControlVal = val; /* Get the value */
+	evFD = xh->rxControlFD; /* Copy the fd */
+	XH_UNLOCK
+	
+	/* Send the event */
+	if(write(evFD, &incr, sizeof(incr)) < 0){
+		debug (DEBUG_UNEXPECTED, "%s: Could not write event increment",__func__);
+		return FAIL;
+	}
+
+	return PASS;
+}
+
+
+/*
+ * Destroy the receiver. 
+ * 
+ * Kills the receiver thread, 
+ * kills the poller, closes the control FD.
+ * and frees all memory used.
+ */
+ 
+void XplRXDestroy(void *objPtr)
+{
+	int termCount = 0;
+	rxHeadPtr_t xh = objPtr;
+	ASSERT_FAIL(xh)
+	ASSERT_FAIL(XH_MAGIC == xh->magic)
+	
+	debug(DEBUG_ACTION, "%s: Sending request to terminate rx thread...", __func__);
+	/* Send terminate request */
+	if(FAIL == XplrxSendControlMsg(xh, XHCM_TERM_REQUEST)){
+		fatal("%s: Terminate event transmission failed, exiting unclean",__func__);
+	}
+	/* Wait for thread to signal it terminated */
+	XH_LOCK
+	while(!xh->terminated && termCount < 10){
+		XH_UNLOCK
+		usleep(100000); // FIXME wait for event instead
+		termCount++;
+		XH_LOCK
+	}
+	XH_UNLOCK
+	if(termCount < 10){
+		debug(DEBUG_ACTION,"%s: RX thread terminated", __func__);
+	}
+	else{
+		debug(DEBUG_UNEXPECTED, "%s: Problem terminating RX thread", __func__);
+	}
+	
+	/* Destroy the poller */
+	PollDestroy(xh->rxPoller);
+	
+	/* Close the control FD */
+	if(xh->rxControlFD > 0){
+		close(xh->rxControlFD);
+	}
+	/* Invalidate then free the object */
+	xh->magic = 0;
+	talloc_free(xh);
+}
 
 
 
@@ -368,7 +419,7 @@ static void *rxThread(void *userObj)
  * Initialization function
  */
 
-void *XplRXInit(TALLOC_CTX *ctx, int rxReadyFD)
+void *XplRXInit(TALLOC_CTX *ctx, int localConnFD, int localConnPort, int rxReadyFD)
 {
 	pthread_attr_t attrs;
 	int res;
@@ -380,6 +431,10 @@ void *XplRXInit(TALLOC_CTX *ctx, int rxReadyFD)
 
 	/* Initialize the guarding mutex */
 	ASSERT_FAIL( 0 == pthread_mutex_init(&xh->lock, NULL))
+	
+	/* Note the local connection FD and the port */
+	xh->localConnFD = localConnFD;
+	xh->localConnPort = localConnPort;
 	
 	/* Note the ready file descriptor */
 	xh->rxReadyFD = rxReadyFD;
@@ -393,6 +448,27 @@ void *XplRXInit(TALLOC_CTX *ctx, int rxReadyFD)
 		talloc_free(xh);
 		return NULL;
 	}
+	
+	/* Create a polling resource */
+	if(!(xh->rxPoller = PollInit(xh, 4))){
+		debug(DEBUG_UNEXPECTED, "%s: Could not create polling resource", __func__);
+	}
+
+	/* Add the control FD to the polling list */
+	if(FAIL == PollRegEvent(xh->rxPoller, xh->rxControlFD, POLL_WT_IN, rxControlAction, xh)){
+		debug(DEBUG_UNEXPECTED, "%s: Could not register RX Control eventfd", __func__);
+	}
+	
+	/* Add the local connection FD to the polling list */
+	if(FAIL == PollRegEvent(xh->rxPoller, xh->localConnFD, POLL_WT_IN, rxIncomingAction, xh)){
+		debug(DEBUG_UNEXPECTED, "%s: Could not register local connection FD", __func__);
+	}
+	
+	/* Add the rxTick to the polling list */
+	if(FAIL == PollRegTimeout(xh->rxPoller, rxTick, xh)){
+		fatal("%s: Could not register timeout", __func__);
+	}
+
 	
 	/* Initialize attr type */
 	if((res = pthread_attr_init(&attrs))){
@@ -428,36 +504,13 @@ void *XplRXInit(TALLOC_CTX *ctx, int rxReadyFD)
 }
 
 /*
- * Send an event to the RX thread 
- */
- 
-Bool XplrxSendControlMsg(void *xplrxheader, int val)
-{
-	rxHeadPtr_t xh = xplrxheader;
-	int evFD;
-	long long incr = 1;
-	XH_LOCK
-	xh->rxControlVal = val; /* Get the value */
-	evFD = xh->rxControlFD; /* Copy the fd */
-	XH_UNLOCK
-	
-	/* Send the event */
-	if(write(evFD, &incr, sizeof(incr)) < 0){
-		debug (DEBUG_UNEXPECTED, "%s: Could not write event increment",__func__);
-		return FAIL;
-	}
-
-	return PASS;
-}
-
-/*
  * Remove a string from the receive queue and return a copy of it
  */
  
-String XplrxDQRawString(TALLOC_CTX *ctx, void *xplrxheader)
+String XplrxDQRawString(TALLOC_CTX *ctx, void *objPtr)
 {
 	String res,pStr;
-	rxHeadPtr_t xh = xplrxheader;
+	rxHeadPtr_t xh = objPtr;
 	
 	/* Lock the mutex */
 	XH_LOCK

@@ -55,9 +55,10 @@
 #include "parser.h"
 #include "monitor.h"
 #include "util.h"
+#include "poll.h"
 #include "socket.h"
 #include "xplevent.h"
-#include "xplrx.h"
+#include "xplcore.h"
 
 
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERATE};
@@ -734,9 +735,20 @@ int main(int argc, char *argv[])
 	
 	atexit(xpleventShutdown);
 	
-	notify_set_debug_level(4); // DEBUG
-	XplRXInit(Globals, -1); // DEBUG
-	for(;;); // DEBUG
+	notify_set_debug_level(4); // DEBUG Start
+	
+	void *xp,*ph;
+	if(!(ph = PollInit(Globals, 4))){
+		fatal("Could not get poll object");
+	}
+	if(!(xp = XplInit(Globals, ph, "192.168.17.10"))){
+		fatal("Could not get xpl object");
+	}
+	PollWait(ph, 1000, NULL);
+	exit(1);
+
+	// DEBUG end
+
 
 
 

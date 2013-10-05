@@ -1,8 +1,10 @@
 #ifndef XPLRX_H
 #define XPLRX_H
 
+#define XHCM_TERM_REQUEST 0x55
 
-void *XplRXInit(TALLOC_CTX *ctx, int rxReadyFD);
+void XplRXDestroy(void *objPtr);
+void *XplRXInit(TALLOC_CTX *ctx, int localConnFD, int localConnPort, int rxReadyFD);
 Bool XplrxSendControlMsg(void *xplrxheader, int val);
 String XplrxDQRawString(TALLOC_CTX *ctx, void *xplrxheader);
 
