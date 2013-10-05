@@ -62,7 +62,7 @@
 
 
 #define RXBUFFPOOLSIZE 1024*128
-#define RXQEPOOLSIZE sizeof(rxQentry_t) * 1024
+#define RXQEPOOLSIZE sizeof(rxQEntry_t) * 1024
 #define RXTHREADSTACKSIZE 32768
 #define XH_MAGIC 0x7A1F0CE2
 #define RQ_MAGIC 0x39CF41A2
@@ -79,12 +79,13 @@ typedef struct rxHead_s {
 	pthread_t rxThread;
 	pthread_mutex_t lock;
 	int numRxEntries;
+	int port;
 	int sockFD;
 	int rxReadyFD;
 	int rxControlFD;
 	int rxControlVal;
 	void *rxStringPool;
-	void *rQEPool;
+	void *rxQEPool;
 	void *rxPoller;
 	rxQEntryPtr_t head;
 	rxQEntryPtr_t tail;
@@ -98,9 +99,10 @@ static void rxCleanup(rxHeadPtr_t xh)
 {
 	XH_LOCK
 	PollDestroy(xh->rxPoller);
-	close(xh->rxReadyFD);
+	close(xh->sockFD);
+	close(xh->rxControlFD);
 	talloc_free(xh->rxStringPool);
-	talloc_free(xh->rQEPool);
+	talloc_free(xh->rxQEPool);
 	XH_UNLOCK
 }
 
@@ -172,7 +174,7 @@ static void rxQueueRawString(rxHeadPtr_t xh, String rawStr)
 	rxQEntryPtr_t rq;
 	
 	/* Make a queue entry */
-	MALLOC_FAIL(rq = talloc_zero(xh->rQEPool, rxQEntry_t))
+	MALLOC_FAIL(rq = talloc_zero(xh->rxQEPool, rxQEntry_t))
 	/* Make a copy of the raw string and store it in the queue entry */
 	MALLOC_FAIL(rq->rawStr = talloc_strdup(xh->rxStringPool, rawStr))
 	rq->magic = RQ_MAGIC;
@@ -249,6 +251,56 @@ static void rxTick(int id, void *userObj)
 }
 
 /*
+ * Add local interface socket 
+ */
+
+static int addLocalSock(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
+{
+	rxHeadPtr_t xh = userObj;
+	struct sockaddr_in sockInfo = {0};
+	socklen_t sockInfoSize = sizeof(struct sockaddr_in);
+	char eStr[64];
+	String astr = SocketPrintableAddress(xh, addr);
+	int flag = 1;
+	
+	ASSERT_FAIL(xh);
+	ASSERT_FAIL(XH_MAGIC == xh->magic)
+	ASSERT_FAIL(xh->sockFD == -1)
+	ASSERT_FAIL(astr);
+	
+	/* Mark as a broadcast socket */
+	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &flag, sizeof(flag)) < 0){
+		fatal("%s: Unable to set SO_BROADCAST on socket %s (%d)", __func__, strerror_r(errno, eStr, 64), errno);
+	}
+
+	/* Attempt to bind */
+	if ((bind(sock, addr, addrlen)) < 0){
+		fatal("%s: Unable to bind listener socket to port %d, %s (%d)", __func__, 3865, strerror_r(errno, eStr, 64), errno);
+	}
+
+	/* Retreive the assigned ephemeral socket port # */
+
+	if (getsockname(sock, (struct sockaddr *) &sockInfo, (socklen_t *) &sockInfoSize)){
+		fatal("Unable to fetch socket info for bound listener, %s (%d)", strerror(errno), errno);
+	}
+	
+	/* Extract assigned ephemeral port */
+	xh->port = ntohs(sockInfo.sin_port);
+	
+
+	/* Note the socket and port number */
+	xh->sockFD = sock;
+
+	debug(DEBUG_ACTION,"%s: Local interface Address: %s", __func__, astr);
+	debug(DEBUG_ACTION,"%s: Ephemeral port: %d", __func__, xh->port);
+	talloc_free(astr);
+ 
+	return FALSE;
+	
+}
+
+
+/*
  * Rx Thread
  */
  
@@ -257,48 +309,54 @@ static void *rxThread(void *userObj)
 	rxHeadPtr_t xh = userObj;
 	void *poller;
 
+		
+
+	debug(DEBUG_ACTION, "xpl RX thread started");
 	
 	XH_LOCK
 	ASSERT_FAIL(XH_MAGIC == xh->magic)
 	
+		
+	/* Allocate the receive string pool */
+	MALLOC_FAIL(xh->rxStringPool = talloc_pool(xh, RXBUFFPOOLSIZE));
 	
+	/* Allocate the queue entry pool */
+	MALLOC_FAIL(xh->rxQEPool = talloc_pool(xh, RXQEPOOLSIZE));
 
+	
+	/* Get socket for local interface (Note: IPV4 only for now) */
+	xh->sockFD = -1;
+	if((FAIL == SocketCreate("127.0.0.1", "0", AF_INET, SOCK_DGRAM, xh, addLocalSock)) || (xh->sockFD < 0)){
+		fatal("%s: Could not create socket for local interface", __func__);
+	}	
+	
 	/* Create a polling resource */
 	if(!(xh->rxPoller = PollInit(xh, 4))){
-		debug(DEBUG_UNEXPECTED, "Could not create polling resource");
-		talloc_free(xh);
-		return NULL;
+		debug(DEBUG_UNEXPECTED, "%s: Could not create polling resource", __func__);
 	}
 
 	/* Add the rxEvent FD to the polling list */
 	if(FAIL == PollRegEvent(xh->rxPoller, xh->rxControlFD, POLL_WT_IN, rxControlAction, xh)){
-		debug(DEBUG_UNEXPECTED, "Could not register RX eventfd");
+		debug(DEBUG_UNEXPECTED, "%s: Could not register RX Control eventfd", __func__);
 	}
 	
 	/* Add the rxTick to the polling list */
 	if(FAIL == PollRegTimeout(xh->rxPoller, rxTick, xh)){
-		debug(DEBUG_UNEXPECTED, "Could not register timeout");
+		fatal("%s: Could not register timeout", __func__);
 	}
-	
-	/* Allocate the receive queue entry pool */
-	
-	/* Allocate the receive string pool */
-	MALLOC_FAIL(xh->rxStringPool = talloc_pool(xh, RXBUFFPOOLSIZE));
+
 	
 	/* Copy the polling resource pointer */
 	poller = xh->rxPoller;
 	
 	XH_UNLOCK
 	
-	
-
-	debug(DEBUG_ACTION, "xpl RX thread started");
-	
 
 	PollWait(poller, 1000, NULL);
 	debug(DEBUG_UNEXPECTED, "Poll returned serious error: %d", errno);
+	
 	rxCleanup(xh);
-	exit(1);
+	fatal("%s: Poll error in RX thread", __func__);
 	
 	return NULL;
 }

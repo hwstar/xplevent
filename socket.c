@@ -692,7 +692,8 @@ void *SocketFixAddrPointer(void *p)
 * 2. Service name string. Can be either a service name or a port number.
 * 3. Address family. Usually set to AF_UNSPEC.
 * 4. Socket type. Set to SOCK_STREAM for a TCP connection.
-* 4. Callback function (see below)
+* 5. User Object
+* 6. Callback function (see below)
 *
 * Return value:
 *
@@ -706,6 +707,7 @@ void *SocketFixAddrPointer(void *p)
 * 2. Socket address as a void pointer
 * 3. Socket family
 * 4. Socket type.
+* 5. User Object
 *
 * Return Value:
 *
@@ -714,8 +716,8 @@ void *SocketFixAddrPointer(void *p)
 */
 	
 
-Bool SocketCreate(String bindaddr, String service, int family, int socktype, 
-	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
+Bool SocketCreate(String bindaddr, String service, int family, int socktype, void *userObj,
+	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype, void *userObj))
 {
 	struct addrinfo hints = (struct addrinfo){0};
 	struct addrinfo *list, *p;
@@ -753,8 +755,9 @@ Bool SocketCreate(String bindaddr, String service, int family, int socktype,
 
 		sockcount++;
 
-		if((*addsock)(sock, p->ai_addr, p->ai_addrlen, p->ai_family, p->ai_socktype) == FALSE)
+		if((*addsock)(sock, p->ai_addr, p->ai_addrlen, p->ai_family, p->ai_socktype, userObj) == FALSE){
 			break;
+		}
 	}
 
 	freeaddrinfo(list);
@@ -783,7 +786,8 @@ Bool SocketCreate(String bindaddr, String service, int family, int socktype,
 * 3. Service name string. Can be either a service name or a port number.
 * 4. Address family. Usually set to AF_UNSPEC.
 * 5. Socket type. Set to SOCK_STREAM for a TCP connection.
-* 6. Callback function (see below)
+* 6. User Object
+* 7. Callback function (see below)
 *
 * Return value:
 *
@@ -797,6 +801,7 @@ Bool SocketCreate(String bindaddr, String service, int family, int socktype,
 * 2. Socket address as a void pointer
 * 3. Socket family
 * 4. Socket type.
+* 5. User Object
 *
 * Return Value:
 *
@@ -804,8 +809,8 @@ Bool SocketCreate(String bindaddr, String service, int family, int socktype,
 *
 */
 	
-Bool SocketCreateMultiple(TALLOC_CTX *ctx, String bindaddr, String service, int family, int socktype, 
-	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype))
+Bool SocketCreateMultiple(TALLOC_CTX *ctx, String bindaddr, String service, int family, int socktype, void *userObj,
+	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype, void *userObj))
 {
 	int i;
 	int res;
@@ -828,7 +833,7 @@ Bool SocketCreateMultiple(TALLOC_CTX *ctx, String bindaddr, String service, int 
 		talloc_free(strippedBA);
 		/* Iterate the list creating all the necessary listening sockets */
 		for(i = 0; bindList[i]; i++){
-			res = SocketCreate(bindList[i], service, family, socktype, addsock);
+			res = SocketCreate(bindList[i], service, family, socktype, addsock, userObj);
 			if(FAIL == res){
 				debug(DEBUG_UNEXPECTED, "%s: Failure binding: %s", __func__, bindList[i]);
 				talloc_free(bindList);
@@ -841,7 +846,7 @@ Bool SocketCreateMultiple(TALLOC_CTX *ctx, String bindaddr, String service, int 
 	}
 	else{
 		/* Create a passive socket */
-		return SocketCreate(ba, service, family, socktype, addsock);
+		return SocketCreate(ba, service, family, socktype, NULL, addsock);
 	}
 
 }

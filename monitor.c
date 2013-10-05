@@ -1058,7 +1058,7 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 *
 */
  
-static int addIPSocket(int sock, void *addr, int addrlen, int family, int socktype)
+static int addIPSocket(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
 {
 	int sockopt = 1;
 	String s;
@@ -1285,7 +1285,8 @@ void MonitorRun(void)
   	
 
 	/* Add a listener for the command socket */
-	if(SocketCreateMultiple(Globals, Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, addIPSocket ) == FAIL){
+	if(SocketCreateMultiple(Globals, Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, NULL,
+	    addIPSocket ) == FAIL){
 		fatal("Can't create listening socket(s)");
 	}	
 
