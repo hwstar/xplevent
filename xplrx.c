@@ -78,7 +78,6 @@ typedef struct rxHead_s {
 	unsigned magic;
 	pthread_t rxThread;
 	pthread_mutex_t lock;
-	Bool terminated;
 	unsigned numRxEntries;
 	unsigned localConnPort;
 	int localConnFD;
@@ -103,19 +102,16 @@ typedef struct rxHead_s {
  
 static Bool rxSendReady(rxHeadPtr_t xh )
 {
-	int evFD;
 	long long incr = 1;
-	
-	evFD = xh->rxReadyFD; /* Copy the fd */
 	
 	/* If FD is not defined, return successful */
 	
-	if(evFD < 0){
+	if(xh->rxReadyFD < 0){
 		return PASS;
 	}
 	
 	/* Send the event */
-	if(write(evFD, &incr, sizeof(incr)) < 0){
+	if(write(xh->rxReadyFD, &incr, sizeof(incr)) < 0){
 		debug (DEBUG_UNEXPECTED, "%s: Could not write event increment",__func__);
 		return FAIL;
 	}
@@ -151,7 +147,7 @@ static void rxControlAction(int fd, int event, void *objPtr)
 		if(val == XHCM_TERM_REQUEST){
 			debug(DEBUG_ACTION, "Received terminate request");
 			XH_LOCK
-			xh->terminated = TRUE;
+			rxSendReady(xh); /* Send Dying gasp */
 			XH_UNLOCK
 			pthread_exit(0);
 		}
@@ -377,6 +373,8 @@ void XplRXDestroy(void *objPtr)
 {
 	int termCount = 0;
 	rxHeadPtr_t xh = objPtr;
+	char eBuf[8];
+	
 	ASSERT_FAIL(xh)
 	ASSERT_FAIL(XH_MAGIC == xh->magic)
 	
@@ -385,11 +383,14 @@ void XplRXDestroy(void *objPtr)
 	if(FAIL == XplrxSendControlMsg(xh, XHCM_TERM_REQUEST)){
 		fatal("%s: Terminate event transmission failed, exiting unclean",__func__);
 	}
-	/* Wait for thread to signal it terminated */
+	/* Wait for RX thread to signal it terminated */
 	XH_LOCK
-	while(!xh->terminated && termCount < 10){
+	while(termCount < 10){ /* Wait for RX thread dying gasp */
 		XH_UNLOCK
-		usleep(100000); // FIXME wait for event instead
+		if(8 == read(xh->rxReadyFD, eBuf, 8)){
+			break;
+		}
+		usleep(100000);
 		termCount++;
 		XH_LOCK
 	}
@@ -398,7 +399,7 @@ void XplRXDestroy(void *objPtr)
 		debug(DEBUG_ACTION,"%s: RX thread terminated", __func__);
 	}
 	else{
-		debug(DEBUG_UNEXPECTED, "%s: Problem terminating RX thread", __func__);
+		fatal("%s: Problem terminating RX thread", __func__);
 	}
 	
 	/* Destroy the poller */

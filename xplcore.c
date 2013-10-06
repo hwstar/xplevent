@@ -180,7 +180,21 @@ static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int s
 	return FALSE;
 }
 
+/*
+ * XPL tick function
+ */
 
+static void xplTick(int id, void *objPtr)
+{
+	xplObjPtr_t xp = objPtr;
+
+	
+	ASSERT_FAIL(xp)
+	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	
+	/* debug(DEBUG_ACTION, "XPL tick"); */
+
+}
 
 /*
  * Destroy an XPL object
@@ -259,6 +273,11 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String BroadcastIP)
 		debug(DEBUG_UNEXPECTED, "%s: Could not register RX Ready eventfd", __func__);
 		XplDestroy(xp);
 		return NULL;
+	}
+	
+	/* Add the xplTick to the polling list */
+	if(FAIL == PollRegTimeout(xp->poller, xplTick, xp)){
+		fatal("%s: Could not register timeout", __func__);
 	}
 	
 	/* Initialize receiver thread */
