@@ -741,7 +741,7 @@ int main(int argc, char *argv[])
 	if(!(ph = PollInit(Globals, 4))){
 		fatal("Could not get poll object");
 	}
-	if(!(xp = XplInit(Globals, ph, "192.168.17.10"))){
+	if(!(xp = XplInit(Globals, ph, "192.168.17.255"))){
 		fatal("Could not get xpl object");
 	}
 	PollWait(ph, 1000, NULL);

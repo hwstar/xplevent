@@ -40,6 +40,8 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/fcntl.h>
+#include <net/if.h>
+#include <ifaddrs.h>
 
 #include <errno.h>
 #include <pthread.h>
@@ -64,6 +66,7 @@ typedef struct xplObj_s {
 	int broadcastFD;
 	int rxReadyFD;
 	int localConnPort;
+	String broadcastIP;
 	void *poller;
 	void *rcvr;
 } xplObj_t, *xplObjPtr_t;
@@ -114,13 +117,13 @@ static int addLocalSock(int sock, void *addr, int addrlen, int family, int sockt
 	struct sockaddr_in sockInfo = {0};
 	socklen_t sockInfoSize = sizeof(struct sockaddr_in);
 	char eStr[64];
-	String astr = SocketPrintableAddress(xp, addr);
+	String astr;
 	int flag = 1;
 	
 	ASSERT_FAIL(xp);
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	ASSERT_FAIL(xp->localConnFD == -1)
-	ASSERT_FAIL(astr);
+	ASSERT_FAIL(astr = SocketPrintableAddress(xp, addr))
 	
 	/* Mark as a broadcast socket */
 	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &flag, sizeof(flag)) < 0){
@@ -152,6 +155,32 @@ static int addLocalSock(int sock, void *addr, int addrlen, int family, int sockt
 	return FALSE;
 	
 }
+
+/*
+ * Add the broadcast socket
+ */
+
+static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
+{  
+	int flag = 1;
+	xplObjPtr_t xp = userObj;
+	char eStr[64];
+		
+	ASSERT_FAIL(xp);
+	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	ASSERT_FAIL(xp->broadcastFD == -1)
+	
+	/* Mark as a broadcasting socket */
+	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &flag, sizeof(flag)) < 0) {
+		close(sock);
+		fatal("%s: Unable to set SO_BROADCAST on socket %s (%d)", __func__, strerror_r(errno, eStr, 64), errno);
+	}
+	xp->broadcastFD = sock;
+	debug(DEBUG_ACTION, "Broadcast socket set up on: %s", xp->broadcastIP);
+	return FALSE;
+}
+
+
 
 /*
  * Destroy an XPL object
@@ -199,17 +228,24 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String BroadcastIP)
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(Poller)
+	ASSERT_FAIL(BroadcastIP);
 	
 	MALLOC_FAIL(xp = talloc_zero(ctx, xplObj_t))
+	MALLOC_FAIL(xp->broadcastIP = talloc_strdup(xp, BroadcastIP))
 	xp->localConnFD = xp->rxReadyFD = xp->broadcastFD = -1;
 	xp->poller = Poller;
 	xp->magic = XP_MAGIC;
-	
 	
 	/* Get socket for local interface (Note: IPV4 only for now) */
 	if((FAIL == SocketCreate("127.0.0.1", "0", AF_INET, SOCK_DGRAM, xp, addLocalSock)) || (xp->localConnFD < 0)){
 		fatal("%s: Could not create socket for local interface", __func__);
 	}
+	
+	/* Get socket for broadcast interface (Note: IPV4 only for now) */
+	if((FAIL == SocketCreate(xp->broadcastIP, "3865", AF_INET, SOCK_DGRAM, xp, addBroadcastSock)) || (xp->broadcastFD < 0)){
+		fatal("%s: Could not create socket for broadcast interface", __func__);
+	}
+	
 	
 	/* Create an event FD for ready */
 	if((xp->rxReadyFD = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)) < 0){

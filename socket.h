@@ -24,6 +24,7 @@ Bool SocketWaitWriteReady(int socket, int msTimeout);
 Bool SocketCheckACL(void *acl, const struct sockaddr_storage *clientAddr);
 Bool SocketGenACL(TALLOC_CTX *ctx, void **acl, String allowList, String denyList);
 String SocketPrintableAddress(TALLOC_CTX *ctx, struct sockaddr_storage *theAddr);
+Bool SocketCompareAddrVerbatim(const struct sockaddr_storage *ip1, const struct sockaddr_storage *ip2);
 
 
 #endif

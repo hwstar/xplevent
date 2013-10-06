@@ -377,7 +377,7 @@ String SocketPrintableAddress(TALLOC_CTX *ctx, struct sockaddr_storage *theAddr)
             break;
 
         default:
-             strncpy(s, "Unknown Address Family", 22);
+             snprintf(s, INET6_ADDRSTRLEN, "Unknown Address Family: %d", theAddr->ss_family);
             break;
 	}
 	return s;
@@ -1075,6 +1075,25 @@ Bool SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 	va_end(ap);
 
 	return (Bool) res;	
+}
+
+/*
+ * Compare two socket addresses verbatim
+ */
+ 
+Bool SocketCompareAddrVerbatim(const struct sockaddr_storage *ip1, const struct sockaddr_storage *ip2)
+{
+	struct sockaddr_storage mask;
+	
+	if (ip1->ss_family != ip2->ss_family) {
+		/* Never on the same net. */
+		return FALSE;
+	}
+	/* Enable every last mask bit */
+	addrMaskInit(&mask, ip1->ss_family, 128);
+	
+	/* Compare and return */
+	return sameNet(ip1, ip2, &mask);	
 }
 
 	
