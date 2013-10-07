@@ -734,21 +734,25 @@ int main(int argc, char *argv[])
 	Globals->lon = -117.0;
 	
 	atexit(xpleventShutdown);
-	
+
+#if(1)	
 	notify_set_debug_level(5); // DEBUG Start
 	
-	void *xp,*ph;
+	void *xp,*ph,*xs;
 	if(!(ph = PollInit(Globals, 4))){
 		fatal("Could not get poll object");
 	}
-	if(!(xp = XplInit(Globals, ph, "192.168.17.255"))){
+	if(!(xp = XplInit(Globals, ph, "192.168.17.213", "192.168.17.255", "0.0.0.0"))){
 		fatal("Could not get xpl object");
 	}
+	xs = XplNewService(xp, "hwstar", "ctrlr", "test");
+	XplEnableService(xp, xs);
+	
 	PollWait(ph, 1000, NULL);
 	exit(1);
 
 	// DEBUG end
-
+#endif
 
 
 

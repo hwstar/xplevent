@@ -140,6 +140,25 @@ void notify_set_debug_level(int dbglvl)
 	debugLvl = dbglvl;
 }
 
+/*
+* Set the debug level.
+* 
+*
+* Arguments:
+* 
+* None
+*
+* Return value:
+*
+* Debug level as integer
+*/
+
+int notify_get_debug_level(void)
+{
+	return debugLvl;
+}
+
+
 /* 
 * Fatal error handler with strerror(errno) reason
 *

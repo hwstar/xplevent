@@ -127,7 +127,8 @@ typedef struct XPLService_s {
 	
 	Bool ignoreBroadcasts;
 
-	int heartbeatInterval;
+	unsigned heartbeatInterval;
+	unsigned heartbeatTimer;
 	time_t lastHeartbeatAt;
 	XPLMessagePtr_t heartbeatMessage;
 
@@ -174,13 +175,21 @@ typedef struct xplObj_s {
 	void *poller;
 	void *rcvr;
 	String txBuff;
+	String remoteIP;
 	String broadcastIP;
+	String internalIP;
 	XPLServicePtr_t servHead;
 	XPLServicePtr_t servTail;
 	struct sockaddr_storage broadcastAddr;
 } xplObj_t, *xplObjPtr_t;
 
 typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } Heartbeat_t;
+
+/*
+* Forward references
+*/
+
+static Bool sendHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService);
 
 
 /*
@@ -210,11 +219,14 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 	}
 	else{	
 
-		debug(DEBUG_EXPECTED, "%s: Ding! RX ready", __func__);
+		debug(DEBUG_ACTION, "%s: Ding! RX ready", __func__);
 		/* Fetch any strings from the queue */
 		while((theString = XplrxDQRawString(xp, xp->rcvr))){
 			if(theString){
-				debug(DEBUG_ACTION, "Processing received message");
+				if(notify_get_debug_level() >= 5){
+					debug(DEBUG_EXPECTED, "Processing received message: length = %d", strlen(theString));
+					debug(DEBUG_EXPECTED,"Packet received:\n%s", theString);
+				}
 				/* Process the string contents */
 		
 				talloc_free(theString);
@@ -311,12 +323,30 @@ static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int s
 static void xplTick(int id, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
+	XPLServicePtr_t xs;
 
 	
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	
 	debug(DEBUG_INCOMPLETE, "XPL tick");
+	/* Traverse the service list */
+	for(xs = xp->servHead; xs; xs = xs->next){
+		/* Is the heartbeat timer expired ? */
+		if(!xs->heartbeatTimer){
+			debug(DEBUG_ACTION, "Sending refresh heartbeat");
+			if(FALSE == sendHeartbeat(xp, xs)){
+				debug(DEBUG_UNEXPECTED, "Refresh heartbeat send failed");
+			}		
+		}
+		else{
+			/* Decrement timer and continue */
+			xs->heartbeatTimer--;
+		}	
+	}
+	
+	
+
 
 }
 
@@ -632,7 +662,7 @@ static XPLMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, XPLServicePtr_t th
 	/* Add standard heartbeat data */
 	MALLOC_FAIL(portStr = talloc_asprintf(theHeartbeat, "%d", xp->localConnPort))
 	addMessageNamedValue(theHeartbeat, "port", portStr);
-	addMessageNamedValue(theHeartbeat, "remote-ip", xp->broadcastIP);
+	addMessageNamedValue(theHeartbeat, "remote-ip", xp->remoteIP);
 	if (theService->serviceVersion) {
 		addMessageNamedValue(theHeartbeat, "version", theService->serviceVersion);
 	}    
@@ -672,7 +702,11 @@ static Bool sendHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService)
 	}
 
 	/* Update last heartbeat time */
-	theService->lastHeartbeatAt = time(NULL); 
+	theService->lastHeartbeatAt = time(NULL);
+	
+	/* Reset the heartbeat timer */
+	theService->heartbeatTimer = theService->heartbeatInterval;
+	 
 	debug(DEBUG_ACTION, "Sent Heatbeat message");
 	return TRUE;
 }
@@ -849,18 +883,23 @@ void XplDestroy(void *xplObj)
  */
  
 
-void *XplInit(TALLOC_CTX *ctx, void *Poller, String BroadcastIP)
+void *XplInit(TALLOC_CTX *ctx, void *Poller, String RemoteIP, String BroadcastIP, String InternalIP)
 {
 	xplObjPtr_t xp;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(Poller)
+	ASSERT_FAIL(RemoteIP)
 	ASSERT_FAIL(BroadcastIP);
 	
 	/* Allocate the object */
 	MALLOC_FAIL(xp = talloc_zero(ctx, xplObj_t))
-	/* Save th broadcast IP address */
+	/* Save the internal IP address */
+	MALLOC_FAIL(xp->internalIP = talloc_strdup(xp, InternalIP))
+	/* Save the broadcast IP address */
 	MALLOC_FAIL(xp->broadcastIP = talloc_strdup(xp, BroadcastIP))
+	/* Save the remote IP address */
+	MALLOC_FAIL(xp->remoteIP = talloc_strdup(xp, RemoteIP))
 	/* Invalidate the FD's */
 	xp->localConnFD = xp->rxReadyFD = xp->broadcastFD = -1;
 	/* Save the poller object passed in */
@@ -873,7 +912,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String BroadcastIP)
 	xp->magic = XP_MAGIC;
 	
 	/* Get socket for local interface (Note: IPV4 only for now) */
-	if((FAIL == SocketCreate("127.0.0.1", "0", AF_INET, SOCK_DGRAM, xp, addLocalSock)) || (xp->localConnFD < 0)){
+	if((FAIL == SocketCreate(xp->internalIP, "0", AF_INET, SOCK_DGRAM, xp, addLocalSock)) || (xp->localConnFD < 0)){
 		fatal("%s: Could not create socket for local interface", __func__);
 	}
 	

@@ -38,6 +38,9 @@ void notify_logpath(const String path);
 // Call to set debugging level
 void notify_set_debug_level(int dbglvl);
 
+// Call to get debug level
+int notify_get_debug_level(void);
+
 // Call to enable or disable time reporting in messages
 void notify_timen(Bool ena);
 

@@ -221,7 +221,7 @@ static void rxIncomingAction(int fd, int event, void *objPtr)
 
 	/* Send notification of buffer add */
 	rxSendReady(xh);
-	
+
 	XH_UNLOCK
 	
 	

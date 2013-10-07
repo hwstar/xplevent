@@ -6,8 +6,8 @@ typedef enum { XPL_MESSAGE_ANY, XPL_MESSAGE_COMMAND, XPL_MESSAGE_STATUS, XPL_MES
 
 
 void XplDestroy(void *objPtr);
-void *XplInit(TALLOC_CTX *ctx, void *Poller, String InterfaceIP);
-void *XplNewService(void *pxi, String theVendor, String theDeviceID, String theInstanceID);
+void *XplInit(TALLOC_CTX *ctx, void *Poller, String RemoteIP, String BroadcastIP, String InternalIP);
+void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String theInstanceID);
 Bool XplDestroyService(void *xplObj, void *servToDestroy);
 void XplEnableService(void *xplObj, void *servToEnable);
 void XplDisableService(void *xplObj, void *servToDisable);
