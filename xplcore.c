@@ -74,14 +74,14 @@
 
 
 /* name/value list entry */
-typedef struct XPLNameValueLE_s {
+typedef struct xplNameValueLE_s {
 	unsigned magic;
 	String itemName;
 	String itemValue;
 	Bool isBinary;
 	int binaryLength;
-	struct XPLNameValueLE_s *next;
-	} XPLNameValueLE_t, *XPLNameValueLEPtr_t;
+	struct xplNameValueLE_s *next;
+	} xplNameValueLE_t, *xplNameValueLEPtr_t;
 
 
 /* Describe a received message */
@@ -107,14 +107,14 @@ typedef struct {
 	String schemaType;
 	
 	TALLOC_CTX *nvCTX;
-	XPLNameValueLEPtr_t nvHead;
-	XPLNameValueLEPtr_t nvTail;
+	xplNameValueLEPtr_t nvHead;
+	xplNameValueLEPtr_t nvTail;
 	
-} XPLMessage_t, *XPLMessagePtr_t;
+} xplMessage_t, *xplMessagePtr_t;
 
 
 /* Describe a xPL service */
-typedef struct XPLService_s {
+typedef struct xplService_s {
 	unsigned magic;
 	
 	Bool serviceEnabled;
@@ -130,7 +130,7 @@ typedef struct XPLService_s {
 	unsigned heartbeatInterval;
 	unsigned heartbeatTimer;
 	time_t lastHeartbeatAt;
-	XPLMessagePtr_t heartbeatMessage;
+	xplMessagePtr_t heartbeatMessage;
 
 	Bool configurableService;
 	Bool serviceConfigured;
@@ -144,25 +144,25 @@ typedef struct XPLService_s {
 	String configFileName;
 	int configChangedCount;
 	int configChangedAllocCount;
-	xPL_ServiceChangedListenerDefPtr changedListenerList;
+	xpl_ServiceChangedListenerDefPtr changedListenerList;
 
 	int configCount;
 	int configAllocCount;
-	xPL_ServiceConfigurablePtr configList;
+	xpl_ServiceConfigurablePtr configList;
 
 	int filterCount;
 	int filterAllocCount;
-	xPL_ServiceFilterPtr messageFilterList;
+	xpl_ServiceFilterPtr messageFilterList;
 
 	Bool reportOwnMessages;
 	int listenerCount;
 	int listenerAllocCount;
-	xPL_ServiceListenerDefPtr serviceListenerList; 
+	xpl_ServiceListenerDefPtr serviceListenerList; 
 */
-	struct XPLService_s *prev;
-	struct XPLService_s *next;
+	struct xplService_s *prev;
+	struct xplService_s *next;
 	
-} XPLService_t, *XPLServicePtr_t;
+} xplService_t, *xplServicePtr_t;
 
 typedef struct xplObj_s {
 	unsigned magic;
@@ -178,8 +178,8 @@ typedef struct xplObj_s {
 	String remoteIP;
 	String broadcastIP;
 	String internalIP;
-	XPLServicePtr_t servHead;
-	XPLServicePtr_t servTail;
+	xplServicePtr_t servHead;
+	xplServicePtr_t servTail;
 	struct sockaddr_storage broadcastAddr;
 } xplObj_t, *xplObjPtr_t;
 
@@ -189,7 +189,7 @@ typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } 
 * Forward references
 */
 
-static Bool sendHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService);
+static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService);
 
 
 /*
@@ -323,7 +323,7 @@ static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int s
 static void xplTick(int id, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
-	XPLServicePtr_t xs;
+	xplServicePtr_t xs;
 
 	
 	ASSERT_FAIL(xp)
@@ -406,9 +406,9 @@ static Bool appendText(xplObjPtr_t xp, String theString)
  * Write out the message 
  */
  
-static Bool formatMessage(xplObjPtr_t xp, XPLMessagePtr_t theMessage)
+static Bool formatMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
 {
-	XPLNameValueLEPtr_t le;
+	xplNameValueLEPtr_t le;
 
 	/* Clear the write count */
 	xp->txBuffBytesWritten = 0;
@@ -492,13 +492,13 @@ static Bool formatMessage(xplObjPtr_t xp, XPLMessagePtr_t theMessage)
 }
 
 /* 
- * Send an xPL message. 
+ * Send an xpl message. 
  *  
  * If the message is valid and is successfully sent,
  * TRUE is returned.  
  */ 
                                                     
-static Bool sendMessage(xplObjPtr_t xp, XPLMessagePtr_t theMessage)
+static Bool sendMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
 {
 	/* Write the message to text */
 	if (FALSE == formatMessage(xp, theMessage)){
@@ -518,11 +518,11 @@ static Bool sendMessage(xplObjPtr_t xp, XPLMessagePtr_t theMessage)
  * Create a new message based on a service
  */
  
-static XPLMessagePtr_t createSendableMessage(XPLServicePtr_t theService, XPLMessageType_t messageType) {
-  XPLMessagePtr_t theMessage;
+static xplMessagePtr_t createSendableMessage(xplServicePtr_t theService, XPLMessageType_t messageType) {
+  xplMessagePtr_t theMessage;
   
   /* Allocate the message (owned by the service context) */
-  MALLOC_FAIL(theMessage = talloc_zero(theService, XPLMessage_t))
+  MALLOC_FAIL(theMessage = talloc_zero(theService, xplMessage_t))
 
   /* Set the version */
   theMessage->messageType = messageType;
@@ -543,16 +543,16 @@ static XPLMessagePtr_t createSendableMessage(XPLServicePtr_t theService, XPLMess
  * Add a name value pair to an existing message
  */
  
-static void addMessageNamedValue(XPLMessagePtr_t theMessage, String name, String value )
+static void addMessageNamedValue(xplMessagePtr_t theMessage, String name, String value )
 {
-	XPLNameValueLEPtr_t newNVLE;
+	xplNameValueLEPtr_t newNVLE;
 	
 	if(!theMessage->nvCTX){ 
 		/* Create a new context from the NV pool for the list to make it simple to delete */
 		MALLOC_FAIL(theMessage->nvCTX = talloc_new(theMessage));
 	}
 	/* Create a new list entry */
-	MALLOC_FAIL(newNVLE = talloc_zero(theMessage->nvCTX, XPLNameValueLE_t))
+	MALLOC_FAIL(newNVLE = talloc_zero(theMessage->nvCTX, xplNameValueLE_t))
 	
 	/* Add the name */
 	MALLOC_FAIL(newNVLE->itemName = talloc_strdup(newNVLE, name))
@@ -575,7 +575,7 @@ static void addMessageNamedValue(XPLMessagePtr_t theMessage, String name, String
  * Remove all the named values from the message
  */
 
-static void removeAllNamedValues(XPLMessagePtr_t theMessage)
+static void removeAllNamedValues(xplMessagePtr_t theMessage)
 {
 	if(theMessage->nvCTX){
 		talloc_free(theMessage->nvCTX);
@@ -588,11 +588,11 @@ static void removeAllNamedValues(XPLMessagePtr_t theMessage)
  * Create a message suitable for sending to a specific receiver
  */
  
-static XPLMessagePtr_t createTargetedMessage(XPLServicePtr_t theService, XPLMessageType_t messageType, 
+static xplMessagePtr_t createTargetedMessage(xplServicePtr_t theService, XPLMessageType_t messageType, 
 	String theVendor, String theDevice, String theInstance) 
 {
 
-	XPLMessagePtr_t theMessage = createSendableMessage(theService, messageType);
+	xplMessagePtr_t theMessage = createSendableMessage(theService, messageType);
 	MALLOC_FAIL(theMessage->targetVendor = talloc_strdup(theMessage, theVendor))
 	MALLOC_FAIL(theMessage->targetDeviceID = talloc_strdup(theMessage, theDevice))
 	MALLOC_FAIL(theMessage->targetInstanceID = talloc_strdup(theMessage, theInstance))
@@ -600,17 +600,17 @@ static XPLMessagePtr_t createTargetedMessage(XPLServicePtr_t theService, XPLMess
 }
  
 /* Create a message suitable for sending to a group */
-static XPLMessagePtr_t createGroupTargetedMessage(XPLServicePtr_t theService, XPLMessageType_t messageType, String theGroup) 
+static xplMessagePtr_t createGroupTargetedMessage(xplServicePtr_t theService, XPLMessageType_t messageType, String theGroup) 
 {
-	XPLMessagePtr_t theMessage = createSendableMessage(theService, messageType);
+	xplMessagePtr_t theMessage = createSendableMessage(theService, messageType);
 	MALLOC_FAIL(theMessage->groupName = talloc_strdup(theMessage, theGroup))
 	return theMessage;
 }
 
 /* Create a message suitable for broadcasting to all listeners */
-static XPLMessagePtr_t xPL_createBroadcastMessage(XPLServicePtr_t theService, XPLMessageType_t messageType) 
+static xplMessagePtr_t createBroadcastMessage(xplServicePtr_t theService, XPLMessageType_t messageType) 
 {
-	XPLMessagePtr_t theMessage = createSendableMessage(theService, messageType);
+	xplMessagePtr_t theMessage = createSendableMessage(theService, messageType);
 	theMessage->isBroadcastMessage = TRUE;
 	return theMessage;
 }
@@ -619,14 +619,14 @@ static XPLMessagePtr_t xPL_createBroadcastMessage(XPLServicePtr_t theService, XP
  * Create a heartbeat message
  */
  
-static XPLMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, XPLServicePtr_t theService, Heartbeat_t heartbeatType) 
+static xplMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, xplServicePtr_t theService, Heartbeat_t heartbeatType) 
 {
-	XPLMessagePtr_t theHeartbeat;
+	xplMessagePtr_t theHeartbeat;
 	String portStr;
 	String interval = "";
 
 	/* Create the Heartbeat message */
-	theHeartbeat = xPL_createBroadcastMessage(theService, XPL_MESSAGE_STATUS);
+	theHeartbeat = createBroadcastMessage(theService, XPL_MESSAGE_STATUS);
     
 	/* Configure the heartbeat */
 	switch (heartbeatType) {
@@ -674,9 +674,9 @@ static XPLMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, XPLServicePtr_t th
  * Send a standard XPL Heartbeat immediately 
  */
  
-static Bool sendHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService)
+static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
 {
-	XPLMessagePtr_t theHeartbeat;
+	xplMessagePtr_t theHeartbeat;
 
 	/* Create the Heartbeat message, if needed */
 	if (!theService->heartbeatMessage){
@@ -716,9 +716,9 @@ static Bool sendHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService)
  * Send an Goodbye XPL Heartbeat immediately
  */
  
-static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService)
+static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
 {
-	XPLMessagePtr_t theHeartbeat;
+	xplMessagePtr_t theHeartbeat;
   
 	/* Create a shutdown message */
 	if (theService->configurableService && !theService->serviceConfigured){
@@ -752,7 +752,7 @@ static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, XPLServicePtr_t theService)
  * Change the current heartbeat interval 
  */
  
-static void setHeartbeatInterval(XPLServicePtr_t theService, int newInterval)
+static void setHeartbeatInterval(xplServicePtr_t theService, int newInterval)
 {
 	/* Skip out of range values */
 	if ((newInterval < 0) || (newInterval > 172800)){
@@ -764,12 +764,12 @@ static void setHeartbeatInterval(XPLServicePtr_t theService, int newInterval)
  * Create an XPL service 
  */
  
-static XPLServicePtr_t createService(xplObjPtr_t xp, String theVendor, String theDeviceID, String theInstanceID) 
+static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String theDeviceID, String theInstanceID) 
 {
-	XPLServicePtr_t theService;
+	xplServicePtr_t theService;
 	
 	/* Allocate space for the service object */
-	MALLOC_FAIL(theService = talloc_zero(xp, XPLService_t))
+	MALLOC_FAIL(theService = talloc_zero(xp, xplService_t))
 
 	/* Install info */
 	MALLOC_FAIL(theService->serviceVendor = talloc_strdup(theService, theVendor))
@@ -787,7 +787,7 @@ static XPLServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
  * Set service state
  */
  
-static void setServiceState(xplObjPtr_t xp, XPLServicePtr_t theService, Bool newState)
+static void setServiceState(xplObjPtr_t xp, xplServicePtr_t theService, Bool newState)
 {
 	
 	/* Skip if there's no change to the enable state */
@@ -820,7 +820,7 @@ static void setServiceState(xplObjPtr_t xp, XPLServicePtr_t theService, Bool new
  * updated and the message sent
  */
  
-static Bool sendServiceMessage(xplObjPtr_t xp, XPLServicePtr_t theService, XPLMessagePtr_t theMessage)
+static Bool sendServiceMessage(xplObjPtr_t xp, xplServicePtr_t theService, xplMessagePtr_t theMessage)
 {
 	if ((theService == NULL) || (theMessage == NULL)){
 	  return FALSE;
@@ -957,7 +957,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String RemoteIP, String BroadcastIP
  
 void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String theInstanceID)
 {	
-	XPLServicePtr_t xs;
+	xplServicePtr_t xs;
 	xplObjPtr_t xp = xplObj;
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
@@ -990,7 +990,7 @@ void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String t
 Bool XplDestroyService(void *xplObj, void *servToDestroy)
 {	
 	xplObjPtr_t xp = xplObj;
-	XPLServicePtr_t xst, xs = servToDestroy;
+	xplServicePtr_t xst, xs = servToDestroy;
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	ASSERT_FAIL(xs)
@@ -1048,7 +1048,7 @@ Bool XplDestroyService(void *xplObj, void *servToDestroy)
 void XplEnableService(void *xplObj, void *servToEnable)
 {
 	xplObjPtr_t xp = xplObj;
-	XPLServicePtr_t xs = servToEnable;
+	xplServicePtr_t xs = servToEnable;
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	ASSERT_FAIL(xs)
@@ -1065,7 +1065,7 @@ void XplEnableService(void *xplObj, void *servToEnable)
 void XplDisableService(void *xplObj, void *servToDisable)
 {
 	xplObjPtr_t xp = xplObj;
-	XPLServicePtr_t xs = servToDisable;
+	xplServicePtr_t xs = servToDisable;
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	ASSERT_FAIL(xs)
