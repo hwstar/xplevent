@@ -735,7 +735,7 @@ int main(int argc, char *argv[])
 	
 	atexit(xpleventShutdown);
 	
-	notify_set_debug_level(4); // DEBUG Start
+	notify_set_debug_level(5); // DEBUG Start
 	
 	void *xp,*ph;
 	if(!(ph = PollInit(Globals, 4))){

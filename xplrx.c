@@ -289,7 +289,7 @@ static void rxTick(int id, void *objPtr)
 	ASSERT_FAIL(xh)
 	ASSERT_FAIL(XH_MAGIC == xh->magic)
 	
-	debug(DEBUG_ACTION,"RX thread tick");
+	debug(DEBUG_INCOMPLETE,"RX thread tick");
 
 }
 
