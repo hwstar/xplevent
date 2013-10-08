@@ -1190,7 +1190,8 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
 
 
 	/* Parse the next block */
-	if ((parsedThisTime = parseBlock(theMessage, &theMessage->nvHead, &theMessage->nvTail, theText, blockHeader, 64, FALSE)) < 0){
+	if ((parsedThisTime = parseBlock(theMessage, &theMessage->nvHead, &theMessage->nvTail,
+	theText + parsedThisTime, blockHeader, 64, FALSE)) < 0){
 		debug(DEBUG_UNEXPECTED, "Error parsing message block");
 		releaseMessage(theMessage);
 		return NULL;
