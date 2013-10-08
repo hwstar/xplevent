@@ -108,6 +108,8 @@ typedef struct {
 	String schemaClass;
 	String schemaType;
 	
+	void *xplObj;
+	void *serviceObj;
 	TALLOC_CTX *nvCTX;
 	xplNameValueLEPtr_t nvHead;
 	xplNameValueLEPtr_t nvTail;
@@ -136,6 +138,8 @@ typedef struct xplService_s {
 
 	Bool configurableService;
 	Bool serviceConfigured;
+	
+	void *xplObj;
 	
 /*
 	int groupCount;
@@ -405,10 +409,11 @@ static void xplTick(int id, void *objPtr)
  * Create a new name value list entry 
  */
 
-static xplMessagePtr_t createReceivedMessage(void *msgCtx, XPLMessageType_t msgType)
+static xplMessagePtr_t createReceivedMessage(xplObjPtr_t xp, XPLMessageType_t msgType)
 {
 	xplMessagePtr_t xm;
-	MALLOC_FAIL(xm = talloc_zero(msgCtx, xplMessage_t))
+	MALLOC_FAIL(xm = talloc_zero(xp->generalPool, xplMessage_t))
+	xm->xplObj = xp;
 	xm->receivedMessage = TRUE;
 	xm->messageType = msgType;
 	xm->magic = XM_MAGIC;
@@ -595,6 +600,11 @@ static xplMessagePtr_t createSendableMessage(xplServicePtr_t theService, XPLMess
   
   /* Allocate the message (owned by the service context) */
   MALLOC_FAIL(theMessage = talloc_zero(theService, xplMessage_t))
+  
+  /* Install references back to service and master objects */
+  theMessage->xplObj = theService->xplObj;
+  theMessage->serviceObj = theService;
+   
 
   /* Set the version */
   theMessage->messageType = messageType;
@@ -670,7 +680,8 @@ static xplMessagePtr_t createTargetedMessage(xplServicePtr_t theService, XPLMess
 	MALLOC_FAIL(theMessage->targetInstanceID = talloc_strdup(theMessage, theInstance))
 	return theMessage;
 }
- 
+
+#if(0)
 /* Create a message suitable for sending to a group */
 static xplMessagePtr_t createGroupTargetedMessage(xplServicePtr_t theService, XPLMessageType_t messageType, String theGroup) 
 {
@@ -678,6 +689,7 @@ static xplMessagePtr_t createGroupTargetedMessage(xplServicePtr_t theService, XP
 	MALLOC_FAIL(theMessage->groupName = talloc_strdup(theMessage, theGroup))
 	return theMessage;
 }
+#endif
 
 /* Create a message suitable for broadcasting to all listeners */
 static xplMessagePtr_t createBroadcastMessage(xplServicePtr_t theService, XPLMessageType_t messageType) 
@@ -1143,7 +1155,7 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
 	
   
 	/* Allocate a message */
-	theMessage = createReceivedMessage(xp->generalPool, XPL_MESSAGE_ANY);
+	theMessage = createReceivedMessage(xp, XPL_MESSAGE_ANY);
 	
 	/* Allocate the header list context so we can easily free it later */
 	MALLOC_FAIL(listCTX = talloc_new(xp->generalPool))
@@ -1251,6 +1263,9 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
 	
 	/* Allocate space for the service object */
 	MALLOC_FAIL(theService = talloc_zero(xp->generalPool, xplService_t))
+	
+	/* Install reference to master object */
+	theService->xplObj = xp;
 
 	/* Install info */
 	MALLOC_FAIL(theService->serviceVendor = talloc_strdup(theService, theVendor))
@@ -1300,7 +1315,7 @@ static void setServiceState(xplObjPtr_t xp, xplServicePtr_t theService, Bool new
  * source set or the source does not match the sending service, it is
  * updated and the message sent
  */
- 
+#if(0) 
 static Bool sendServiceMessage(xplObjPtr_t xp, xplServicePtr_t theService, xplMessagePtr_t theMessage)
 {
 	if ((theService == NULL) || (theMessage == NULL)){
@@ -1314,7 +1329,7 @@ static Bool sendServiceMessage(xplObjPtr_t xp, xplServicePtr_t theService, xplMe
 
 	return sendMessage(xp, theMessage);
 }
-
+#endif
 
 
 /*
@@ -1556,4 +1571,92 @@ void XplDisableService(void *xplObj, void *servToDisable)
 	setServiceState(xp, xs, FALSE);
 }
 
+/*
+ * Create a new message block
+ */
+ 
+void *XplInitMessage(void *XPLServ, XPLMessageType_t messageType, 
+String theVendor, String theDeviceID, String theInstanceID)
+{
+	xplServicePtr_t xs = XPLServ;
+	ASSERT_FAIL(xs);
+	ASSERT_FAIL(XS_MAGIC == xs->magic);
+	if(!theVendor){
+		/* Is to be a broadcast message */
+		return createBroadcastMessage(xs, messageType); 
+	}
+	else{
+		/* Is to be a targetted message */
+		ASSERT_FAIL(theDeviceID)
+		ASSERT_FAIL(theInstanceID)
+		return createTargetedMessage(xs, messageType, theVendor, theDeviceID, theInstanceID);
+	}
+	 
+		
+	
+	
+}
 
+/*
+ * Destroy an existing message block
+ */
+
+void XplDestroyMessage(void *XPLMessage)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm);
+	ASSERT_FAIL(XM_MAGIC == xm->magic);
+	/* Invalidate message */
+	xm->magic = 0;
+	talloc_free(xm);	
+}
+
+/*
+ * Add Name-Value pair to message
+ */
+ 
+void XplAddNameValue(void *XPLMessage, String theName, String theValue)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm);
+	ASSERT_FAIL(XM_MAGIC == xm->magic);
+}
+
+/* 
+ * Delete Message Name/Value list
+ */
+ 
+void XplDestroyNameValues(void *XPLMessage)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm);
+	ASSERT_FAIL(XM_MAGIC == xm->magic);
+	
+	/* Destroy name value list and initialize it as empty */
+	
+	talloc_free(xm->nvCTX);
+	xm->nvCTX = xm->nvHead = xm->nvTail = NULL;
+	
+	/* See how easy that was? */
+	
+	return;
+}
+
+/*
+ * Send the message
+ */
+ 
+void XplSendMessage(void *XPLMessage)
+{
+	
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm);
+	ASSERT_FAIL(XM_MAGIC == xm->magic);;
+
+	
+}
+
+ 
+ 
+ 
+ 
