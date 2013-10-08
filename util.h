@@ -2,6 +2,7 @@
 #define UTIL_H
 
 String UtilUpperCase(String inString);
+int UtilStrcmpIgnoreCase(String textA, String textB);
 String UtilFileReadString(TALLOC_CTX *ctx, const String filename);
 Bool UtilFileWriteString(const String filename, const String str);
 uint32_t UtilHash(const String key);

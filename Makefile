@@ -7,7 +7,8 @@ CONTACT = <hwstar@rodgers.sdcoxmail.com>
 CC = gcc
 LIBS = -lm -lxPL -lsqlite3 -ltalloc
 
-DBGFLAGS ?= -O3 -Wall -pthread
+#DBGFLAGS ?= -O3 -Wall -pthread
+DBGFLAGS ?= -g3 -Wall -pthread
 
 CFLAGS = $(DBGFLAGS)  -D'PACKAGE="$(PACKAGE)"' -D'VERSION="$(VERSION)"' -D'EMAIL="$(CONTACT)"'
 LEX=flex

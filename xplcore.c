@@ -62,15 +62,17 @@
 #define XP_MAGIC 0xC51A6423
 #define XM_MAGIC 0x5719034F
 #define XS_MAGIC 0xA68C9F24
-#define XL_MAGIC 7983E098CD
+#define XNV_MAGIC 0x7983E098
 
+#define GENERAL_POOL_SIZE 32768
 #define MSG_MAX_SIZE 1500
 #define DEFAULT_HEARTBEAT_INTERVAL 300
 #define CONFIG_HEARTBEAT_INTERVAL 60
 #define HUB_DISCOVERY_INTERVAL 3
 
 #define WRITE_TEXT(xp, x) if (!appendText(xp, x)) return FALSE;
-
+#define VALID_CHAR(theChar) (((theChar >= 32) && (theChar < 123)) || (theChar = 124) || (theChar = 126))
+#define STR_FREE(p) if(p){ talloc_free(p); p = NULL;}
 
 
 /* name/value list entry */
@@ -174,6 +176,7 @@ typedef struct xplObj_s {
 	int localConnPort;
 	void *poller;
 	void *rcvr;
+	void *generalPool;
 	String txBuff;
 	String remoteIP;
 	String broadcastIP;
@@ -190,13 +193,45 @@ typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } 
 */
 
 static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService);
-
+static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText);
+static void releaseMessage(xplMessagePtr_t xm);
 
 /*
  **************************************************************************
  *  Non-categorized Private functions
  **************************************************************************
  */
+ 
+ 
+/*
+ * Create a new name value list entry 
+ */
+
+static xplNameValueLEPtr_t newNameValueListEntry(void *nvListContext)
+{
+	xplNameValueLEPtr_t nvp;
+	MALLOC_FAIL(nvp = talloc_zero(nvListContext, xplNameValueLE_t))
+	nvp->magic = XNV_MAGIC;
+	return nvp;
+}
+/*
+ * Retrieve a value from a name/value list
+ */
+
+static xplNameValueLEPtr_t getNamedValue(xplNameValueLEPtr_t nvListHead, const String name)
+{
+	xplNameValueLEPtr_t nvp;
+	
+	/* Traverse the list looking for a match */
+	for(nvp = nvListHead; nvp; nvp = nvp->next){
+		ASSERT_FAIL(XNV_MAGIC == nvp->magic)
+		if(!UtilStrcmpIgnoreCase(name, nvp->itemName)){
+			return nvp;
+		}
+	}
+	/* No match found */
+	return NULL;
+}
 
 
 
@@ -209,6 +244,7 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 	xplObjPtr_t xp = objPtr;
 	char buf[8];
 	String theString;
+	xplMessagePtr_t xm = NULL;
 	
 	ASSERT_FAIL(xp);
 	
@@ -228,7 +264,16 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 					debug(DEBUG_EXPECTED,"Packet received:\n%s", theString);
 				}
 				/* Process the string contents */
-		
+				xm = parseMessage(xp, theString);
+				if(xm){
+					debug(DEBUG_ACTION, "Message parsed OK");
+					/* Dispatch message to appropriate handler */
+					
+					releaseMessage(xm);
+				}
+				else{
+					debug(DEBUG_UNEXPECTED, "Message parse error");
+				}
 				talloc_free(theString);
 			}
 			else{
@@ -355,6 +400,33 @@ static void xplTick(int id, void *objPtr)
  *  Private Message Functions
  **************************************************************************
  */
+
+/*
+ * Create a new name value list entry 
+ */
+
+static xplMessagePtr_t createReceivedMessage(void *msgCtx, XPLMessageType_t msgType)
+{
+	xplMessagePtr_t xm;
+	MALLOC_FAIL(xm = talloc_zero(msgCtx, xplMessage_t))
+	xm->receivedMessage = TRUE;
+	xm->messageType = msgType;
+	xm->magic = XM_MAGIC;
+	return xm;
+}
+
+/*
+ * Release (free) a message
+ */
+
+static void releaseMessage(xplMessagePtr_t xm)
+{
+	/* Invalidate message */
+	xm->magic = 0;
+	/* Free message and any children */
+	talloc_free(xm);
+}
+
 
 /* 
  * Send the passed string and return TRUE if it appears it was transmitted successfully
@@ -571,18 +643,6 @@ static void addMessageNamedValue(xplMessagePtr_t theMessage, String name, String
 	}	
 }
 
-/*
- * Remove all the named values from the message
- */
-
-static void removeAllNamedValues(xplMessagePtr_t theMessage)
-{
-	if(theMessage->nvCTX){
-		talloc_free(theMessage->nvCTX);
-		theMessage->nvCTX = theMessage->nvHead = theMessage->nvTail = NULL;
-	}
-}
-
 
 /* 
  * Create a message suitable for sending to a specific receiver
@@ -740,7 +800,423 @@ static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
 	return TRUE;
 }
 
+
+
+
+/* 
+ * Parse data until end of block as a block.  If the block is valid, then the number of bytes 
+ * parsed is returned.  If there is an error, a negated number of bytes read thus far is      
+ * returned (ABS of this number points to the failing character)                              
+ * If we run out of bytes before we start a new block, it's likely end of stream garbage and  
+ * we return 0 (which means parsing this message is done) 
+ */
+
+static int parseBlock(void *nvListContext, xplNameValueLEPtr_t *nvListHead, xplNameValueLEPtr_t *nvListTail,
+String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
+{
+	int curState = 0, curIndex, theLength = strlen(theText), charCount = 0;
+	char theChar;
+	char nb[32];
+	char vb[32];
+	Bool isBinaryValue = FALSE, blockStarted = FALSE;
+	xplNameValueLEPtr_t theNameValue;
+
+	
+
+
+	/* Parse character by character */
+	for (curIndex = 0; curIndex < theLength; curIndex++){
+		theChar = theText[curIndex];
+
+		/* Convert identifiers to upper case */
+		
+		if (forceUpperCase && (theChar >= 97) && (theChar <= 122)){
+			theChar -= 32;
+		}
+    
+		switch(curState) {
+			case 0: /* Parse block header part of message */
+				/* Handle an LF transition */
+				if ((theChar == '\n') && blockStarted){
+					blockHeader[charCount] = '\0';
+					charCount = 0;
+					curState = 1;
+					continue;
+				}
+
+				/* Handle leading junk chars */
+				if (!blockStarted && (theChar <= 32)){
+					continue;
+				}
+
+				/* Handle known good characters */
+				if (VALID_CHAR(theChar)) {
+					/* Handle normal letters */
+					blockStarted = TRUE;
+					/* Bounds check buffer */
+					if(charCount < blockHeaderLength - 1){
+						blockHeader[charCount++] = theChar;
+						continue;
+					}
+					else{
+						debug(DEBUG_UNEXPECTED,"Block header buffer overflow");
+						return -curIndex;
+					}
+				}
+
+				/* Handle error */
+				debug(DEBUG_UNEXPECTED, "Got invalid character parsing block header - %c at position %d", theChar, curIndex);
+				return -curIndex;
+    
+			case 1:
+				/* Advance */
+				if (theChar == '{') {
+					curState = 2;
+					continue;
+				}
+
+				/* Crapola */
+				debug(DEBUG_UNEXPECTED, "Got invalid character parsing start of block - %c at position %d (wanted a {)", theChar, curIndex);
+				return -curIndex;
+      
+
+			case 2:
+				/* Advance */
+				if (theChar == '\n') {
+					curState = 3;
+					charCount = 0;
+					continue;
+				}
+
+				/* Crapola */
+				debug(DEBUG_UNEXPECTED, "Got invalid character parsing start of block -  %c at position %d (wanted a LF)", theChar, curIndex);
+				return -curIndex;
+
+			case 3:
+				/* Handle end of name */
+				if (theChar == '='){
+					if(charCount < 32){
+						nb[charCount++] = '\0';
+					}
+					else{
+						debug(DEBUG_UNEXPECTED,"Name buffer overflow");
+						return -curIndex;
+					}
+					isBinaryValue = FALSE;
+					charCount = 0;
+					curState = 4;
+					continue;
+				}
+
+				/* Handle end of binary name */
+				if (theChar == '!'){
+					nb[0] = '\0'; /* Binary not supported yet */
+					isBinaryValue = TRUE;
+					charCount = 0;
+					curState = 4;
+					continue;
+				}
+
+				/* Handle end of block */
+				if (theChar == '}'){
+					curState = 5;
+					continue;
+				}
+
+				/* Handle normal chars */
+				if (VALID_CHAR(theChar)){
+					/* Buffer Name */
+					if(charCount < 31){
+						nb[charCount++] = theChar;
+						continue;
+					}
+					else{
+						debug(DEBUG_UNEXPECTED,"Name buffer overflow");
+						return -curIndex;
+					}
+					continue;
+				}
+
+				/* Bad characters! */
+				debug(DEBUG_UNEXPECTED, "Got invalid character parsing block name/value name -  %c at position %d", theChar, curIndex);
+				return -curIndex;
+
+			case 4:
+				/* Handle end of line */
+				if (theChar == '\n'){
+					
+					/* Terminate the value string */
+					vb[charCount]  = '\0';
+
+					/* Create a name/value list entry and append it to the end of the list */
+					
+					theNameValue = newNameValueListEntry(nvListContext);
+					theNameValue->isBinary = isBinaryValue;
+					if (!isBinaryValue){
+						MALLOC_FAIL(theNameValue->itemValue = talloc_strdup(theNameValue, vb))
+						MALLOC_FAIL(theNameValue->itemName = talloc_strdup(theNameValue, nb))
+					}
+					else{
+							debug(DEBUG_UNEXPECTED, "Unsupported binary name/value pair");
+							return -curIndex;
+						}
+
+					/* Append the value to the list */
+					if(!*nvListHead){
+						/* List is empty */
+						*nvListHead = *nvListTail = theNameValue;
+					}
+					else{
+						/* Append to end of list */
+						(*nvListTail)->next = theNameValue;
+						*nvListTail = theNameValue;
+					}
+
+					/* Reset things */
+					curState = 3;
+					charCount = 0;
+					continue;
+				}
+
+				/* Handle normal characters */
+				if (VALID_CHAR(theChar) || (theChar == 32)){
+					/* Buffer char */
+					if(charCount < 31){
+						vb[charCount++] = theChar;
+					}
+					else{
+						debug(DEBUG_UNEXPECTED,"Value buffer overflow");
+						return -curIndex;
+					}
+					continue;
+				}
+
+				/* Bad character! */
+				debug(DEBUG_EXPECTED, "Got invalid character parsing name/value value -  %c at position %d", theChar, curIndex);
+				return -curIndex;
+
+			case 5:
+				/* Should be an EOL - we are done if so */
+				if (theChar == '\n'){
+					/* We are done */
+					return curIndex + 1;
+				}
+
+				/* Bad data */
+				debug(DEBUG_UNEXPECTED, "Got invalid character parsing end of name/value -  %c at position %d (wanted a LF)",
+				theChar, curIndex);
+				return -curIndex;
+			
+			default:
+				ASSERT_FAIL(0);
+		} /* End switch */
+		break;
+	} /* End for */
+	
+	/* If we didn't start a block, then it's just end of the stream */
+	if (!blockStarted){
+		return 0;
+	}
+	
+	/* If we got here, we ran out of characters - this is an error too */
+	debug(DEBUG_UNEXPECTED, "Ran out of characters parsing block");
+	return -theLength;
+}
+
+/* 
+ * Parse the header name/value pairs for this message.  
+ * If they are all found and valid, then 
+ * 
+ * we return TRUE.  Otherwise, FALSE.
+ */
+
+static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNameValueLEPtr_t nameValueList)
+{
+	int hopCount;
+	xplNameValueLEPtr_t theNameValue;
+	String theVendor, theDeviceID, theInstanceID;
+
+	/* Parse the hop count */
+	if(!(theNameValue = getNamedValue(nameValueList, "HOP"))){
+		debug(DEBUG_UNEXPECTED, "Message missing HOP count");
+		return FALSE;
+	}
+	if(FAIL == UtilStoi(theNameValue->itemValue, &hopCount) || (hopCount < 1)){
+		debug(DEBUG_UNEXPECTED, "Message HOP Count invalid");
+		return FALSE;
+	}
+	theMessage->hopCount = hopCount;
+
+	/* Parse the source */
+	if(!(theNameValue = getNamedValue(nameValueList, "SOURCE"))){
+		debug(DEBUG_UNEXPECTED, "Message missing SOURCE");
+		return FALSE;
+	}
+	/* Make a copy of the source tag */
+	MALLOC_FAIL(theVendor = talloc_strdup(xp->generalPool, theNameValue->itemValue))
+	
+	if(!(theDeviceID = strchr(theVendor, '-'))){
+		debug(DEBUG_UNEXPECTED, "SOURCE Missing Device ID - %s", theVendor);
+		talloc_free(theVendor);
+		return FALSE;
+	}
+	
+	*theDeviceID++ = '\0';
+	
+	if(!(theInstanceID = strchr(theDeviceID, '.'))){
+		debug(DEBUG_UNEXPECTED, "SOURCE Missing Instance ID - %s.%s", theVendor, theDeviceID);
+		talloc_free(theVendor);
+		return FALSE;
+	}
+
+	*theInstanceID++ = '\0';
+
+	/* Install source into message */
+	MALLOC_FAIL(theMessage->sourceVendor = talloc_strdup(theMessage, theVendor))
+	MALLOC_FAIL(theMessage->sourceDeviceID = talloc_strdup(theMessage, theDeviceID))
+	MALLOC_FAIL(theMessage->sourceInstanceID = talloc_strdup(theMessage, theInstanceID))
+
+	/* Release mangled copy of source tag */
+	talloc_free(theVendor);
+
+	/* Parse the target (if anything) */
+	if ((theNameValue = getNamedValue(nameValueList, "TARGET")) == NULL) {
+		debug(DEBUG_UNEXPECTED, "Message missing TARGET");
+		return FALSE;
+	}
+
+	/* Parse the target */
+  
+	/* Check for a wildcard */
+	if(!strcmp(theNameValue->itemValue, "*")){
+		theMessage->isBroadcastMessage = TRUE;
+	} 
+	else{
+		/* Not wildcard. Parse target tag */
+		MALLOC_FAIL(theVendor = talloc_strdup(xp->generalPool, theNameValue->itemValue))
+		if(!(theDeviceID = strchr(theVendor, '-'))){
+			debug(DEBUG_UNEXPECTED, "TARGET Missing Device ID - %s", theVendor);
+			talloc_free(theVendor);
+			return FALSE;
+		}
+
+		*theDeviceID++ = '\0';
+		if(!(theInstanceID = strchr(theDeviceID, '.'))){
+			debug(DEBUG_UNEXPECTED, "TARGET Missing Instance ID - %s.%s", theVendor, theDeviceID);
+			talloc_free(theVendor);
+			return FALSE;
+		}
+
+		*theInstanceID++ = '\0';
+		
+		/* Install target into message */
+		MALLOC_FAIL(theMessage->targetVendor = talloc_strdup(theMessage, theVendor))
+		MALLOC_FAIL(theMessage->targetDeviceID = talloc_strdup(theMessage, theDeviceID))
+		MALLOC_FAIL(theMessage->targetInstanceID = talloc_strdup(theMessage, theInstanceID))
+
+
+		/* Release mangled string */
+		talloc_free(theVendor);
  
+	}
+
+	/* Header parsed OK */
+	return TRUE;
+}
+
+/* 
+ * Convert a text message into a xPL message.  Return the message
+ * or NULL if there is a parse error
+ */
+ 
+static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
+	int parsedThisTime;
+	String blockDelimPtr,classType;
+	xplNameValueLEPtr_t listHead = NULL, listTail = NULL;
+	void *listCTX;
+	xplMessagePtr_t theMessage;
+	char blockHeader[64];
+	
+  
+	/* Allocate a message */
+	theMessage = createReceivedMessage(xp->generalPool, XPL_MESSAGE_ANY);
+	
+	/* Allocate the header list context so we can easily free it later */
+	MALLOC_FAIL(listCTX = talloc_new(xp->generalPool))
+
+	/* Parse the header */
+	if ((parsedThisTime = parseBlock(listCTX, &listHead, &listTail, theText, blockHeader, 64, FALSE)) <= 0) {
+		debug(DEBUG_UNEXPECTED, "Error parsing message header");
+		releaseMessage(theMessage);
+		return NULL;
+	}
+
+
+	/* Parse the header */
+	if (!UtilStrcmpIgnoreCase(blockHeader, "XPL-CMND")){
+		theMessage->messageType = XPL_MESSAGE_COMMAND;
+	} 
+	else if(!UtilStrcmpIgnoreCase(blockHeader, "XPL-STAT")){
+		theMessage->messageType = XPL_MESSAGE_STATUS;
+	} 
+	else if(!UtilStrcmpIgnoreCase(blockHeader, "XPL-TRIG")){
+		theMessage->messageType = XPL_MESSAGE_TRIGGER;
+	}
+	else{
+		debug(DEBUG_UNEXPECTED, "Unknown message header of %s - bad message", blockHeader);
+		releaseMessage(theMessage);
+		return NULL;
+	}
+	
+	/* Must have a header name value list. */
+	if(!listHead){
+		debug(DEBUG_UNEXPECTED, "No name value list for header");
+		releaseMessage(theMessage);
+		return NULL;
+	}
+	
+
+	/* Parse the message header name/values into the message */
+	if (!parseMessageHeader(xp, theMessage, listHead)){
+		debug(DEBUG_UNEXPECTED, "Unable to parse message header");
+		releaseMessage(theMessage);
+		return NULL;
+	}
+	
+	/* Free the header name value list, and invalidate the pointers */
+	
+	talloc_free(listCTX);
+	listCTX = listHead = listTail = NULL;
+
+
+	/* Parse the next block */
+	if ((parsedThisTime = parseBlock(theMessage, &theMessage->nvHead, &theMessage->nvTail, theText, blockHeader, 64, FALSE)) < 0){
+		debug(DEBUG_UNEXPECTED, "Error parsing message block");
+		releaseMessage(theMessage);
+		return NULL;
+	}
+    
+    MALLOC_FAIL(classType = talloc_strdup(xp->generalPool, blockHeader))
+	
+	/* Parse the block header */
+	if ((blockDelimPtr = strchr(classType, '.')) == NULL) {
+		debug(DEBUG_UNEXPECTED, "Malformed message block header - %s", blockHeader);
+		releaseMessage(theMessage); 
+		talloc_free(classType); 
+		return NULL;
+	}
+	*blockDelimPtr++ = '\0';
+
+	/* Record the message schema class/type */
+	MALLOC_FAIL(theMessage->schemaClass = talloc_strdup(theMessage, classType))
+	MALLOC_FAIL(theMessage->schemaType = talloc_strdup(theMessage, blockDelimPtr))	
+	
+	talloc_free(classType);
+	
+	/* Return the message */
+	return theMessage;
+}
+
 
 /*
  **************************************************************************
@@ -894,6 +1370,8 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String RemoteIP, String BroadcastIP
 	
 	/* Allocate the object */
 	MALLOC_FAIL(xp = talloc_zero(ctx, xplObj_t))
+	/* Allocate a working string pool */
+	MALLOC_FAIL(xp->generalPool = talloc_pool(xp, GENERAL_POOL_SIZE))
 	/* Save the internal IP address */
 	MALLOC_FAIL(xp->internalIP = talloc_strdup(xp, InternalIP))
 	/* Save the broadcast IP address */
