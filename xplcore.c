@@ -64,7 +64,7 @@
 #define XS_MAGIC 0xA68C9F24
 #define XNV_MAGIC 0x7983E098
 
-#define GENERAL_POOL_SIZE 32768
+#define GENERAL_POOL_SIZE 128*1024
 #define MSG_MAX_SIZE 1500
 #define DEFAULT_HEARTBEAT_INTERVAL 300
 #define CONFIG_HEARTBEAT_INTERVAL 60
@@ -612,6 +612,26 @@ static xplMessagePtr_t createSendableMessage(xplServicePtr_t theService, XPLMess
 }
 
 /*
+ * Postpend an entry to a name-value list
+ */
+ 
+static void postpendToNameValueList(xplNameValueLEPtr_t *listHeadPtrPtr, xplNameValueLEPtr_t *listTailPtrPtr, 
+	xplNameValueLEPtr_t newEntry)
+{
+	if(!*listHeadPtrPtr){
+		/* Empty list */
+		*listHeadPtrPtr = *listTailPtrPtr = newEntry;
+	}
+	else{
+		/* Items already in the list */
+		(*listTailPtrPtr)->next = newEntry;
+		*listTailPtrPtr = newEntry;
+	}	
+	
+}
+
+
+/*
  * Add a name value pair to an existing message
  */
  
@@ -632,15 +652,7 @@ static void addMessageNamedValue(xplMessagePtr_t theMessage, String name, String
 	/* Add the value */
 	MALLOC_FAIL(newNVLE->itemValue = talloc_strdup(newNVLE, value))
 	
-	if(!theMessage->nvHead){
-		/* Empty list */
-		theMessage->nvHead = theMessage->nvTail = newNVLE;
-	}
-	else{
-		/* Items already in the list */
-		theMessage->nvTail->next = newNVLE;
-		theMessage->nvTail = newNVLE;
-	}	
+	postpendToNameValueList(&theMessage->nvHead, &theMessage->nvTail, newNVLE);
 }
 
 
@@ -961,16 +973,8 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 							return -curIndex;
 						}
 
-					/* Append the value to the list */
-					if(!*nvListHead){
-						/* List is empty */
-						*nvListHead = *nvListTail = theNameValue;
-					}
-					else{
-						/* Append to end of list */
-						(*nvListTail)->next = theNameValue;
-						*nvListTail = theNameValue;
-					}
+					/* Postpend name value pair to name value list */
+					postpendToNameValueList(nvListHead, nvListTail, theNameValue);
 
 					/* Reset things */
 					curState = 3;
@@ -1246,7 +1250,7 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
 	xplServicePtr_t theService;
 	
 	/* Allocate space for the service object */
-	MALLOC_FAIL(theService = talloc_zero(xp, xplService_t))
+	MALLOC_FAIL(theService = talloc_zero(xp->generalPool, xplService_t))
 
 	/* Install info */
 	MALLOC_FAIL(theService->serviceVendor = talloc_strdup(theService, theVendor))
