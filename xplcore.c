@@ -80,8 +80,8 @@ typedef struct xplNameValueLE_s {
 	unsigned magic;
 	String itemName;
 	String itemValue;
-	Bool isBinary;
-	int binaryLength;
+	Bool isBinary; /* RFU */
+	int binaryLength; /* RFU */
 	struct xplNameValueLE_s *next;
 	} xplNameValueLE_t, *xplNameValueLEPtr_t;
 
@@ -107,9 +107,9 @@ typedef struct {
 	String schemaClass;
 	String schemaType;
 	
-	void *xplObj;
-	void *serviceObj;
-	TALLOC_CTX *nvCTX;
+	void *xplObj; /* Pointer back to master object */
+	void *serviceObj; /* Set to point to service object on TX messages, is set to NULL on receive messages */
+	TALLOC_CTX *nvCTX; /* Name/value talloc context. Makes it easy to delete all name value pairs in a message */
 	xplNameValueLEPtr_t nvHead;
 	xplNameValueLEPtr_t nvTail;
 	
@@ -120,55 +120,27 @@ typedef struct {
 typedef struct xplService_s {
 	unsigned magic;
 	
-	Bool serviceEnabled;
-
-	String serviceVendor;
-	String serviceDeviceID;
-	String serviceInstanceID;
-
-	String serviceVersion;
-	
-	Bool ignoreBroadcasts;
+	Bool serviceEnabled;	
+	Bool configurableService; /* RFU */
+	Bool serviceConfigured;   /* RFU */
 
 	unsigned heartbeatInterval;
 	unsigned heartbeatTimer;
 	time_t lastHeartbeatAt;
+	XPLListenerReportMode_t reportMode;
+	
+	String serviceVendor; 
+	String serviceDeviceID;
+	String serviceInstanceID;
+	String serviceVersion;
+	
 	xplMessagePtr_t heartbeatMessage;
 
-	Bool configurableService;
-	Bool serviceConfigured;
-	Bool reportOwnMessages;
-	Bool reportAllMessages;
+	void *xplObj; /* Pointer back to master object */
 	
-	void *xplObj;
+	XPLListenerFunc_t listener; /* User installed listener function */
+	void *userListenerObject; /* User-supplied object for listener callback */
 	
-	XPLListenerFunc_t listener;
-	
-	
-/*
-	int groupCount;
-	int groupAllocCount;
-	String *groupList;
-
-
-	String configFileName;
-	int configChangedCount;
-	int configChangedAllocCount;
-	xpl_ServiceChangedListenerDefPtr changedListenerList;
-
-	int configCount;
-	int configAllocCount;
-	xpl_ServiceConfigurablePtr configList;
-
-	int filterCount;
-	int filterAllocCount;
-	xpl_ServiceFilterPtr messageFilterList;
-
-
-	int listenerCount;
-	int listenerAllocCount;
-	xpl_ServiceListenerDefPtr serviceListenerList; 
-*/
 	struct xplService_s *prev;
 	struct xplService_s *next;
 	
@@ -176,22 +148,22 @@ typedef struct xplService_s {
 
 typedef struct xplObj_s {
 	unsigned magic;
-	unsigned txBuffBytesWritten;
-	int localConnFD;
-	int broadcastFD;
-	int rxReadyFD;
-	int broadcastAddrLen;
-	int localConnPort;
-	void *poller;
-	void *rcvr;
-	void *generalPool;
-	String txBuff;
-	String remoteIP;
-	String broadcastIP;
-	String internalIP;
-	xplServicePtr_t servHead;
-	xplServicePtr_t servTail;
-	struct sockaddr_storage broadcastAddr;
+	unsigned txBuffBytesWritten; /* Holds the number of bytes in txBuff */
+	int localConnFD; /* FD for packets from HUB */
+	int broadcastFD; /* FD for broadcasts to network */
+	int rxReadyFD; /* Ent FC for RX packet ready from receiver */
+	int broadcastAddrLen; /* Indicates length of data in broadcastAddr stuct below */
+	int localConnPort; /* Ephermeral port for packets sent from local hub */
+	void *poller; /* Pointer to the poller object supplied by the user */
+	void *rcvr; /* Pointer to the receiver object */
+	void *generalPool; /* Pointer to general memory pool for strings and structs */
+	String txBuff; /* Holds the transmit string */
+	String remoteIP; /* IP of ethernet interface to use */
+	String broadcastIP; /* Broadcast address on the interface */
+	String internalIP; /* Listen address for hub transmissions */
+	xplServicePtr_t servHead; /* Head for linked list of services */
+	xplServicePtr_t servTail; /* Tail for linked list of services */
+	struct sockaddr_storage broadcastAddr; /* Holds the broadcast address data for sending XPL packets */
 } xplObj_t, *xplObjPtr_t;
 
 typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } Heartbeat_t;
@@ -245,11 +217,13 @@ static xplNameValueLEPtr_t getNamedValue(xplNameValueLEPtr_t nvListHead, const S
 
 /*
  * Process notification of buffer add
+ * This is where we parse receive messages.
  */
 
 static void rxReadyAction(int fd, int event, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
+	xplServicePtr_t cse;
 	char buf[8];
 	String theString;
 	xplMessagePtr_t xm = NULL;
@@ -277,6 +251,58 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 					debug(DEBUG_ACTION, "Message parsed OK");
 					/* Dispatch message to appropriate handler */
 					
+					/* Traverse the service list */
+					for(cse = xp->servHead; cse; cse = cse->next){
+						Bool report = FALSE;
+						if(XPL_REPORT_EVERYTHING == cse->reportMode){
+							/* Report it all */
+							report = TRUE;
+						}
+						else if (XPL_REPORT_OWN_MESSAGES == cse->reportMode){
+							/* Try to match source tag to our service */
+							int matchCount = 0;
+							if((!UtilStrcmpIgnoreCase(xm->sourceDeviceID, cse->serviceDeviceID))){
+								matchCount++;
+							}
+							if((!UtilStrcmpIgnoreCase(xm->sourceVendor, cse->serviceVendor))){
+								matchCount++;
+							}
+							if((!UtilStrcmpIgnoreCase(xm->sourceInstanceID, cse->serviceInstanceID))){
+								matchCount++;
+							}
+							if(matchCount >= 3){
+								report = TRUE;
+							}
+						}
+						if(!report){ /* If nothing still matches, then try to match a broadcast or targetted message */
+							if(xm->isBroadcastMessage){
+								report = TRUE;
+							}
+							else{
+								int matchCount = 0;
+								if((!UtilStrcmpIgnoreCase(xm->targetDeviceID, cse->serviceDeviceID))){
+									matchCount++;
+								}
+								if((!UtilStrcmpIgnoreCase(xm->targetVendor, cse->serviceVendor))){
+									matchCount++;
+								}
+								if((!UtilStrcmpIgnoreCase(xm->targetInstanceID, cse->serviceInstanceID))){
+									matchCount++;
+								}
+								if(matchCount >= 3){
+									report = TRUE;
+								}
+							}
+						if(report && cse->listener){
+							/* Call user listener function with the message and the user object */
+							(*cse->listener)( xm, cse, cse->userListenerObject);
+						}
+							
+							
+						}
+					}
+					
+					/* Destroy the message */
 					releaseMessage(xm);
 				}
 				else{
@@ -1610,6 +1636,7 @@ void XplDestroyMessage(void *XPLMessage)
 	xplMessagePtr_t xm = XPLMessage;
 	ASSERT_FAIL(xm)
 	ASSERT_FAIL(XM_MAGIC == xm->magic)
+	ASSERT_FAIL(xm->serviceObj)
 	/* Invalidate message */
 	xm->magic = 0;
 	talloc_free(xm);	
@@ -1624,6 +1651,7 @@ void XplAddNameValue(void *XPLMessage, String theName, String theValue)
 	xplMessagePtr_t xm = XPLMessage;
 	ASSERT_FAIL(xm)
 	ASSERT_FAIL(XM_MAGIC == xm->magic)
+	ASSERT_FAIL(xm->serviceObj)
 	addMessageNamedValue(xm, theName, theValue);
 }
 
@@ -1636,6 +1664,7 @@ void XplClearNameValues(void *XPLMessage)
 	xplMessagePtr_t xm = XPLMessage;
 	ASSERT_FAIL(xm);
 	ASSERT_FAIL(XM_MAGIC == xm->magic)
+	ASSERT_FAIL(xm->serviceObj)
 	
 	/* Destroy name value list and initialize it as empty */
 	
@@ -1668,19 +1697,15 @@ Bool XplSendMessage(void *XPLMessage)
  * Add a message listener function to the service
  */
  
-void XplAddMessageListener(void *XPLService, Bool reportAllMessages, 
-Bool reportOwnMessages, void *userObj, XPLListenerFunc_t listener)
+void XplAddMessageListener(void *XPLService, XPLListenerReportMode_t reportMode, void *userObj, XPLListenerFunc_t listener)
 {
 	xplServicePtr_t xs = XPLService;
-	ASSERT_FAIL(xs);
-	ASSERT_FAIL(XS_MAGIC == xs->magic)
-	ASSERT_FAIL(listener)
-	xs->reportOwnMessages = reportOwnMessages;
-	xs->reportAllMessages = reportAllMessages;
+	ASSERT_FAIL(xs); /* Object must exist */
+	ASSERT_FAIL(XS_MAGIC == xs->magic) /* Object must be valid */
+	ASSERT_FAIL(listener) /* Must have supplied a listening function */
+	xs->reportMode = reportMode;
+	xs->userListenerObject = userObj;
 	xs->listener = listener;
-
-	
-	
 }
 
 /*
@@ -1709,6 +1734,18 @@ void XplGetMessageSourceTagComponents(void *XPLMessage, TALLOC_CTX *stringCTX,
 	xplMessagePtr_t xm = XPLMessage;
 	ASSERT_FAIL(xm) /* Object must exist */
 	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	
+	if(theVendor){
+		MALLOC_FAIL(*theVendor = talloc_strdup(stringCTX, xm->sourceVendor))
+	}
+	
+	if(theDeviceID){
+		MALLOC_FAIL(*theDeviceID = talloc_strdup(stringCTX, xm->sourceDeviceID))
+	}
+	
+	if(theInstanceID){
+		MALLOC_FAIL(*theInstanceID = talloc_strdup(stringCTX, xm->sourceInstanceID))
+	}
 	
 }
 
@@ -1739,6 +1776,15 @@ void XplGetMessageSchema(void *XPLMessage, TALLOC_CTX *stringCTX, String *theCla
 	ASSERT_FAIL(xm) /* Object must exist */
 	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
 	ASSERT_FAIL(stringCTX)
+	
+	if(theClass){
+		MALLOC_FAIL(*theClass = talloc_strdup(stringCTX, xm->schemaClass))
+	}
+	
+	if(theType){
+		MALLOC_FAIL(*theType = talloc_strdup(stringCTX, xm->schemaType))
+	}
+	
 }
 
 /*
@@ -1755,6 +1801,20 @@ Bool XplMessageIsBroadcast(void *XPLMessage)
 }
 
 /*
+ * Return TRUE if the message is a received message
+ */
+
+Bool XplMessageIsReceive(void *XPLMessage)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	
+	return (xm->serviceObj == NULL); /* Return the flag */
+}
+
+
+/*
  * Return a value for a given name
  * 
  * If the value doesn't exist, return NULL
@@ -1764,13 +1824,21 @@ Bool XplMessageIsBroadcast(void *XPLMessage)
  
 String XplGetMessageValueByName(void *XPLMessage, TALLOC_CTX *stringCTX, String theName)
 {
+	xplNameValueLEPtr_t xnv;
 	xplMessagePtr_t xm = XPLMessage;
+	String theValue;
 	ASSERT_FAIL(xm) /* Object must exist */
 	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
 	ASSERT_FAIL(stringCTX)
 	ASSERT_FAIL(theName)
 	
-	return NULL; /* Fixme */
+	if((xnv = getNamedValue(xm->nvHead, theName))){
+		/* Value exists, make a duplicate and return it */
+		MALLOC_FAIL(theValue = talloc_strdup(stringCTX, xnv->itemValue))
+		return theValue;
+	}
+	/* Value does not exist */
+	return NULL;
 }
 
  
