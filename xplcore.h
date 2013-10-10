@@ -4,6 +4,8 @@
 /* Possible xPL message types */
 typedef enum { XPL_MESSAGE_ANY, XPL_MESSAGE_COMMAND, XPL_MESSAGE_STATUS, XPL_MESSAGE_TRIGGER } XPLMessageType_t;
 
+/* Signature of a service message listener function */
+typedef void (* XPLListenerFunc_t )(void *XPLMessage, void *userObj);
 
 /* Master object creation and destruction */
 
@@ -22,8 +24,16 @@ void XplDisableService(void *xplObj, void *servToDisable);
 void *XplInitMessage(void *XPLServ, XPLMessageType_t messageType, 
 String theVendor, String theDeviceID, String theInstanceID);
 void XplDestroyMessage(void *XPLMessage);
-void XplDestroyNameValues(void *XPLMessage);
+void XplClearNameValues(void *XPLMessage);
 void XplAddNameValue(void *XPLMessage, String theName, String theValue);
-void XplSendMessage(void *XPLMessage);
+Bool XplSendMessage(void *XPLMessage);
+void XplAddMessageListener(void *XPLService, Bool reportAllMessages,
+Bool reportOwnMessages, void *userObj, void (*listener)(void *XPLMessage, void *userObj));
+void XplRemoveMessageListener(void *XPLService);
+void XplGetMessageSourceTagComponents(void *XPLMessage, TALLOC_CTX *stringCTX,
+	String *theVendor, String *theDeviceID, String *theInstanceID);
+XPLMessageType_t XplGetMessageType(void *XPLMessage);
+void XplGetMessageSchema(void *XPLMessage, TALLOC_CTX *stringCTX, String *theClass,  String *theType);
+Bool XplMessageIsBroadcast(void *XPLMessage);
 
 #endif

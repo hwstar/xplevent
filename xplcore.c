@@ -91,7 +91,6 @@ typedef struct {
 	unsigned magic;
 	XPLMessageType_t messageType;
 	int hopCount;
-	Bool receivedMessage; /* TRUE if received, FALSE if being sent */
 
 	String sourceVendor;
 	String sourceDeviceID;
@@ -138,8 +137,13 @@ typedef struct xplService_s {
 
 	Bool configurableService;
 	Bool serviceConfigured;
+	Bool reportOwnMessages;
+	Bool reportAllMessages;
 	
 	void *xplObj;
+	
+	XPLListenerFunc_t listener;
+	
 	
 /*
 	int groupCount;
@@ -160,7 +164,7 @@ typedef struct xplService_s {
 	int filterAllocCount;
 	xpl_ServiceFilterPtr messageFilterList;
 
-	Bool reportOwnMessages;
+
 	int listenerCount;
 	int listenerAllocCount;
 	xpl_ServiceListenerDefPtr serviceListenerList; 
@@ -413,8 +417,9 @@ static xplMessagePtr_t createReceivedMessage(xplObjPtr_t xp, XPLMessageType_t ms
 {
 	xplMessagePtr_t xm;
 	MALLOC_FAIL(xm = talloc_zero(xp->generalPool, xplMessage_t))
+	/* Reference the object */
 	xm->xplObj = xp;
-	xm->receivedMessage = TRUE;
+	/* A received message will have xplServ set to NULL */
 	xm->messageType = msgType;
 	xm->magic = XM_MAGIC;
 	return xm;
@@ -603,13 +608,12 @@ static xplMessagePtr_t createSendableMessage(xplServicePtr_t theService, XPLMess
   
   /* Install references back to service and master objects */
   theMessage->xplObj = theService->xplObj;
-  theMessage->serviceObj = theService;
+  theMessage->serviceObj = theService; /* A sendable message will include a reference to a service */
    
 
   /* Set the version */
   theMessage->messageType = messageType;
   theMessage->hopCount = 1;
-  theMessage->receivedMessage = FALSE;
 
   theMessage->sourceVendor = theService->serviceVendor;
   theMessage->sourceDeviceID = theService->serviceDeviceID;
@@ -1579,8 +1583,8 @@ void *XplInitMessage(void *XPLServ, XPLMessageType_t messageType,
 String theVendor, String theDeviceID, String theInstanceID)
 {
 	xplServicePtr_t xs = XPLServ;
-	ASSERT_FAIL(xs);
-	ASSERT_FAIL(XS_MAGIC == xs->magic);
+	ASSERT_FAIL(xs)
+	ASSERT_FAIL(XS_MAGIC == xs->magic)
 	if(!theVendor){
 		/* Is to be a broadcast message */
 		return createBroadcastMessage(xs, messageType); 
@@ -1604,8 +1608,8 @@ String theVendor, String theDeviceID, String theInstanceID)
 void XplDestroyMessage(void *XPLMessage)
 {
 	xplMessagePtr_t xm = XPLMessage;
-	ASSERT_FAIL(xm);
-	ASSERT_FAIL(XM_MAGIC == xm->magic);
+	ASSERT_FAIL(xm)
+	ASSERT_FAIL(XM_MAGIC == xm->magic)
 	/* Invalidate message */
 	xm->magic = 0;
 	talloc_free(xm);	
@@ -1618,19 +1622,20 @@ void XplDestroyMessage(void *XPLMessage)
 void XplAddNameValue(void *XPLMessage, String theName, String theValue)
 {
 	xplMessagePtr_t xm = XPLMessage;
-	ASSERT_FAIL(xm);
-	ASSERT_FAIL(XM_MAGIC == xm->magic);
+	ASSERT_FAIL(xm)
+	ASSERT_FAIL(XM_MAGIC == xm->magic)
+	addMessageNamedValue(xm, theName, theValue);
 }
 
 /* 
  * Delete Message Name/Value list
  */
  
-void XplDestroyNameValues(void *XPLMessage)
+void XplClearNameValues(void *XPLMessage)
 {
 	xplMessagePtr_t xm = XPLMessage;
 	ASSERT_FAIL(xm);
-	ASSERT_FAIL(XM_MAGIC == xm->magic);
+	ASSERT_FAIL(XM_MAGIC == xm->magic)
 	
 	/* Destroy name value list and initialize it as empty */
 	
@@ -1646,17 +1651,126 @@ void XplDestroyNameValues(void *XPLMessage)
  * Send the message
  */
  
-void XplSendMessage(void *XPLMessage)
+Bool XplSendMessage(void *XPLMessage)
 {
-	
+	xplObjPtr_t xp;
 	xplMessagePtr_t xm = XPLMessage;
-	ASSERT_FAIL(xm);
-	ASSERT_FAIL(XM_MAGIC == xm->magic);;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	ASSERT_FAIL(xm->serviceObj) /* Message must be sendable */
+	xp = xm->xplObj; /* Re-create pointer to master object */
+	ASSERT_FAIL(xp) /* Master object must exist */
+	ASSERT_FAIL(XP_MAGIC == xp->magic) /* Master object must be valid */
+	return sendMessage(xp, xm);	
+}
 
+/*
+ * Add a message listener function to the service
+ */
+ 
+void XplAddMessageListener(void *XPLService, Bool reportAllMessages, 
+Bool reportOwnMessages, void *userObj, XPLListenerFunc_t listener)
+{
+	xplServicePtr_t xs = XPLService;
+	ASSERT_FAIL(xs);
+	ASSERT_FAIL(XS_MAGIC == xs->magic)
+	ASSERT_FAIL(listener)
+	xs->reportOwnMessages = reportOwnMessages;
+	xs->reportAllMessages = reportAllMessages;
+	xs->listener = listener;
+
+	
 	
 }
 
+/*
+ * Remove the message listener from the service
+ */
+
+void XplRemoveMessageListener(void *XPLService)
+{
+	xplServicePtr_t xs = XPLService;
+	ASSERT_FAIL(xs);
+	ASSERT_FAIL(XS_MAGIC == xs->magic)
+	xs->listener = NULL;
+}
+
+/*
+ * Set user supplied pointer to string pointers with the  3 elements of the source tag:
+ * 
+ * If a NULL is passed in for one of the string pointers, that element will be ignored.
+ * 
+ * The returned strings should be talloc_freed when they are no longer required.
+ */
+
+void XplGetMessageSourceTagComponents(void *XPLMessage, TALLOC_CTX *stringCTX,
+	String *theVendor, String *theDeviceID, String *theInstanceID)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	
+}
+
+/*
+ * Get the message type
+ */
  
+XPLMessageType_t XplGetMessageType(void *XPLMessage)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	return xm->messageType;
+
+}
+
+/*
+ * Get class and type (message schema)
+ *
+ * If a NULL is passed in for one of the string pointers, that element will be ignored.
+ * 
+ * The returned strings should be talloc_freed when they are no longer required.
+ */
+
+void XplGetMessageSchema(void *XPLMessage, TALLOC_CTX *stringCTX, String *theClass,  String *theType)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	ASSERT_FAIL(stringCTX)
+}
+
+/*
+ * Return TRUE if the message is a broadcast message
+ */
+
+Bool XplMessageIsBroadcast(void *XPLMessage)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	
+	return xm->isBroadcastMessage; /* Return the flag */
+}
+
+/*
+ * Return a value for a given name
+ * 
+ * If the value doesn't exist, return NULL
+ * 
+ * An talloc'd string is returned, so it will need to talloc_freed when it is no longer required.
+ */
  
- 
+String XplGetMessageValueByName(void *XPLMessage, TALLOC_CTX *stringCTX, String theName)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	ASSERT_FAIL(stringCTX)
+	ASSERT_FAIL(theName)
+	
+	return NULL; /* Fixme */
+}
+
  
