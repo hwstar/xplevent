@@ -1449,6 +1449,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
 			if(strcmp(IPAddr, interfaceAddr)){ /* Address must match that passed in */
 				continue;
 			}	
+			/* We have a useable address */
 			found = TRUE;	
 			debug(DEBUG_ACTION, "Interface Name: %s", curIFEntry->ifa_name);
 			debug(DEBUG_ACTION, "Interface Address: %s", interfaceAddr);
