@@ -11,7 +11,8 @@ typedef void (* XPLListenerFunc_t )(void *XPLMessage, void *XPLService, void *us
 /* Master object creation and destruction */
 
 void XplDestroy(void *objPtr);
-void *XplInit(TALLOC_CTX *ctx, void *Poller, String RemoteIP, String BroadcastIP, String InternalIP);
+void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port);
+
 
 /* Service support */
 

@@ -742,7 +742,7 @@ int main(int argc, char *argv[])
 	if(!(ph = PollInit(Globals, 4))){
 		fatal("Could not get poll object");
 	}
-	if(!(xp = XplInit(Globals, ph, "192.168.17.213", "192.168.17.255", "0.0.0.0"))){
+	if(!(xp = XplInit(Globals, ph, "192.168.17.213", 3865))){
 		fatal("Could not get xpl object");
 	}
 	xs = XplNewService(xp, "hwstar", "ctrlr", "test");

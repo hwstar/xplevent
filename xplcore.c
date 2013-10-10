@@ -929,7 +929,7 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 					continue;
 				}
 
-				/* Crapola */
+				/* Bad */
 				debug(DEBUG_UNEXPECTED, "Got invalid character parsing start of block - %c at position %d (wanted a {)", theChar, curIndex);
 				return -curIndex;
       
@@ -942,7 +942,7 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 					continue;
 				}
 
-				/* Crapola */
+				/* Bad */
 				debug(DEBUG_UNEXPECTED, "Got invalid character parsing start of block -  %c at position %d (wanted a LF)", theChar, curIndex);
 				return -curIndex;
 
@@ -1409,43 +1409,103 @@ void XplDestroy(void *xplObj)
  */
  
 
-void *XplInit(TALLOC_CTX *ctx, void *Poller, String RemoteIP, String BroadcastIP, String InternalIP)
+void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
 {
 	xplObjPtr_t xp;
+	char portStr[6];
+	char interfaceAddr[INET6_ADDRSTRLEN];
+	char broadcastAddr[INET6_ADDRSTRLEN];
+	struct ifaddrs *interfaceList = NULL, *curIFEntry = NULL;
+	void *addrPtr;
+	int res;
+	int addrFamily;
+	Bool found = FALSE;
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(Poller)
-	ASSERT_FAIL(RemoteIP)
-	ASSERT_FAIL(BroadcastIP);
+	ASSERT_FAIL(IPAddr)
+
+	/* Figure out the IP addresses associated with a particular interface */
+	if(!(res = getifaddrs(&interfaceList))){ /* Fetch list */
+		/* Traverse the list looking for a match on the interface and address family */
+		for(curIFEntry = interfaceList; curIFEntry; curIFEntry = curIFEntry->ifa_next){
+			addrFamily = curIFEntry->ifa_addr->sa_family;
+			/* Match only IPV4 or IPV6, and skip local interface */	
+			if(((addrFamily != AF_INET) && (addrFamily != AF_INET6)) || (!strcmp("lo", curIFEntry->ifa_name))){
+				continue;
+			}
+			/* Convert address to presentation */
+			addrPtr = SocketFixAddrPointer(curIFEntry->ifa_addr);
+			inet_ntop(curIFEntry->ifa_addr->sa_family, addrPtr, interfaceAddr, sizeof(interfaceAddr));
+		
+			if(addrFamily == AF_INET){
+				if(!curIFEntry->ifa_ifu.ifu_broadaddr){
+					continue; /* IPV4 must have a broadcast address */
+				}
+			}
+			else{ 
+				continue; /* IPV6 Not supported yet */
+			}
+			if(strcmp(IPAddr, interfaceAddr)){ /* Address must match that passed in */
+				continue;
+			}	
+			found = TRUE;	
+			debug(DEBUG_ACTION, "Interface Name: %s", curIFEntry->ifa_name);
+			debug(DEBUG_ACTION, "Interface Address: %s", interfaceAddr);
+			addrPtr = SocketFixAddrPointer(curIFEntry->ifa_ifu.ifu_broadaddr);
+			inet_ntop(curIFEntry->ifa_addr->sa_family, addrPtr, broadcastAddr, sizeof(broadcastAddr));
+			debug(DEBUG_ACTION, "Broadcast/Multicast Address: %s", broadcastAddr);
+			break;
+		}
+	}
+	else{
+		debug(DEBUG_UNEXPECTED, "Can't get a list of interfaces for %s", IPAddr);
+		return NULL;
+	}
+	if(!found){
+		debug(DEBUG_UNEXPECTED, "Can't get information for IP address %s", IPAddr);
+	}
+	
+	/* Convert port number to string */
+	snprintf(portStr, 6, "%u", port);
 	
 	/* Allocate the object */
 	MALLOC_FAIL(xp = talloc_zero(ctx, xplObj_t))
-	/* Allocate a working string pool */
-	MALLOC_FAIL(xp->generalPool = talloc_pool(xp, GENERAL_POOL_SIZE))
-	/* Save the internal IP address */
-	MALLOC_FAIL(xp->internalIP = talloc_strdup(xp, InternalIP))
-	/* Save the broadcast IP address */
-	MALLOC_FAIL(xp->broadcastIP = talloc_strdup(xp, BroadcastIP))
-	/* Save the remote IP address */
-	MALLOC_FAIL(xp->remoteIP = talloc_strdup(xp, RemoteIP))
+
 	/* Invalidate the FD's */
 	xp->localConnFD = xp->rxReadyFD = xp->broadcastFD = -1;
+	
+	/* Save the internal IP address */
+	MALLOC_FAIL(xp->internalIP = talloc_strdup(xp, (addrFamily == AF_INET6) ? "::" : "0.0.0.0"))
+	/* Save the broadcast IP address */
+	MALLOC_FAIL(xp->broadcastIP = talloc_strdup(xp, broadcastAddr )) 
+	/* Save the remote IP address */
+	MALLOC_FAIL(xp->remoteIP = talloc_strdup(xp, interfaceAddr ))
+	
+	/* Release the getifaddrs info */
+	freeifaddrs(interfaceList);   
+	
 	/* Save the poller object passed in */
 	xp->poller = Poller;
+	
 	
 	/* Allocate the raw message buffer */
 	MALLOC_FAIL(xp->txBuff = talloc_zero_array(xp, char, MSG_MAX_SIZE))
 	
+	/* Allocate a working string pool */
+	MALLOC_FAIL(xp->generalPool = talloc_pool(xp, GENERAL_POOL_SIZE))
+
+	
 	/* Validate the object */
 	xp->magic = XP_MAGIC;
 	
-	/* Get socket for local interface (Note: IPV4 only for now) */
-	if((FAIL == SocketCreate(xp->internalIP, "0", AF_INET, SOCK_DGRAM, xp, addLocalSock)) || (xp->localConnFD < 0)){
+	/* Get socket for local interface */
+	if((FAIL == SocketCreate(xp->internalIP, "0", addrFamily, SOCK_DGRAM, xp, addLocalSock)) || (xp->localConnFD < 0)){
 		fatal("%s: Could not create socket for local interface", __func__);
 	}
 	
-	/* Get socket for broadcast interface (Note: IPV4 only for now) */
-	if((FAIL == SocketCreate(xp->broadcastIP, "3865", AF_INET, SOCK_DGRAM, xp, addBroadcastSock)) || (xp->broadcastFD < 0)){
+	/* Get socket for broadcast interface */
+	if((FAIL == SocketCreate(xp->broadcastIP, portStr, addrFamily, SOCK_DGRAM, xp, addBroadcastSock)) || (xp->broadcastFD < 0)){
 		fatal("%s: Could not create socket for broadcast interface", __func__);
 	}
 	
