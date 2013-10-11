@@ -31,7 +31,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <limits.h>
-#include <xPL.h>
+
 
 #include "defs.h"
 #include "types.h"
@@ -42,6 +42,7 @@
 #include "parse.h"
 #include "lex.h"
 #include "db.h"
+#include "xplcore.h"
 #include "xplevent.h"
 
 /* Definitions */
@@ -369,13 +370,13 @@ static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 {
 	String tag = NULL;
 	String class = NULL;
-	String schema = NULL;
+	String type = NULL;
 	String hash = NULL;
 	TALLOC_CTX *ctx;
 	String vendor, device, instance;
 	ParseHashSTEPtr_t se = NULL;
 	ParseHashKVPtr_t kvp;
-	xPL_MessagePtr msg = NULL;
+	void *msg = NULL;
 	PcodePtr_t pa;
 
 
@@ -395,7 +396,7 @@ static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 	pa = pi->prev;
 	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &hash) == PASS)
 	pa = pa->prev;
-	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &schema) == PASS)
+	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &type) == PASS)
 	pa = pa->prev;
 	ASSERT_FAIL(ParserPcodeGetValue(ctx, ph, pa, &class) == PASS)
 	pa = pa->prev;
@@ -412,14 +413,15 @@ static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
 			
 		/* Create xpl command message */
-		msg = xPL_createTargetedMessage(ph->xplServicePtr, xPL_MESSAGE_COMMAND, vendor, device, instance);
+		msg = XplInitMessage(ph->xplServicePtr, XPL_MESSAGE_COMMAND, vendor, device, instance);
 		ASSERT_FAIL(msg)
 		
 		/* Set message schema */
-		xPL_setSchema(msg, class, schema); 
+		XplSetMessageClassType(msg, class, type);
+	
 		
 		/* Clear name/value pairs */
-		xPL_clearMessageNamedValues(msg);
+		XplClearNameValues(msg);
 	}
 	else{
 		/* For dry run, just print the vendor, device and instance */
@@ -437,15 +439,15 @@ static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 			debug(DEBUG_EXPECTED,"Adding Key: %s, Value: %s", kvp->key, kvp->value);
 		}
 		else{
-			xPL_addMessageNamedValue(msg, kvp->key, kvp->value);
+			XplAddNameValue(msg, kvp->key, kvp->value);
 		}		
 	}
 	
 	debug(DEBUG_ACTION, "***Sending xPL command***");
 	
 	if(ph->xplServicePtr){
-		xPL_sendMessage(msg);
-		xPL_releaseMessage(msg);
+		XplSendMessage(msg);
+		XplDestroyMessage(msg);
 	}
 
 end:

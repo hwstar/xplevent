@@ -22,8 +22,8 @@ lon =  -116.97
 #
 # xPL Instance id for hwstar-xplevent
 instance-id = main
-# xPL interface to use
-interface = eth1
+# xPL ip address to use.
+ip-addr = 192.168.17.213
 #
 
 

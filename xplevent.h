@@ -15,8 +15,10 @@ typedef struct XPLEvGlobals_s {
 	String pidFile;
 	String dbFile;
 	String logFile;
-	String interface;
+	String ipAddr;
 	String instanceID;
+	void *poller;
+	void *xplObj;
 	void *xplEventService;
 	void *db;	
 	void *sch;

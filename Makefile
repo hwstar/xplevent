@@ -5,7 +5,7 @@ VERSION = 0.0.3
 CONTACT = <hwstar@rodgers.sdcoxmail.com>
 
 CC = gcc
-LIBS = -lm -lxPL -lsqlite3 -ltalloc
+LIBS = -lm -lsqlite3 -ltalloc
 
 #DBGFLAGS ?= -O3 -Wall -pthread
 DBGFLAGS ?= -g3 -Wall -pthread

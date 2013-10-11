@@ -28,6 +28,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <limits.h>
+#include <errno.h>
 #include <time.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -38,7 +39,6 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/fcntl.h>
-#include <xPL.h>
 #include <sqlite3.h>
 #include <talloc.h>
 #include  "defs.h"
@@ -47,8 +47,10 @@
 #include "socket.h"
 #include "parser.h"
 #include "db.h"
+#include "poll.h"
 #include "util.h"
 #include "scheduler.h"
+#include "xplcore.h"
 #include "monitor.h"
 #include "xplevent.h"
 
@@ -75,9 +77,7 @@ static String clientCommands[]  = {
 	NULL
 };
 
-/* Instance ID */
 
-static String instanceID;
 
 
 
@@ -95,18 +95,23 @@ static String instanceID;
  */
 
 
-static void logHeartBeatMessage(xPL_MessagePtr theMessage)
+static void logHeartBeatMessage(void *theMessage)
 {
 
 	TALLOC_CTX *log;
-	const String vendor = xPL_getSourceVendor(theMessage);
-	const String device = xPL_getSourceDeviceID(theMessage);
-	const String instance_id = xPL_getSourceInstanceID(theMessage);
+	String vendor;
+	String device;
+	String instance_id;
 
 	char source[64];
 	
+		
 	/* Setup */
 	MALLOC_FAIL(log = talloc_new(Globals))
+	/* Get the source tag components */
+	XplGetMessageSourceTagComponents(theMessage, log, &vendor, &device, &instance_id);
+	
+
 	
 	snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
 	debug(DEBUG_EXPECTED,"Heartbeat status message received: vendor = %s, device = %s, instance_id = %s",
@@ -262,6 +267,20 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 	return res;
 }
 
+/*
+ * Callback function for getting all of the name value pairs for
+ * parseAndExecTrig()
+ */
+ 
+
+
+static void parseAndExecTrigCallback(void *userObj, const String name, const String value)
+{
+	PcodeHeaderPtr_t ph = userObj;
+	
+	ASSERT_FAIL(ph);
+	ParserHashAddKeyValue(ph, ph, "xplnvin", name, value);
+}
 
 
 /*
@@ -281,13 +300,14 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
  
 
  
-static int parseAndExecTrig(PcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, String hcl)
+static int parseAndExecTrig(PcodeHeaderPtr_t ph, void *triggerMessage, String hcl)
 {
 	ParseCtrlPtr_t parseCtrl;
-	xPL_NameValueListPtr msgBody;
 	String classType,sourceAddress; 
-	int i;
 	Bool res = PASS;
+	String vendor, device, instance, class, type;
+
+	
 	
 	debug(DEBUG_ACTION, "***Parsing***\n %s", hcl);
 
@@ -301,31 +321,25 @@ static int parseAndExecTrig(PcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, 
 	
 	/* Initialize and fill %xplnvin */
 		
-	msgBody = xPL_getMessageBody(triggerMessage);
-	
-	for(i = 0; msgBody && i < msgBody->namedValueCount; i++){
-		if(!msgBody->namedValues[i]->isBinary){
-			ParserHashAddKeyValue(ph, ph, "xplnvin", msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
-		}
-	}
+	XplMessageIterateNameValues(triggerMessage, ph, parseAndExecTrigCallback);
+
 
 	debug(DEBUG_ACTION, "xplnvin:");
 	
 	ParserHashWalk(ph, "xplnvin", kvDump);
 	
 	/* Initialize and fill %xplin */
+	XplGetMessageSchema(triggerMessage, parseCtrl, &class, &type);
 	
-	classType = talloc_asprintf(ph, "%s.%s", 
-	xPL_getSchemaClass(triggerMessage),
-	xPL_getSchemaType(triggerMessage));
+	classType = talloc_asprintf(ph, "%s.%s", class, type);
 	MALLOC_FAIL(classType);
 	ParserHashAddKeyValue(ph, ph, "xplin", "classtype", classType);
 	
-	sourceAddress= talloc_asprintf(ph,"%s-%s.%s",
-	xPL_getSourceVendor(triggerMessage),
-	xPL_getSourceInstanceID(triggerMessage),
-	xPL_getSourceDeviceID(triggerMessage));
+	XplGetMessageSourceTagComponents(triggerMessage, parseCtrl, &vendor, &device, &instance);
+	
+	sourceAddress= talloc_asprintf(ph,"%s-%s.%s", vendor, device, instance);
 	MALLOC_FAIL(sourceAddress);
+	
 	ParserHashAddKeyValue(ph, ph, "xplin", "sourceaddress", sourceAddress);
 	
 	/* Parse the script */
@@ -363,7 +377,7 @@ static int parseAndExecTrig(PcodeHeaderPtr_t ph, xPL_MessagePtr triggerMessage, 
 */
  
 
-static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, PcodeHeaderPtrPtr_t ph)
+static Bool trigExec(void *triggerMessage, const String script, PcodeHeaderPtrPtr_t ph)
 {
 	Bool res;
 
@@ -408,7 +422,7 @@ static Bool trigExec(xPL_MessagePtr triggerMessage, const String script, PcodeHe
  
 
 
-static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
+static Bool actOnXPLTrig(void *triggerMessage, const String trigaction)
 {
 	Bool res;
 	PcodeHeaderPtr_t ph = NULL;
@@ -448,7 +462,7 @@ static Bool actOnXPLTrig(xPL_MessagePtr triggerMessage, const String trigaction)
 
 
 
-static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
+static void checkTriggerMessage(void *theMessage, String *sourceDevice)
 {
 	
 	PcodeHeaderPtr_t ph;
@@ -460,6 +474,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	String pScript;
 	String subAddress;
 	String script = NULL;
+	TALLOC_CTX *tempCTX;
 	TALLOC_CTX *ctx;
 	char source[96];
 	char schema[64];
@@ -467,15 +482,16 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 
 	ASSERT_FAIL(theMessage);
 	
-	vendor = xPL_getSourceVendor(theMessage);
-	device = xPL_getSourceDeviceID(theMessage);
-	instance_id = xPL_getSourceInstanceID(theMessage);
-	schema_class = xPL_getSchemaClass(theMessage);
-	schema_type = xPL_getSchemaType(theMessage); 
+	MALLOC_FAIL(tempCTX = talloc_new(Globals))
+	
+	XplGetMessageSourceTagComponents(theMessage, tempCTX, &vendor, &device, &instance_id);
+	XplGetMessageSchema(theMessage, tempCTX, &schema_class,  &schema_type);
+
 
 	/* Test for valid schema */
 	if(!schema_class || !schema_type){
 		debug(DEBUG_UNEXPECTED, "logTriggerMessage: Bad or missing schema");
+		talloc_free(tempCTX);
 		return;
 	}
 	
@@ -493,12 +509,13 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 	
 
 		/* Test for sensor.basic */
-		if(!strcmp(schema, "sensor.basic"))
-			subAddress = xPL_getMessageNamedValue(theMessage, "device");
-	
+		if(!strcmp(schema, "sensor.basic")){
+			subAddress = XplGetMessageValueByName(theMessage, tempCTX, "device");
+		}
 		/* Test for hvac.zone or security.gateway */
-		if((!strcmp(schema, "hvac.zone")) || (!strcmp(schema, "security.gateway")))
-			subAddress = xPL_getMessageNamedValue(theMessage, "zone");
+		if((!strcmp(schema, "hvac.zone")) || (!strcmp(schema, "security.gateway"))){
+			subAddress = XplGetMessageValueByName(theMessage, tempCTX, "zone");
+		}
 	
 		/* Make source name with sub-address if available */
 		snprintf(source, 63, "%s-%s.%s", vendor, device, instance_id);
@@ -548,6 +565,7 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
 		errs = actOnXPLTrig(theMessage, script);
 	}
 	talloc_free(ctx);
+	talloc_free(tempCTX);
 			
 }
 
@@ -568,12 +586,10 @@ static void checkTriggerMessage(xPL_MessagePtr theMessage, String *sourceDevice)
  
 
 
-static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
+static void logTriggerMessage(void *theMessage, String sourceDevice)
 {
 	ASSERT_FAIL(theMessage);
 	
-	int i;
-	xPL_NameValueListPtr msgBody;
 	String schema;
 	String nvpairs;
 	String schema_class, schema_type;
@@ -587,17 +603,12 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 	logctx = talloc_new(Globals);
 	MALLOC_FAIL(logctx);
 
-	/* Allocate space for nvpairs */
-	nvpairs = talloc_zero(logctx, char);
-	MALLOC_FAIL(nvpairs)
 	
 	/* Grab xPL strings */
 	ASSERT_FAIL(theMessage);
-	msgBody = xPL_getMessageBody(theMessage);
-	ASSERT_FAIL(msgBody);
-	schema_class = xPL_getSchemaClass(theMessage);
+	
+	XplGetMessageSchema(theMessage, logctx, &schema_class,  &schema_type);
 	ASSERT_FAIL(schema_class);
-	schema_type = xPL_getSchemaType(theMessage); 
 	ASSERT_FAIL(schema_type);
 	
 	/* Make combined schema/class */
@@ -607,31 +618,7 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 	/*
 	 * Update trigger log
 	 */
-	 
-	 
-	/* Build name/value pair list */
-	if(msgBody){
-		for(i = 0; i < msgBody-> namedValueCount; i++){
-			if(!msgBody->namedValues[i]->isBinary){
-				if(i){
-					nvpairs = talloc_asprintf_append(nvpairs, ",");
-					MALLOC_FAIL(nvpairs)
-				}
-				nvpairs = talloc_asprintf_append(nvpairs, "%s=%s",
-				msgBody->namedValues[i]->itemName, msgBody->namedValues[i]->itemValue);
-				MALLOC_FAIL(nvpairs)
-			}
-			else{
-				debug(DEBUG_UNEXPECTED, "Skipping binary message");
-			}
-		}
-		debug(DEBUG_ACTION, "Name value pairs: %s", nvpairs);
-	}
-	else{
-		debug(DEBUG_UNEXPECTED, "Missing message body");
-		nvpairs[0] = 0;
-	}
-	
+	nvpairs = XplGetMessageNameValuesAsString(logctx, theMessage);
 	DBUpdateTrigLog(logctx, Globals->db, sourceDevice, schema, nvpairs);
 	
 	
@@ -655,17 +642,20 @@ static void logTriggerMessage(xPL_MessagePtr theMessage, String sourceDevice)
 
 
 
-static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
+static void xPLListener(void *theMessage, void *theService, void *userValue)
 {
-	if(xPL_isBroadcastMessage(theMessage)){ /* If broadcast message */
-		int mtype = xPL_getMessageType(theMessage);
-		const char *class = xPL_getSchemaClass(theMessage);
-		const char *type = xPL_getSchemaType(theMessage);
-		if((mtype == xPL_MESSAGE_STATUS) && !strcmp(class, "hbeat") && !strcmp(type, "app")){
+	String class, type;
+	void *tempCTX;
+	MALLOC_FAIL(tempCTX = talloc_new(Globals));
+	if(XplMessageIsBroadcast(theMessage)){ /* If broadcast message */
+		XPLMessageType_t mtype = XplGetMessageType(theMessage);
+		XplGetMessageSchema(theMessage, tempCTX, &class,  &type);
+	
+		if((mtype == XPL_MESSAGE_STATUS) && !strcmp(class, "hbeat") && !strcmp(type, "app")){
 			/* Log heartbeat messages */
 			logHeartBeatMessage(theMessage);
 		}
-		else if(mtype == xPL_MESSAGE_TRIGGER){
+		else if(mtype == XPL_MESSAGE_TRIGGER){
 			String sourceDevice = NULL;
 			/* Process trigger message */
 			checkTriggerMessage(theMessage, &sourceDevice);
@@ -673,6 +663,7 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 			talloc_free(sourceDevice);
 		}
 	}
+	talloc_free(tempCTX);
 }
 
 /*
@@ -691,9 +682,9 @@ static void xPLListener(xPL_MessagePtr theMessage, xPL_ObjectPtr userValue)
 
 static void xplShutdown(void)
 {
-		xPL_setServiceEnabled(Globals->xplEventService, FALSE);
-		xPL_releaseService(Globals->xplEventService);
-		xPL_shutdown();
+		XplDisableService(Globals->xplEventService);
+		XplDestroyService(Globals->xplEventService);
+		XplDestroy(Globals->xplObj);
 }
 /*
  * Scheduler handler for executing scripts
@@ -789,7 +780,7 @@ static Bool schedulerLoad(void)
 */
  
 
-static void tickHandler(int userVal, xPL_ObjectPtr obj)
+static void tickHandler(int userVal, void *obj)
 {
 
 	
@@ -900,11 +891,11 @@ static Bool interpretClientCommand(connectionDataPtr_t cdp, int userSock, String
 */
  
 
-static void clientCommandListener(int userSock, int revents, int uservalue)
+static void clientCommandListener(int userSock, int revents, void *uservalue)
 {
 	unsigned length = 0;
 	String line, theScript;
-	connectionDataPtr_t cdp = (connectionDataPtr_t) uservalue;
+	connectionDataPtr_t cdp = uservalue;
 	MonRcvInfoPtr_t ri;
 	String res = "ok:";
 	
@@ -977,7 +968,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 		/* EOF or ERROR */
 		/* Remove the socket from the polling list and close it */
 		debug(DEBUG_ACTION, "Removing socket from poll list, close the socket, and free the persistent connection data");
-		xPL_removeIODevice(userSock); /* Remove listener from the polling list */
+		PollUnRegEvent(Globals->poller, userSock); /* Remove listener from the polling list */
 		close(userSock); /* Close the socket */
 		talloc_free(cdp); /* Free persistent connection data */
 	}
@@ -998,7 +989,7 @@ static void clientCommandListener(int userSock, int revents, int uservalue)
 *
 */
  
-static void commandSocketListener(int fd, int revents, int uservalue)
+static void commandSocketListener(int fd, int revents, void *uservalue)
 {
 	connectionDataPtr_t cdp;
 	struct sockaddr_storage clientAddr = (struct sockaddr_storage) {0};
@@ -1039,7 +1030,8 @@ static void commandSocketListener(int fd, int revents, int uservalue)
 	memcpy(&cdp->clientAddr, &clientAddr, sizeof(struct sockaddr_storage));
 	
 	/* Add the accepted socket to the polling list */
-	xPL_addIODevice(clientCommandListener, (int) cdp, userSock, TRUE, FALSE, FALSE);
+	PollRegEvent(Globals->poller, userSock, POLL_WT_IN, clientCommandListener, cdp);
+	
 }
 
 /*
@@ -1065,36 +1057,36 @@ static int addIPSocket(int sock, void *addr, int addrlen, int family, int sockty
 
 	
 	
-		/* If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket */
-		/* This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound. */
+	/* If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket */
+	/* This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound. */
 
-		if(family == PF_INET6){
-			setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
-			debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", __func__);
-		}
+	if(family == PF_INET6){
+		setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
+		debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", __func__);
+	}
 			
-		/* Set to reuse socket address when program exits */
+	/* Set to reuse socket address when program exits */
 
-		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt));
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt));
 
 
-		if(bind(sock, addr, addrlen) == -1){
-			debug(DEBUG_UNEXPECTED,"%s: Bind failed with %s", __func__, strerror(errno));
-			close(sock);
-			return -1;
-		}
+	if(bind(sock, addr, addrlen) == -1){
+		debug(DEBUG_UNEXPECTED,"%s: Bind failed with %s", __func__, strerror(errno));
+		close(sock);
+		return -1;
+	}
 
-		if(listen(sock, SOMAXCONN) == -1){
-			debug(DEBUG_UNEXPECTED, "%s: Listen failed with %s", __func__, strerror(errno));
-			close(sock);
-			return -1;
-			}
+	if(listen(sock, SOMAXCONN) == -1){
+		debug(DEBUG_UNEXPECTED, "%s: Listen failed with %s", __func__, strerror(errno));
+		close(sock);
+		return -1;
+	}
 
 	if(Globals->debugLvl > 1){
 		debug(DEBUG_EXPECTED, "Monitor Socket listen ip address: %s", (s = SocketPrintableAddress(Globals, addr)));
 		talloc_free(s);
 	}
-	return xPL_addIODevice(commandSocketListener, 0, sock, TRUE, FALSE, FALSE);
+	return PollRegEvent(Globals->poller, sock, POLL_WT_IN, commandSocketListener, NULL);
 
 }
 
@@ -1221,28 +1213,6 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 
 
 
-/*
-*
-* Pre setup of monitor code.
-*
-* Arguments:
-*
-* 1. Interface to listen on as a string. 
-* 2. Instance ID to use.
-*
-* Return value:
-*
-* None
-*
-*/
-
-void MonitorPreForkSetup(String interface, String instance_id)
-{
-	/* Set the xPL interface */
-	xPL_setBroadcastInterface(interface);
-	instanceID = instance_id;
-	
-}
 
 
 /*
@@ -1263,25 +1233,16 @@ void MonitorRun(void)
 {
 	
 	
-	/* Start xPL up */
-	if (!xPL_initialize(xPL_getParsedConnectionType())) {
-		fatal("Unable to start xPL lib");
-	}
-	
-	/* Turn on library debugging for level 5 */
-	if(Globals->debugLvl >= 5)
-		xPL_setDebugging(TRUE);
-		
 	/* Create a service and set our application version */
-	Globals->xplEventService = xPL_createService("hwstar", "xplevent", instanceID);
-  	xPL_setServiceVersion(Globals->xplEventService, VERSION);
+	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID);
+  	/* FIXME xPL_setServiceVersion(Globals->xplEventService, VERSION); */
 
 
 	/* Add 1 second tick service */
-	xPL_addTimeoutHandler(tickHandler, 1, NULL);
+	PollRegTimeout(Globals->poller, tickHandler, NULL);
 
   	/* And a listener for all xPL messages */
-  	xPL_addMessageListener(xPLListener, NULL);
+  	XplAddMessageListener(Globals->xplEventService, XPL_REPORT_MODE_NORMAL, NULL, xPLListener);
   	
 
 	/* Add a listener for the command socket */
@@ -1292,7 +1253,7 @@ void MonitorRun(void)
 
 
  	/* Enable the service */
-  	xPL_setServiceEnabled(Globals->xplEventService, TRUE);
+  	XplEnableService(Globals->xplEventService);
 
 	atexit(xplShutdown);
 	
@@ -1301,8 +1262,13 @@ void MonitorRun(void)
  	/** Main Loop **/
 
 	for (;;) {
-		/* Let XPL run forever */
-		xPL_processMessages(-1);
+		/* Let Poller run forever */
+		if(FAIL == PollWait(Globals->poller, -1, NULL)){
+			fatal("Poll error detected");
+		}
+		
+		
+		
   	}
 }
 

@@ -728,33 +728,11 @@ int main(int argc, char *argv[])
 	Globals->pidFile = DEF_PID_FILE;
 	Globals->dbFile = DEF_DB_FILE;
 	Globals->logFile = DEF_LOG_FILE;
-	Globals->interface = DEF_INTERFACE;
 	Globals->instanceID = DEF_INSTANCE_ID;
 	Globals->lat = 33.0;
 	Globals->lon = -117.0;
 	
 	atexit(xpleventShutdown);
-
-#if(1)	
-	notify_set_debug_level(5); // DEBUG Start
-	
-	void *xp,*ph,*xs;
-	if(!(ph = PollInit(Globals, 4))){
-		fatal("Could not get poll object");
-	}
-	if(!(xp = XplInit(Globals, ph, "192.168.17.213", 3865))){
-		fatal("Could not get xpl object");
-	}
-	xs = XplNewService(xp, "hwstar", "ctrlr", "test");
-	XplEnableService(xp, xs);
-	
-	PollWait(ph, 1000, NULL);
-	exit(1);
-
-	// DEBUG end
-#endif
-
-
 
 	/* Parse the arguments. */
 	while((optchar=getopt_long(argc, argv, SHORT_OPTIONS, longOptions, &longindex)) != EOF) {
@@ -837,7 +815,7 @@ int main(int argc, char *argv[])
 				/* Specify interface to broadcast on */
 			case 'i': 
 				clOverride.interface = 1;
-				MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, optarg));
+				MALLOC_FAIL(Globals->ipAddr = talloc_strdup(Globals, optarg));
 				break;
 
 			case 'L':
@@ -944,8 +922,8 @@ int main(int argc, char *argv[])
 		}
 		
 		/* xPL Interface */
-		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "interface"))){
-			MALLOC_FAIL(Globals->interface = talloc_strdup(Globals, p));
+		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "ip-addr"))){
+			MALLOC_FAIL(Globals->ipAddr = talloc_strdup(Globals, p));
 		}
 			
 		/* Control Bind Address */
@@ -1070,10 +1048,18 @@ int main(int argc, char *argv[])
 	}
 	
 
-	/* Set the broadcast interface */
-	
-	MonitorPreForkSetup(Globals->interface, Globals->instanceID);	
-
+	/* XPL Setup before forking into the background */
+	if(!(Globals->poller = PollInit(Globals, 4))){
+		fatal("Could not create poller object");
+	}
+	if(!Globals->ipAddr){
+		fatal("No IP address specified");
+	}
+	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, 3865))){ /* Fixme port number */ 
+		fatal("Could not create XPL  object, is the interface up?");
+	}
+	printf("Foop\n");
+	exit(1);
 
 	/* Fork into the background. */	
 	if(!Globals->noBackground) {

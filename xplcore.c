@@ -1465,6 +1465,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
 	}
 	if(!found){
 		debug(DEBUG_UNEXPECTED, "Can't get information for IP address %s", IPAddr);
+		return NULL;
 	}
 	
 	/* Convert port number to string */
@@ -1576,14 +1577,14 @@ void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String t
  * The service should be disabled before this is called. 
  */
  
-Bool XplDestroyService(void *xplObj, void *servToDestroy)
+Bool XplDestroyService(void *servToDestroy)
 {	
-	xplObjPtr_t xp = xplObj;
+	xplObjPtr_t xp;
 	xplServicePtr_t xst, xs = servToDestroy;
-	ASSERT_FAIL(xp)
-	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	ASSERT_FAIL(xs)
 	ASSERT_FAIL(XS_MAGIC == xs->magic)
+	ASSERT_FAIL(xp = xs->xplObj)
+	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	/* Traverse the list looking for our service */
 	for(xst = xp->servHead; xst; xst = xst->next){
 		if(xst == xs){
@@ -1634,14 +1635,16 @@ Bool XplDestroyService(void *xplObj, void *servToDestroy)
  * also will allow message monitor callbacks to be called.
  */
  
-void XplEnableService(void *xplObj, void *servToEnable)
+void XplEnableService(void *servToEnable)
 {
-	xplObjPtr_t xp = xplObj;
 	xplServicePtr_t xs = servToEnable;
-	ASSERT_FAIL(xp)
-	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	xplObjPtr_t xp;
+	
 	ASSERT_FAIL(xs)
 	ASSERT_FAIL(XS_MAGIC == xs->magic)
+	ASSERT_FAIL(xp = xs->xplObj)
+	ASSERT_FAIL(XP_MAGIC == xp->magic)
+
 	setServiceState(xp, xs, TRUE);
 }
 
@@ -1651,14 +1654,16 @@ void XplEnableService(void *xplObj, void *servToEnable)
  * message monitor callbacks from being called.
  */
  
-void XplDisableService(void *xplObj, void *servToDisable)
+void XplDisableService(void *servToDisable)
 {
-	xplObjPtr_t xp = xplObj;
+	xplObjPtr_t xp;
 	xplServicePtr_t xs = servToDisable;
-	ASSERT_FAIL(xp)
-	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	
 	ASSERT_FAIL(xs)
 	ASSERT_FAIL(XS_MAGIC == xs->magic)
+	ASSERT_FAIL(xp = xs->xplObj)
+	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	
 	setServiceState(xp, xs, FALSE);
 }
 
@@ -1716,6 +1721,30 @@ void XplAddNameValue(void *XPLMessage, String theName, String theValue)
 	addMessageNamedValue(xm, theName, theValue);
 }
 
+/*
+ * Set the message schema class and type
+ */
+ 
+
+void XplSetMessageClassType(void *xplMessage, const String theClass, const String theType)
+{
+	
+	
+	xplMessagePtr_t xm = xplMessage;
+	ASSERT_FAIL(xm);
+	ASSERT_FAIL(XM_MAGIC == xm->magic)
+	ASSERT_FAIL(xm->serviceObj)
+
+	if(theClass){
+		STR_FREE(xm->schemaClass);
+		MALLOC_FAIL(xm->schemaClass = talloc_strdup(xplMessage, theClass))
+	}	
+	if(theType){
+		STR_FREE(xm->schemaType);
+		MALLOC_FAIL(xm->schemaType = talloc_strdup(xplMessage, theType))
+	}
+}
+
 /* 
  * Delete Message Name/Value list
  */
@@ -1751,6 +1780,8 @@ Bool XplSendMessage(void *XPLMessage)
 	xp = xm->xplObj; /* Re-create pointer to master object */
 	ASSERT_FAIL(xp) /* Master object must exist */
 	ASSERT_FAIL(XP_MAGIC == xp->magic) /* Master object must be valid */
+	ASSERT_FAIL(xm->schemaClass)
+	ASSERT_FAIL(xm->schemaType)
 	return sendMessage(xp, xm);	
 }
 
@@ -1900,6 +1931,56 @@ String XplGetMessageValueByName(void *XPLMessage, TALLOC_CTX *stringCTX, String 
 	}
 	/* Value does not exist */
 	return NULL;
+}
+
+/* 
+ * Return a string containing comma-separated list of name-value pairs
+ * String must be talloc_freed, when it is no longer required.
+ */
+ 
+String XplGetMessageNameValuesAsString(TALLOC_CTX *stringCTX, void *XPLMessage)
+{
+	xplMessagePtr_t xm = XPLMessage;
+	xplNameValueLEPtr_t xnv;
+	String res;
+	int i;
+	
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	
+	MALLOC_FAIL(res = talloc_array(stringCTX, char, 64))
+	res[0] = 0;
+	/* Traverse the list */
+	for(xnv = xm->nvHead, i = 0; xnv; xnv = xnv->next, i++){
+		ASSERT_FAIL(XNV_MAGIC == xnv->magic)
+		if(i){
+			MALLOC_FAIL(res = talloc_asprintf_append(res, ",%s=%s", xnv->itemName, xnv->itemValue))
+		}
+		else{
+			MALLOC_FAIL(res = talloc_asprintf_append(res, "%s=%s", xnv->itemName, xnv->itemValue))
+		}
+	}
+	return res;		
+}
+
+/*
+ * Iterate through the name value list of a message, calling a user supplied callback function for each list entry
+ */
+ 
+void XplMessageIterateNameValues(void *XPLMessage, void *userObj, XPLIterateNVCallback_t callback )
+{
+	xplMessagePtr_t xm = XPLMessage;
+	xplNameValueLEPtr_t xnv;
+	
+	ASSERT_FAIL(xm) /* Object must exist */
+	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
+	ASSERT_FAIL(callback)
+	
+	/* Traverse the list and call the user supplied callback function for each entry */
+	for(xnv = xm->nvHead; xnv; xnv = xnv->next){
+		ASSERT_FAIL(XNV_MAGIC == xnv->magic)
+		(*callback)(userObj, xnv->itemName, xnv->itemValue);
+	}	
 }
 
  
