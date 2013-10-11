@@ -1058,9 +1058,7 @@ int main(int argc, char *argv[])
 	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, 3865))){ /* Fixme port number */ 
 		fatal("Could not create XPL  object, is the interface up?");
 	}
-	printf("Foop\n");
-	exit(1);
-
+	
 	/* Fork into the background. */	
 	if(!Globals->noBackground) {
 		int retval;

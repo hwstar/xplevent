@@ -783,7 +783,7 @@ static Bool schedulerLoad(void)
 static void tickHandler(int userVal, void *obj)
 {
 
-	
+
 	if(!Globals->sch){ /* If scheduler not initialized */
 		/* Initialize scheduler */
 		Globals->sch = SchedulerInit(Globals, Globals->lat, Globals->lon);
@@ -1263,7 +1263,7 @@ void MonitorRun(void)
 
 	for (;;) {
 		/* Let Poller run forever */
-		if(FAIL == PollWait(Globals->poller, -1, NULL)){
+		if(FAIL == PollWait(Globals->poller, 1000, NULL)){
 			fatal("Poll error detected");
 		}
 		

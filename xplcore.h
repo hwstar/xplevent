@@ -1,13 +1,15 @@
 #ifndef XPLCORE_H
 #define XPLCORE_H
 
-/* Possible xPL message types */
+/* Possible XPL message types */
 typedef enum { XPL_MESSAGE_ANY, XPL_MESSAGE_COMMAND, XPL_MESSAGE_STATUS, XPL_MESSAGE_TRIGGER } XPLMessageType_t;
 typedef enum { XPL_REPORT_MODE_NORMAL, XPL_REPORT_OWN_MESSAGES, XPL_REPORT_EVERYTHING } XPLListenerReportMode_t;
 
 /* Signature of a service message listener function */
 typedef void (* XPLListenerFunc_t )(void *XPLMessage, void *XPLService, void *userObj);
+/* Signature of a name-value callback function */
 typedef void (* XPLIterateNVCallback_t)(void *userObj, const String name, const String value);
+
 /* Master object creation and destruction */
 
 void XplDestroy(void *objPtr);

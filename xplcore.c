@@ -223,7 +223,10 @@ static xplNameValueLEPtr_t getNamedValue(xplNameValueLEPtr_t nvListHead, const S
 static void rxReadyAction(int fd, int event, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
-	xplServicePtr_t cse;
+	xplServicePtr_t cse = NULL;
+	Bool isUs;
+	Bool reportIt;
+	int matchCount;
 	char buf[8];
 	String theString;
 	xplMessagePtr_t xm = NULL;
@@ -249,51 +252,65 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 				xm = parseMessage(xp, theString);
 				if(xm){
 					debug(DEBUG_ACTION, "Message parsed OK");
+
+					
 					/* Dispatch message to appropriate handler */
 					
 					/* Traverse the service list */
 					for(cse = xp->servHead; cse; cse = cse->next){
-						Bool report = FALSE;
+						reportIt = FALSE;
+						matchCount = 0;
+						isUs = FALSE;
+						
+						/* See if it is us who sent the message */
+						ASSERT_FAIL(xm->sourceDeviceID)
+						ASSERT_FAIL(xm->sourceDeviceID)
+						ASSERT_FAIL(xm->sourceInstanceID)
+						if((!UtilStrcmpIgnoreCase(xm->sourceDeviceID, cse->serviceDeviceID))){
+							matchCount++;
+						}
+						if((!UtilStrcmpIgnoreCase(xm->sourceVendor, cse->serviceVendor))){
+							matchCount++;
+						}
+						if((!UtilStrcmpIgnoreCase(xm->sourceInstanceID, cse->serviceInstanceID))){
+							matchCount++;
+						}
+						if(matchCount >= 3){
+							isUs = TRUE;
+						}
+
 						if(XPL_REPORT_EVERYTHING == cse->reportMode){
 							/* Report it all */
-							report = TRUE;
+							reportIt = TRUE;
 						}
 						else if (XPL_REPORT_OWN_MESSAGES == cse->reportMode){
-							/* Try to match source tag to our service */
-							int matchCount = 0;
-							if((!UtilStrcmpIgnoreCase(xm->sourceDeviceID, cse->serviceDeviceID))){
-								matchCount++;
-							}
-							if((!UtilStrcmpIgnoreCase(xm->sourceVendor, cse->serviceVendor))){
-								matchCount++;
-							}
-							if((!UtilStrcmpIgnoreCase(xm->sourceInstanceID, cse->serviceInstanceID))){
-								matchCount++;
-							}
-							if(matchCount >= 3){
-								report = TRUE;
-							}
+							/* Report it if it was us who sent it */
+							reportIt = isUs;
 						}
-						if(!report){ /* If nothing still matches, then try to match a broadcast or targetted message */
+						if(!reportIt){ /* If nothing is reportable, then try to match a broadcast or targetted message */
 							if(xm->isBroadcastMessage){
-								report = TRUE;
+								if(!isUs){
+									reportIt = TRUE;
+								}
 							}
 							else{
-								int matchCount = 0;
-								if((!UtilStrcmpIgnoreCase(xm->targetDeviceID, cse->serviceDeviceID))){
-									matchCount++;
-								}
-								if((!UtilStrcmpIgnoreCase(xm->targetVendor, cse->serviceVendor))){
-									matchCount++;
-								}
-								if((!UtilStrcmpIgnoreCase(xm->targetInstanceID, cse->serviceInstanceID))){
-									matchCount++;
-								}
-								if(matchCount >= 3){
-									report = TRUE;
+								if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
+									matchCount = 0;
+									if((!UtilStrcmpIgnoreCase(xm->targetDeviceID, cse->serviceDeviceID))){
+										matchCount++;
+									}
+									if((!UtilStrcmpIgnoreCase(xm->targetVendor, cse->serviceVendor))){
+										matchCount++;
+									}
+									if((!UtilStrcmpIgnoreCase(xm->targetInstanceID, cse->serviceInstanceID))){
+										matchCount++;
+									}
+									if(matchCount >= 3){
+										reportIt = TRUE;
+									}
 								}
 							}
-						if(report && cse->listener){
+						if(reportIt && cse->listener){
 							/* Call user listener function with the message and the user object */
 							(*cse->listener)( xm, cse, cse->userListenerObject);
 						}
