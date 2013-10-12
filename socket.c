@@ -717,7 +717,7 @@ void *SocketFixAddrPointer(void *p)
 	
 
 Bool SocketCreate(String bindaddr, String service, int family, int socktype, void *userObj,
-	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype, void *userObj))
+	Bool (*addsock)(int sock, void *addr, int addrlen, int family, int socktype, void *userObj))
 {
 	struct addrinfo hints = (struct addrinfo){0};
 	struct addrinfo *list, *p;
@@ -754,7 +754,7 @@ Bool SocketCreate(String bindaddr, String service, int family, int socktype, voi
 		/* Callback to have caller do something with the socket */
 
 		sockcount++;
-
+		
 		if((*addsock)(sock, p->ai_addr, p->ai_addrlen, p->ai_family, p->ai_socktype, userObj) == FALSE){
 			break;
 		}
@@ -810,7 +810,7 @@ Bool SocketCreate(String bindaddr, String service, int family, int socktype, voi
 */
 	
 Bool SocketCreateMultiple(TALLOC_CTX *ctx, String bindaddr, String service, int family, int socktype, void *userObj,
-	int (*addsock)(int sock, void *addr, int addrlen, int family, int socktype, void *userObj))
+	Bool (*addsock)(int sock, void *addr, int addrlen, int family, int socktype, void *userObj))
 {
 	int i;
 	int res;
@@ -1078,7 +1078,15 @@ Bool SocketPrintf(TALLOC_CTX *ctx, int socket, const String format, ...)
 }
 
 /*
- * Compare two socket addresses verbatim
+ * Compare two IPv4 or IPV6 socket addresses verbatim (All 32 bits for IPV4 and all 128 bits for IPV6)
+ * 
+ * Arguments:
+ * 1. First socket address to compare
+ * 2. Second socket address to compare
+ * 
+ * Return Value:
+ * 
+ * TRUE if addresses match, FALSE otherwise
  */
  
 Bool SocketCompareAddrVerbatim(const struct sockaddr_storage *ip1, const struct sockaddr_storage *ip2)

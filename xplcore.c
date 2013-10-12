@@ -1304,7 +1304,7 @@ static void setHeartbeatInterval(xplServicePtr_t theService, int newInterval)
  * Create an XPL service 
  */
  
-static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String theDeviceID, String theInstanceID) 
+static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String theDeviceID, String theInstanceID, String theVersion) 
 {
 	xplServicePtr_t theService;
 	
@@ -1318,6 +1318,9 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
 	MALLOC_FAIL(theService->serviceVendor = talloc_strdup(theService, theVendor))
 	MALLOC_FAIL(theService->serviceDeviceID = talloc_strdup(theService, theDeviceID))
 	MALLOC_FAIL(theService->serviceInstanceID = talloc_strdup(theService, theInstanceID))
+	if(theVersion){
+		MALLOC_FAIL(theService->serviceVersion = talloc_strdup(theService, theVersion))
+	}
 	
 	setHeartbeatInterval(theService, DEFAULT_HEARTBEAT_INTERVAL);
 	
@@ -1392,9 +1395,17 @@ static Bool sendServiceMessage(xplObjPtr_t xp, xplServicePtr_t theService, xplMe
 void XplDestroy(void *xplObj)
 {
 	xplObjPtr_t xp = xplObj;
+	xplServicePtr_t xs;
 	
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	
+	/* Traverse the service list and disable any services which are enabled */
+	for(xs = xp->servHead; xs; xs = xs->next){
+		if(xs->serviceEnabled){
+			setServiceState(xp, xs, FALSE);
+		}	
+	}
 	
 	/* Destroy the receiver object */
 	if(xp->rcvr){
@@ -1426,10 +1437,9 @@ void XplDestroy(void *xplObj)
  */
  
 
-void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
+void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 {
 	xplObjPtr_t xp;
-	char portStr[6];
 	char interfaceAddr[INET6_ADDRSTRLEN];
 	char broadcastAddr[INET6_ADDRSTRLEN];
 	struct ifaddrs *interfaceList = NULL, *curIFEntry = NULL;
@@ -1485,8 +1495,6 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
 		return NULL;
 	}
 	
-	/* Convert port number to string */
-	snprintf(portStr, 6, "%u", port);
 	
 	/* Allocate the object */
 	MALLOC_FAIL(xp = talloc_zero(ctx, xplObj_t))
@@ -1524,7 +1532,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
 	}
 	
 	/* Get socket for broadcast interface */
-	if((FAIL == SocketCreate(xp->broadcastIP, portStr, addrFamily, SOCK_DGRAM, xp, addBroadcastSock)) || (xp->broadcastFD < 0)){
+	if((FAIL == SocketCreate(xp->broadcastIP, servicePort, addrFamily, SOCK_DGRAM, xp, addBroadcastSock)) || (xp->broadcastFD < 0)){
 		fatal("%s: Could not create socket for broadcast interface", __func__);
 	}
 	
@@ -1560,9 +1568,23 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port)
 /*
  * Create a new service object
  * Service will be created in the disabled state.
+ * 
+ * 
+ * 
+ * Arguments:
+ * 1. Pointer to master XPL object
+ * 2. String with vendor name (required).
+ * 3. String with device ID (required).
+ * 4. String with instance ID (required).
+ * 5. String with the service version or NULL
+ * 
+ * Return value:
+ * 
+ * Address of new service object.
+ * Must be destroyed with XplDestroyService when no longer needed
  */
  
-void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String theInstanceID)
+void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String theInstanceID, String theVersion)
 {	
 	xplServicePtr_t xs;
 	xplObjPtr_t xp = xplObj;
@@ -1572,7 +1594,7 @@ void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String t
 	ASSERT_FAIL(theDeviceID)
 	ASSERT_FAIL(theInstanceID)
 	
-	xs = createService(xp, theVendor, theDeviceID, theInstanceID);
+	xs = createService(xp, theVendor, theDeviceID, theInstanceID, theVersion);
 	
 	/* Install new service object in service list */
 	if(!xp->servHead){
@@ -1606,6 +1628,9 @@ Bool XplDestroyService(void *servToDestroy)
 	for(xst = xp->servHead; xst; xst = xst->next){
 		if(xst == xs){
 			/* Found it */
+			if(xs->serviceEnabled){ /* Disable service if enabled */
+				setServiceState(xp, xs, FALSE);
+			}
 			break;
 		}
 	}

@@ -24,10 +24,9 @@ Dependencies:
 
 1. Lemon parser
 2. Flex
-3. xPLLib
-4. libtalloc_devel
-5. sqlite3_devel
+3. libtalloc_devel
+4. sqlite3_devel
 
 To compile xplevent use the provided Makefile.
 
-Only Linux 2.6.30 or later is supported by the Makefile at this time
+Only Linux 2.6.30 or later is supported by the the code.

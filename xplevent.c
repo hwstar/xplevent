@@ -64,7 +64,7 @@
 enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERATE};
 
 
-#define SHORT_OPTIONS "b:C:cd:Def:Fg:GHh:i:L:no:P:p:s:S:Vx:"
+#define SHORT_OPTIONS "b:C:cd:Def:Fg:GHh:i:L:nO:o:P:p:s:S:Vx:"
 
 #define WS_SIZE 256
 
@@ -74,11 +74,11 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERAT
 #define DEF_DB_FILE			"./xplevent.sqlite3"
 #define DEF_LOG_FILE		""
 
-#define DEF_INTERFACE		"eth1"
-
 #define DEF_INSTANCE_ID		"main"
 
 #define DEF_CMD_SERVICE_NAME "1130"
+
+#define DEF_XPL_SERVICE_NAME "3865"
 
 
  
@@ -91,7 +91,8 @@ typedef union cloverrides{
 		unsigned dbfile : 1;
 		unsigned bindaddress : 1;
 		unsigned hostname : 1;
-		unsigned service : 1;
+		unsigned cmdserv : 1;
+		unsigned xplserv : 1;
 	};
 	unsigned all;
 	
@@ -127,13 +128,14 @@ static struct option longOptions[] = {
 	{"generate", 0, 0, 'G'},
 	{"help", 0, 0, 'H'},
 	{"host", 1, 0, 'h'},
-	{"interface", 1, 0, 'i'},
+	{"ipaddr", 1, 0, 'i'},
 	{"log", 1, 0, 'L'},
 	{"no-background", 0, 0, 'n'},	
+	{"xplport", 1, 0, 'O'},
 	{"db-file", 1, 0, 'o'},
 	{"put", 1, 0, 'p'},
 	{"pidfile", 1, 0, 'P'},
-	{"service", 1, 0, 'S'},
+	{"lstport", 1, 0, 'S'},
 	{"instance", 1, 0, 's'},
 	{"version", 0, 0, 'V'},
 	{"command", 1, 0, 'x'},
@@ -218,14 +220,15 @@ static void showHelp(void)
 	printf("  -G, --generate          Utility function: Generate an empty database file\n");
 	printf("  -H, --help              Shows this\n");
 	printf("  -h, --host HOST         Set host name for utility client mode\n");
-	printf("  -i, --interface NAME    Set the broadcast interface (e.g. eth0)\n");
+	printf("  -i, --ipaddr ADDR       Set the broadcast interface IP address\n");
 	printf("  -L, --log  PATH         Path name to debug log file when daemonized\n");
 	printf("  -n, --no-background     Do not fork into the background (useful for debugging)\n");
+	printf("  -O, --xplport NAME/PORT Use port number or service name specified for xPL connections");
 	printf("  -o, --db-file           Database file\n");
 	printf("  -P, --pidfile PATH      Set new pid file path, default is: %s\n", Globals->pidFile);
 	printf("  -p, --put scriptname    Utility function: Put file in script name\n");
 	printf("  -s, --instance ID       Set instance id. Default is %s\n", Globals->instanceID);
-	printf("  -S, --service SERVICE   Set service name or port number for command listener\n");
+	printf("  -S, --lstport NAME/PORT Set service name or port number for command listener\n");
 	printf("  -V, --version           Display program version\n");
 	printf("  -x, --command COMMAND   Execute command on daemon from client\n");
 	printf("\n");
@@ -729,6 +732,7 @@ int main(int argc, char *argv[])
 	Globals->dbFile = DEF_DB_FILE;
 	Globals->logFile = DEF_LOG_FILE;
 	Globals->instanceID = DEF_INSTANCE_ID;
+	Globals->xplService = DEF_XPL_SERVICE_NAME;
 	Globals->lat = 33.0;
 	Globals->lon = -117.0;
 	
@@ -834,6 +838,11 @@ int main(int argc, char *argv[])
 				Globals->noBackground = TRUE;
 				break;
 
+			case 'O': /* xPL Service port name or number */
+				clOverride.xplserv = 1;
+				MALLOC_FAIL(Globals->xplService = talloc_strdup(Globals, optarg));
+				break;
+
 			
 			case 'o': /* Database file */
 				clOverride.dbfile = 1;
@@ -852,8 +861,8 @@ int main(int argc, char *argv[])
 				debug(DEBUG_ACTION,"New pid file path is: %s", Globals->pidFile);
 				break;
 				
-			case 'S': /* Service port name or number */
-				clOverride.service = 1;
+			case 'S': /* Listening Service port name or number */
+				clOverride.cmdserv = 1;
 				MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, optarg));
 				break;
 			
@@ -921,9 +930,14 @@ int main(int argc, char *argv[])
 			MALLOC_FAIL(Globals->instanceID = talloc_strdup(Globals, p));
 		}
 		
-		/* xPL Interface */
+		/* xPL IP Address */
 		if((!clOverride.interface) && (p = ConfReadValueBySectKey(configInfo, "general", "ip-addr"))){
 			MALLOC_FAIL(Globals->ipAddr = talloc_strdup(Globals, p));
+		}
+		
+		/* Xpl Service name or port */
+		if((!clOverride.xplserv) && (p = ConfReadValueBySectKey(configInfo, "general", "service"))){
+			MALLOC_FAIL(Globals->xplService = talloc_strdup(Globals, p));
 		}
 			
 		/* Control Bind Address */
@@ -937,7 +951,7 @@ int main(int argc, char *argv[])
 		}
 		
 		/* Control Service name or port */
-		if((!clOverride.service) && (p = ConfReadValueBySectKey(configInfo, "control", "service"))){
+		if((!clOverride.cmdserv) && (p = ConfReadValueBySectKey(configInfo, "control", "service"))){
 			MALLOC_FAIL(Globals->cmdService = talloc_strdup(Globals, p));
 		}
 			
@@ -1055,7 +1069,7 @@ int main(int argc, char *argv[])
 	if(!Globals->ipAddr){
 		fatal("No IP address specified");
 	}
-	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, 3865))){ /* Fixme port number */ 
+	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, Globals->xplService))){ /* Fixme port number */ 
 		fatal("Could not create XPL  object, is the interface up?");
 	}
 	

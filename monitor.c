@@ -682,8 +682,6 @@ static void xPLListener(void *theMessage, void *theService, void *userValue)
 
 static void xplShutdown(void)
 {
-		XplDisableService(Globals->xplEventService);
-		XplDestroyService(Globals->xplEventService);
 		XplDestroy(Globals->xplObj);
 }
 /*
@@ -998,6 +996,7 @@ static void commandSocketListener(int fd, int revents, void *uservalue)
 	int userSock;
 	
 	
+	
 	debug(DEBUG_ACTION, "Incoming control connection");
 	/* Accept the user connection. */
 	userSock = accept4(fd, (struct sockaddr *) &clientAddr, &clientAddrSize, SOCK_CLOEXEC | SOCK_NONBLOCK);
@@ -1050,17 +1049,15 @@ static void commandSocketListener(int fd, int revents, void *uservalue)
 *
 */
  
-static int addIPSocket(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
+static Bool addIPSocket(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
 {
 	int sockopt = 1;
 	String s;
-
-	
 	
 	/* If IPV6 socket, set IPV6 only option so port space does not clash with an IPV4 socket */
 	/* This is necessary in order to prevent the ipv6 bind from failing when an IPV4 socket was previously bound. */
 
-	if(family == PF_INET6){
+	if(PF_INET6 == family){
 		setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt ));
 		debug(DEBUG_EXPECTED,"%s: Setting IPV6_V6ONLY socket option", __func__);
 	}
@@ -1073,20 +1070,26 @@ static int addIPSocket(int sock, void *addr, int addrlen, int family, int sockty
 	if(bind(sock, addr, addrlen) == -1){
 		debug(DEBUG_UNEXPECTED,"%s: Bind failed with %s", __func__, strerror(errno));
 		close(sock);
-		return -1;
+		return TRUE;
 	}
 
 	if(listen(sock, SOMAXCONN) == -1){
 		debug(DEBUG_UNEXPECTED, "%s: Listen failed with %s", __func__, strerror(errno));
 		close(sock);
-		return -1;
+		return TRUE;
 	}
 
 	if(Globals->debugLvl > 1){
 		debug(DEBUG_EXPECTED, "Monitor Socket listen ip address: %s", (s = SocketPrintableAddress(Globals, addr)));
 		talloc_free(s);
 	}
-	return PollRegEvent(Globals->poller, sock, POLL_WT_IN, commandSocketListener, NULL);
+	if(FAIL == PollRegEvent(Globals->poller, sock, POLL_WT_IN, commandSocketListener, NULL)){
+		debug(DEBUG_UNEXPECTED, "Registering event with poller failed");
+		close(sock);
+		return TRUE;
+	}
+
+	return TRUE; /* Keep going */
 
 }
 
@@ -1234,9 +1237,8 @@ void MonitorRun(void)
 	
 	
 	/* Create a service and set our application version */
-	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID);
-  	/* FIXME xPL_setServiceVersion(Globals->xplEventService, VERSION); */
-
+	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID, VERSION);
+ 
 
 	/* Add 1 second tick service */
 	PollRegTimeout(Globals->poller, tickHandler, NULL);
@@ -1251,7 +1253,7 @@ void MonitorRun(void)
 		fatal("Can't create listening socket(s)");
 	}	
 
-
+	
  	/* Enable the service */
   	XplEnableService(Globals->xplEventService);
 

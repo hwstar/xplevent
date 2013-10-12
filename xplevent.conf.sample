@@ -25,6 +25,9 @@ instance-id = main
 # xPL ip address to use.
 ip-addr = 192.168.17.213
 #
+#
+# Port for xPL connections
+service = 3865
 
 
 #

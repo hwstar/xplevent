@@ -13,12 +13,12 @@ typedef void (* XPLIterateNVCallback_t)(void *userObj, const String name, const 
 /* Master object creation and destruction */
 
 void XplDestroy(void *objPtr);
-void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, unsigned port);
+void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort);
 
 
 /* Service support */
 
-void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String theInstanceID);
+void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String theInstanceID, String theVersion);
 Bool XplDestroyService(void *servToDestroy);
 void XplEnableService(void *servToEnable);
 void XplDisableService(void *servToDisable);
