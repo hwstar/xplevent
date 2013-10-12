@@ -82,8 +82,6 @@ typedef struct xplNameValueLE_s {
 	unsigned magic;
 	String itemName;
 	String itemValue;
-	Bool isBinary; /* RFU */
-	int binaryLength; /* RFU */
 	struct xplNameValueLE_s *next;
 	} xplNameValueLE_t, *xplNameValueLEPtr_t;
 
@@ -211,7 +209,7 @@ static xplNameValueLEPtr_t getNamedValue(xplNameValueLEPtr_t nvListHead, const S
 	/* Traverse the list looking for a match */
 	for(nvp = nvListHead; nvp; nvp = nvp->next){
 		ASSERT_FAIL(XNV_MAGIC == nvp->magic)
-		if(!UtilStrcmpIgnoreCase(name, nvp->itemName)){
+		if(!strcmp(name, nvp->itemName)){
 			return nvp;
 		}
 	}
@@ -272,13 +270,13 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 						ASSERT_FAIL(xm->sourceDeviceID)
 						ASSERT_FAIL(xm->sourceDeviceID)
 						ASSERT_FAIL(xm->sourceInstanceID)
-						if((!UtilStrcmpIgnoreCase(xm->sourceDeviceID, cse->serviceDeviceID))){
+						if((!strcmp(xm->sourceDeviceID, cse->serviceDeviceID))){
 							matchCount++;
 						}
-						if((!UtilStrcmpIgnoreCase(xm->sourceVendor, cse->serviceVendor))){
+						if((!strcmp(xm->sourceVendor, cse->serviceVendor))){
 							matchCount++;
 						}
-						if((!UtilStrcmpIgnoreCase(xm->sourceInstanceID, cse->serviceInstanceID))){
+						if((!strcmp(xm->sourceInstanceID, cse->serviceInstanceID))){
 							matchCount++;
 						}
 						if(matchCount >= 3){
@@ -313,13 +311,13 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 							else{
 								if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
 									matchCount = 0;
-									if((!UtilStrcmpIgnoreCase(xm->targetDeviceID, cse->serviceDeviceID))){
+									if((!strcmp(xm->targetDeviceID, cse->serviceDeviceID))){
 										matchCount++;
 									}
-									if((!UtilStrcmpIgnoreCase(xm->targetVendor, cse->serviceVendor))){
+									if((!strcmp(xm->targetVendor, cse->serviceVendor))){
 										matchCount++;
 									}
-									if((!UtilStrcmpIgnoreCase(xm->targetInstanceID, cse->serviceInstanceID))){
+									if((!strcmp(xm->targetInstanceID, cse->serviceInstanceID))){
 										matchCount++;
 									}
 									if(matchCount >= 3){
@@ -610,15 +608,7 @@ static Bool formatMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
 
 		/* Write data content out */
 		if (le->itemValue != NULL) {
-			if (le->isBinary){ 
-				ASSERT_FAIL(0) /* Not supported */
-				/*
-				writeBinaryValue(le->itemValue, le->binaryLength);
-				*/
-			}
-			else{
-				WRITE_TEXT(xp, le->itemValue);
-			}
+			WRITE_TEXT(xp, le->itemValue);
 		}
 
 		/* Terminate line/entry */
@@ -923,7 +913,7 @@ static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
  
 static Bool isHeartbeatMessage(xplMessagePtr_t xm)
 {
-	if((!UtilStrcmpIgnoreCase(xm->schemaType, "app")) && (!UtilStrcmpIgnoreCase(xm->schemaClass, "hbeat"))){
+	if((!strcmp(xm->schemaType, "app")) && (!strcmp(xm->schemaClass, "hbeat"))){
 		return TRUE;
 	}
 	return FALSE;
@@ -945,7 +935,7 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 	char theChar;
 	char nb[32];
 	char vb[32];
-	Bool isBinaryValue = FALSE, blockStarted = FALSE;
+	Bool blockStarted = FALSE;
 	xplNameValueLEPtr_t theNameValue;
 
 	
@@ -1029,20 +1019,11 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 						debug(DEBUG_UNEXPECTED,"Name buffer overflow");
 						return -curIndex;
 					}
-					isBinaryValue = FALSE;
 					charCount = 0;
 					curState = 4;
 					continue;
 				}
 
-				/* Handle end of binary name */
-				if (theChar == '!'){
-					nb[0] = '\0'; /* Binary not supported yet */
-					isBinaryValue = TRUE;
-					charCount = 0;
-					curState = 4;
-					continue;
-				}
 
 				/* Handle end of block */
 				if (theChar == '}'){
@@ -1078,15 +1059,10 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 					/* Create a name/value list entry and append it to the end of the list */
 					
 					theNameValue = newNameValueListEntry(nvListContext);
-					theNameValue->isBinary = isBinaryValue;
-					if (!isBinaryValue){
-						MALLOC_FAIL(theNameValue->itemValue = talloc_strdup(theNameValue, vb))
-						MALLOC_FAIL(theNameValue->itemName = talloc_strdup(theNameValue, nb))
-					}
-					else{
-							debug(DEBUG_UNEXPECTED, "Unsupported binary name/value pair");
-							return -curIndex;
-						}
+		
+					MALLOC_FAIL(theNameValue->itemValue = talloc_strdup(theNameValue, vb))
+					MALLOC_FAIL(theNameValue->itemName = talloc_strdup(theNameValue, nb))
+					
 
 					/* Postpend name value pair to name value list */
 					postpendToNameValueList(nvListHead, nvListTail, theNameValue);
@@ -1155,7 +1131,7 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
 	String theVendor, theDeviceID, theInstanceID;
 
 	/* Parse the hop count */
-	if(!(theNameValue = getNamedValue(nameValueList, "HOP"))){
+	if(!(theNameValue = getNamedValue(nameValueList, "hop"))){
 		debug(DEBUG_UNEXPECTED, "Message missing HOP count");
 		return FALSE;
 	}
@@ -1166,7 +1142,7 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
 	theMessage->hopCount = hopCount;
 
 	/* Parse the source */
-	if(!(theNameValue = getNamedValue(nameValueList, "SOURCE"))){
+	if(!(theNameValue = getNamedValue(nameValueList, "source"))){
 		debug(DEBUG_UNEXPECTED, "Message missing SOURCE");
 		return FALSE;
 	}
@@ -1198,7 +1174,7 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
 	talloc_free(theVendor);
 
 	/* Parse the target (if anything) */
-	if ((theNameValue = getNamedValue(nameValueList, "TARGET")) == NULL) {
+	if ((theNameValue = getNamedValue(nameValueList, "target")) == NULL) {
 		debug(DEBUG_UNEXPECTED, "Message missing TARGET");
 		return FALSE;
 	}
@@ -1271,13 +1247,13 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
 
 
 	/* Parse the header */
-	if (!UtilStrcmpIgnoreCase(blockHeader, "XPL-CMND")){
+	if (!strcmp(blockHeader, "xpl-cmnd")){
 		theMessage->messageType = XPL_MESSAGE_COMMAND;
 	} 
-	else if(!UtilStrcmpIgnoreCase(blockHeader, "XPL-STAT")){
+	else if(!strcmp(blockHeader, "xpl-stat")){
 		theMessage->messageType = XPL_MESSAGE_STATUS;
 	} 
-	else if(!UtilStrcmpIgnoreCase(blockHeader, "XPL-TRIG")){
+	else if(!strcmp(blockHeader, "xpl-trig")){
 		theMessage->messageType = XPL_MESSAGE_TRIGGER;
 	}
 	else{
