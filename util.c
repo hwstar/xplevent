@@ -38,42 +38,7 @@
 #include "notify.h"
 #include "util.h"
 
-#define FIX_CHAR(x) (((x >= 97) && (x <= 122)) ? x - 32 : x)
-
-int UtilStrcmpIgnoreCase(String textA, String textB)
-{
-	int textALen = strlen(textA);
-	int textBLen = strlen(textB);
-	char textAChar, textBChar;
-  
-	/* Handle the simple length based checks */
-	if (textALen < textBLen){
-		return -1;
-	}
-	if (textALen > textBLen){
-		return 1;
-	}
-
-	/* Check each letter until we are done or a difference is found */
-	for(;textALen > 0; textALen--){
-		textAChar = FIX_CHAR(*textA);
-		textBChar = FIX_CHAR(*textB);
-		if (textAChar == textBChar) {
-			textA++;
-			textB++;
-			continue;
-		}
-		if (textAChar < textBChar){
-			return -1;
-		}
-		return 1;
-	}
-
-	/* They match exactly */
-	return 0;
-}
-
-
+                                                          
 
 /*
  * Convert string to upper case
