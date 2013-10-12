@@ -153,7 +153,7 @@ typedef struct xplObj_s {
 	int broadcastFD; /* FD for broadcasts to network */
 	int rxReadyFD; /* Ent FC for RX packet ready from receiver */
 	int broadcastAddrLen; /* Indicates length of data in broadcastAddr stuct below */
-	int localConnPort; /* Ephermeral port for packets sent from local hub */
+	int localConnPort; /* Ephemeral port for packets sent from local hub */
 	void *poller; /* Pointer to the poller object supplied by the user */
 	void *rcvr; /* Pointer to the receiver object */
 	void *generalPool; /* Pointer to general memory pool for strings and structs */
@@ -1088,8 +1088,7 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 
 /* 
  * Parse the header name/value pairs for this message.  
- * If they are all found and valid, then 
- * 
+ * If they are all found and valid, then  
  * we return TRUE.  Otherwise, FALSE.
  */
 
@@ -1465,13 +1464,13 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 			addrPtr = SocketFixAddrPointer(curIFEntry->ifa_addr);
 			inet_ntop(curIFEntry->ifa_addr->sa_family, addrPtr, interfaceAddr, sizeof(interfaceAddr));
 		
-			if(addrFamily == AF_INET){
+			if(AF_INET == addrFamily){
 				if(!curIFEntry->ifa_ifu.ifu_broadaddr){
 					continue; /* IPV4 must have a broadcast address */
 				}
 			}
 			else{ 
-				continue; /* IPV6 Not supported yet */
+				continue; /* IPV6 Not supported yet. Need futher input on how to multicast xPL*/
 			}
 			if(strcmp(IPAddr, interfaceAddr)){ /* Address must match that passed in */
 				continue;
@@ -1503,7 +1502,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 	xp->localConnFD = xp->rxReadyFD = xp->broadcastFD = -1;
 	
 	/* Save the internal IP address */
-	MALLOC_FAIL(xp->internalIP = talloc_strdup(xp, (addrFamily == AF_INET6) ? "::" : "0.0.0.0"))
+	MALLOC_FAIL(xp->internalIP = talloc_strdup(xp, (AF_INET6 == addrFamily) ? "::" : "0.0.0.0"))
 	/* Save the broadcast IP address */
 	MALLOC_FAIL(xp->broadcastIP = talloc_strdup(xp, broadcastAddr )) 
 	/* Save the remote IP address */

@@ -1,5 +1,5 @@
 /*
- * xplio.c
+ * xplrx.c
  * 
  * Copyright 2013 Steve Rodgers <hwstar@rodgers.sdcoxmail.com>
  * 
