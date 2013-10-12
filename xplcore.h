@@ -2,8 +2,9 @@
 #define XPLCORE_H
 
 /* Possible XPL message types */
-typedef enum { XPL_MESSAGE_ANY, XPL_MESSAGE_COMMAND, XPL_MESSAGE_STATUS, XPL_MESSAGE_TRIGGER } XPLMessageType_t;
-typedef enum { XPL_REPORT_MODE_NORMAL, XPL_REPORT_OWN_MESSAGES, XPL_REPORT_EVERYTHING } XPLListenerReportMode_t;
+typedef enum { XPL_MESSAGE_ANY = 0, XPL_MESSAGE_COMMAND, XPL_MESSAGE_STATUS, XPL_MESSAGE_TRIGGER } XPLMessageType_t;
+typedef enum { XPL_REPORT_MODE_NORMAL = 0, XPL_REPORT_OWN_MESSAGES, XPL_REPORT_EVERYTHING } XPLListenerReportMode_t;
+typedef enum { XPL_HUB_UNCONFIRMED = 0, XPL_HUB_NO_ECHO, XPL_HUB_CONFIRMED } XPLDiscoveryState_t;
 
 /* Signature of a service message listener function */
 typedef void (* XPLListenerFunc_t )(void *XPLMessage, void *XPLService, void *userObj);
@@ -22,6 +23,7 @@ void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String t
 Bool XplDestroyService(void *servToDestroy);
 void XplEnableService(void *servToEnable);
 void XplDisableService(void *servToDisable);
+XPLDiscoveryState_t XplGetHubDiscoveryState(void  *servToCheck);
 
 /* Message Support */
 

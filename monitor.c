@@ -647,6 +647,13 @@ static void xPLListener(void *theMessage, void *theService, void *userValue)
 	String class, type;
 	void *tempCTX;
 	MALLOC_FAIL(tempCTX = talloc_new(Globals));
+	
+	/* Hub must be confirmed to proceed */
+	if( XPL_HUB_CONFIRMED != XplGetHubDiscoveryState(theService)){
+		return;
+	}
+		
+	
 	if(XplMessageIsBroadcast(theMessage)){ /* If broadcast message */
 		XPLMessageType_t mtype = XplGetMessageType(theMessage);
 		XplGetMessageSchema(theMessage, tempCTX, &class,  &type);
@@ -781,18 +788,20 @@ static Bool schedulerLoad(void)
 static void tickHandler(int userVal, void *obj)
 {
 
-
-	if(!Globals->sch){ /* If scheduler not initialized */
-		/* Initialize scheduler */
-		Globals->sch = SchedulerInit(Globals, Globals->lat, Globals->lon);
-		/* Load schedule entries from the database */
-		if(PASS == schedulerLoad()){
-			SchedulerStart(Globals->sch);
+	if((Globals->xplEventService) && ( XPL_HUB_CONFIRMED == XplGetHubDiscoveryState(Globals->xplEventService))){
+		/* Hub must be confirmed to send data */
+		if(!Globals->sch){ /* If scheduler not initialized */
+			/* Initialize scheduler */
+			Globals->sch = SchedulerInit(Globals, Globals->lat, Globals->lon);
+			/* Load schedule entries from the database */
+			if(PASS == schedulerLoad()){
+				SchedulerStart(Globals->sch);
+			}
 		}
-	}
-	else{ /* If scheduler initialized */
-		/* Run each tick through the scheduler */
-		SchedulerDo(Globals->sch);
+		else{ /* If scheduler initialized */
+			/* Run each tick through the scheduler */
+			SchedulerDo(Globals->sch);
+		}
 	}
 	
 	/* Terminate if requested to do so */

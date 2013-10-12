@@ -69,6 +69,8 @@
 #define DEFAULT_HEARTBEAT_INTERVAL 300
 #define CONFIG_HEARTBEAT_INTERVAL 60
 #define HUB_DISCOVERY_INTERVAL 3
+#define HUB_NO_ECHO_INTERVAL 60
+#define DISCOVERY_MAX_TRIES 40
 
 #define WRITE_TEXT(xp, x) if (!appendText(xp, x)) return FALSE;
 #define VALID_CHAR(theChar) (((theChar >= 32) && (theChar < 123)) || (theChar = 124) || (theChar = 126))
@@ -126,6 +128,8 @@ typedef struct xplService_s {
 
 	unsigned heartbeatInterval;
 	unsigned heartbeatTimer;
+	unsigned discoveryTries;
+	XPLDiscoveryState_t discoveryState;
 	time_t lastHeartbeatAt;
 	XPLListenerReportMode_t reportMode;
 	
@@ -175,6 +179,8 @@ typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } 
 static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService);
 static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText);
 static void releaseMessage(xplMessagePtr_t xm);
+static Bool isHeartbeatMessage(xplMessagePtr_t xm);
+
 
 /*
  **************************************************************************
@@ -277,6 +283,17 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 						}
 						if(matchCount >= 3){
 							isUs = TRUE;
+							/* If no hub confirmed, see if we have heard a heartbeat echo */
+							if(cse->discoveryState != XPL_HUB_CONFIRMED){
+								if(isHeartbeatMessage(xm)){
+									debug(DEBUG_EXPECTED, "******* Hub confirmed! *******");
+									cse->discoveryState = XPL_HUB_CONFIRMED;
+									cse->heartbeatTimer = cse->heartbeatInterval;
+								}
+								
+								
+							}
+							
 						}
 
 						if(XPL_REPORT_EVERYTHING == cse->reportMode){
@@ -805,26 +822,27 @@ static xplMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, xplServicePtr_t th
  * Send a standard XPL Heartbeat immediately 
  */
  
-static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
+static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t xs)
 {
 	xplMessagePtr_t theHeartbeat;
+	unsigned hbi;
 
 	/* Create the Heartbeat message, if needed */
-	if (!theService->heartbeatMessage){
+	if (!xs->heartbeatMessage){
 		/* Configure the heartbeat */
-		if (theService->configurableService && !theService->serviceConfigured){
-			theHeartbeat = createHeartbeatMessage(xp, theService, HBEAT_CONFIG);
+		if (xs->configurableService && !xs->serviceConfigured){
+			theHeartbeat = createHeartbeatMessage(xp, xs, HBEAT_CONFIG);
 		} 
 		else {
-			theHeartbeat = createHeartbeatMessage(xp, theService, HBEAT_NORMAL);
+			theHeartbeat = createHeartbeatMessage(xp, xs, HBEAT_NORMAL);
 		}
 
 		/* Install a new heartbeat message */
-		theService->heartbeatMessage = theHeartbeat;
+		xs->heartbeatMessage = theHeartbeat;
 		debug(DEBUG_ACTION, "%s: Just allocated a new Heartbeat message for the service", __func__);
 	} 
 	else {
-		theHeartbeat = theService->heartbeatMessage;
+		theHeartbeat = xs->heartbeatMessage;
 	}
     
 	/* Send the message */
@@ -833,12 +851,40 @@ static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
 	}
 
 	/* Update last heartbeat time */
-	theService->lastHeartbeatAt = time(NULL);
+	xs->lastHeartbeatAt = time(NULL);
 	
 	/* Reset the heartbeat timer */
-	theService->heartbeatTimer = theService->heartbeatInterval;
+	switch(xs->discoveryState){
+		case XPL_HUB_UNCONFIRMED: /* Poll at short interval */
+			xs->discoveryTries++;
+			if(xs->discoveryTries >= DISCOVERY_MAX_TRIES){
+				/* Retries exahusted to find a hub */
+				debug(DEBUG_UNEXPECTED, "No hub found, dropping polling rate back to %d seconds", HUB_NO_ECHO_INTERVAL);
+				xs->discoveryState = XPL_HUB_NO_ECHO;
+				hbi = HUB_NO_ECHO_INTERVAL;
+			}
+			else{
+				debug(DEBUG_ACTION, "Attempting to discover hub. Try = %d", xs->discoveryTries);
+				hbi = HUB_DISCOVERY_INTERVAL;
+			}
+			break;
+			
+		case XPL_HUB_NO_ECHO: /* Poll at backoff interval */
+			debug(DEBUG_UNEXPECTED, "******* Still no hub found... ********");
+			hbi = HUB_NO_ECHO_INTERVAL;
+			break;
+			
+		case XPL_HUB_CONFIRMED: /* Poll at normal interval */
+			hbi = xs->heartbeatInterval;
+			break;
+			
+		default: 
+			ASSERT_FAIL(0) 
+	}		
+			
+	xs->heartbeatTimer = hbi;
 	 
-	debug(DEBUG_ACTION, "Sent Heatbeat message");
+	debug(DEBUG_ACTION, "Sent Heatbeat message. Interval = %u ", hbi);
 	return TRUE;
 }
 
@@ -871,8 +917,18 @@ static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
 	return TRUE;
 }
 
-
-
+/*
+ * Test message to see if it is a heartbeat message
+ */
+ 
+static Bool isHeartbeatMessage(xplMessagePtr_t xm)
+{
+	if((!UtilStrcmpIgnoreCase(xm->schemaType, "app")) && (!UtilStrcmpIgnoreCase(xm->schemaClass, "hbeat"))){
+		return TRUE;
+	}
+	return FALSE;
+	
+}
 
 /* 
  * Parse data until end of block as a block.  If the block is valid, then the number of bytes 
@@ -1332,29 +1388,31 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
  * Set service state
  */
  
-static void setServiceState(xplObjPtr_t xp, xplServicePtr_t theService, Bool newState)
+static void setServiceState(xplObjPtr_t xp, xplServicePtr_t xs, Bool newState)
 {
 	
 	/* Skip if there's no change to the enable state */
-	if (theService->serviceEnabled == newState){
+	if (xs->serviceEnabled == newState){
 		return;
 	}
 
 	/* Set the new service state */
-	theService->serviceEnabled = newState;
+	xs->serviceEnabled = newState;
 
 	/* Handle enabling a disabled service */
 	if (newState){
 		/* If there is an existing heartbeat message, release it, so it will get rebuilt */
-		if (theService->heartbeatMessage){
-			talloc_free(theService->heartbeatMessage);
-			theService->heartbeatMessage = NULL;
+		if (xs->heartbeatMessage){
+			talloc_free(xs->heartbeatMessage);
+			xs->heartbeatMessage = NULL;
 		}
-		/* Start sending heartbeats */
-		sendHeartbeat(xp, theService);
+		/* Start sending discovery heartbeats */
+		xs->discoveryState = XPL_HUB_UNCONFIRMED;
+		xs->discoveryTries = 0;
+		sendHeartbeat(xp, xs);
 	} else {
 		/* Send goodbye heartbeat */
-		sendGoodbyeHeartbeat(xp, theService);
+		sendGoodbyeHeartbeat(xp, xs);
 	}
 }
 
@@ -1685,7 +1743,7 @@ void XplEnableService(void *servToEnable)
 	ASSERT_FAIL(XS_MAGIC == xs->magic)
 	ASSERT_FAIL(xp = xs->xplObj)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
-
+	
 	setServiceState(xp, xs, TRUE);
 }
 
@@ -1707,6 +1765,25 @@ void XplDisableService(void *servToDisable)
 	
 	setServiceState(xp, xs, FALSE);
 }
+
+/*
+ * Get Hub discovery state for the supplied service object
+ */
+
+XPLDiscoveryState_t XplGetHubDiscoveryState(void  *servToCheck)
+{
+	
+	xplServicePtr_t xs = servToCheck;
+	
+	ASSERT_FAIL(xs)
+	ASSERT_FAIL(XS_MAGIC == xs->magic)
+
+	return xs->discoveryState;
+	
+}
+
+ 
+
 
 /*
  * Create a new message block
@@ -2024,4 +2101,3 @@ void XplMessageIterateNameValues(void *XPLMessage, void *userObj, XPLIterateNVCa
 	}	
 }
 
- 
