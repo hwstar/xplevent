@@ -246,7 +246,7 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 			if(theString){
 				if(notify_get_debug_level() >= 5){
 					debug(DEBUG_EXPECTED, "Processing received message: length = %d", strlen(theString));
-					debug(DEBUG_EXPECTED,"Packet received:\n%s", theString);
+					debug(DEBUG_INCOMPLETE,"***Packet received:\n%s\n", theString);
 				}
 				/* Process the string contents */
 				xm = parseMessage(xp, theString);
@@ -631,7 +631,7 @@ static Bool sendMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
 	}
 	
 	/* Attempt to broadcast it */
-	debug(DEBUG_INCOMPLETE, "About to broadcast %d bytes as [%s]", xp->txBuffBytesWritten, xp->txBuff);
+	debug(DEBUG_INCOMPLETE, "*** About to broadcast %d bytes as: \n%s\n", xp->txBuffBytesWritten, xp->txBuff);
 	if (!sendRawMessage(xp)){
 		return FALSE;
 	}
