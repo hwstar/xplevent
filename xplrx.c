@@ -388,13 +388,16 @@ void XplRXDestroy(void *objPtr)
 	while(termCount < 10){ /* Wait for RX thread dying gasp */
 		XH_UNLOCK
 		if(8 == read(xh->rxReadyFD, eBuf, 8)){
+			XH_LOCK
 			break;
 		}
 		usleep(100000);
 		termCount++;
 		XH_LOCK
 	}
+	
 	XH_UNLOCK
+	
 	if(termCount < 10){
 		debug(DEBUG_ACTION,"%s: RX thread terminated", __func__);
 	}

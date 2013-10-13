@@ -1247,7 +1247,7 @@ void MonitorRun(void)
 	
 	/* Create a service and set our application version */
 	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID, VERSION);
- 
+	
 
 	/* Add 1 second tick service */
 	PollRegTimeout(Globals->poller, tickHandler, NULL);

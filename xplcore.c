@@ -30,6 +30,8 @@
 #include <getopt.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/time.h>
+#include <sys/ioctl.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -96,9 +98,6 @@ typedef struct {
 	String sourceDeviceID;
 	String sourceInstanceID;
 
-	Bool isGroupMessage;
-	String groupName;
-
 	Bool isBroadcastMessage;
 	String targetVendor;
 	String targetDeviceID;
@@ -127,6 +126,7 @@ typedef struct xplService_s {
 	unsigned heartbeatInterval;
 	unsigned heartbeatTimer;
 	unsigned discoveryTries;
+	unsigned txBuffBytesWritten; /* Holds the number of bytes in txBuff */
 	XPLDiscoveryState_t discoveryState;
 	time_t lastHeartbeatAt;
 	XPLListenerReportMode_t reportMode;
@@ -135,6 +135,7 @@ typedef struct xplService_s {
 	String serviceDeviceID;
 	String serviceInstanceID;
 	String serviceVersion;
+	String txBuff; /* Holds the transmit string */
 	
 	xplMessagePtr_t heartbeatMessage;
 
@@ -150,7 +151,6 @@ typedef struct xplService_s {
 
 typedef struct xplObj_s {
 	unsigned magic;
-	unsigned txBuffBytesWritten; /* Holds the number of bytes in txBuff */
 	int localConnFD; /* FD for packets from HUB */
 	int broadcastFD; /* FD for broadcasts to network */
 	int rxReadyFD; /* Ent FC for RX packet ready from receiver */
@@ -159,7 +159,6 @@ typedef struct xplObj_s {
 	void *poller; /* Pointer to the poller object supplied by the user */
 	void *rcvr; /* Pointer to the receiver object */
 	void *generalPool; /* Pointer to general memory pool for strings and structs */
-	String txBuff; /* Holds the transmit string */
 	String remoteIP; /* IP of ethernet interface to use */
 	String broadcastIP; /* Broadcast address on the interface */
 	String internalIP; /* Listen address for hub transmissions */
@@ -174,7 +173,7 @@ typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } 
 * Forward references
 */
 
-static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService);
+static Bool sendHeartbeat(xplServicePtr_t theService);
 static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText);
 static void releaseMessage(xplMessagePtr_t xm);
 static Bool isHeartbeatMessage(xplMessagePtr_t xm);
@@ -185,8 +184,96 @@ static Bool isHeartbeatMessage(xplMessagePtr_t xm);
  *  Non-categorized Private functions
  **************************************************************************
  */
+
+/* 
+ * Convert a long value into an 8 digit base36 number 
+ * and concatenate it onto the passed string   
+ *        
+ */
  
+static void longToBase32(unsigned long theValue, String theBuffer) {
+	int charPtr, buffLen;
+	static char base36Table[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
+			      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+			      'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+			      'u', 'v', 'w', 'x', 'y', 'z' };
+
+	/* Fill with zeros */
+	strcat(theBuffer, "00000000");
+	buffLen = strlen(theBuffer);
+
+	/* Handle the simple case */
+	if (theValue == 0){
+		return;
+	}
+
+	for(charPtr = buffLen - 1; charPtr >= (buffLen - 8); charPtr--) {
+		theBuffer[charPtr] = base36Table[theValue % 36];
+		if (theValue < 36){
+			 break;
+		}
+		theValue = theValue / 36;
+  }
+}
+
+/* Calculate CRC over buffer using polynomial: X^16 + X^12 + X^5 + 1 */
+
+static uint16_t crc16(void *buf, int len)
+{
+	uint8_t i;
+	uint16_t crc = 0;
+	uint8_t *b = (uint8_t *) buf;
+	
+	if(!len)
+		return 0;
+
+	while(len--){
+		crc ^= (((uint16_t) *b++) << 8);
+		for ( i = 0 ; i < 8 ; ++i ){
+			if (crc & 0x8000)
+				crc = (crc << 1) ^ 0x1021;
+			else
+				crc <<= 1;
+          	}
+	}
+	return crc;
+}
+
+/*
+ * Create a fairly unique 16 character identifier string
+ * 
+ * String returned was talloc'd of of xplObj, and must be
+ * talloc_free'd when no longer required
  
+ */
+ 
+const String generateFairlyUniqueID(xplObjPtr_t xp)
+{
+	char newIdent[32];
+	struct timeval rightNow;
+	unsigned long timeInMillis;
+	String res;
+	
+	
+	/* Generate a unique prefix from the stuff in sockaddr */
+	sprintf(newIdent, "%04X", (uint32_t) crc16(&xp->broadcastAddr, xp->broadcastAddrLen));
+	
+	/* Now tack on the time of day, radix-32 encoded (which allows   */
+	/* packing in a lot more uniqueness for the 8 characters we have */
+	gettimeofday(&rightNow, NULL);
+	timeInMillis = (rightNow.tv_sec * 1000) + (rightNow.tv_usec / 1000);
+	longToBase32(timeInMillis, newIdent);
+	if (strlen(newIdent) > 16){
+		newIdent[16] = '\0';
+	}
+	/* Pass a copy off */
+	MALLOC_FAIL(res = talloc_strdup(xp, newIdent))	
+	debug(DEBUG_ACTION, "Unique identifier generated: %s", res);
+	return res;
+
+}
+ 
+
 /*
  * Create a new name value list entry 
  */
@@ -446,7 +533,7 @@ static void xplTick(int id, void *objPtr)
 		/* Is the heartbeat timer expired ? */
 		if(!xs->heartbeatTimer){
 			debug(DEBUG_ACTION, "Sending refresh heartbeat");
-			if(FALSE == sendHeartbeat(xp, xs)){
+			if(FALSE == sendHeartbeat(xs)){
 				debug(DEBUG_UNEXPECTED, "Refresh heartbeat send failed");
 			}		
 		}
@@ -501,15 +588,17 @@ static void releaseMessage(xplMessagePtr_t xm)
  * or FALSE if there was an error 
  */  
               
-static Bool sendRawMessage(xplObjPtr_t xp)
+static Bool sendRawMessage(xplServicePtr_t xs)
 {
 	
 	int bytesSent;
 	char eStr[64];
-	unsigned buffLen = xp->txBuffBytesWritten;
+	xplObjPtr_t xp = xs->xplObj;
+	
+	unsigned buffLen = xs->txBuffBytesWritten;
 
 	/* Try to send the message */
-	if ((bytesSent = sendto(xp->broadcastFD, xp->txBuff, buffLen, 0, 
+	if ((bytesSent = sendto(xp->broadcastFD, xs->txBuff, buffLen, 0, 
 		(struct sockaddr *) &xp->broadcastAddr, sizeof(struct sockaddr_storage))) != buffLen) {
 		debug(DEBUG_UNEXPECTED, "Unable to broadcast message, %s (%d)", strerror_r(errno, eStr, 64), errno);
 		return FALSE;
@@ -522,22 +611,22 @@ static Bool sendRawMessage(xplObjPtr_t xp)
  * Append text and keep track of what we've used 
  */
  
-static Bool appendText(xplObjPtr_t xp, String theString) 
+static Bool appendText(xplServicePtr_t xs, String theString) 
 {
 	int stringLen = strlen(theString);
 
 	/* Make sure it fits in the TX buffer */
-	if ((xp->txBuffBytesWritten + stringLen) >= MSG_MAX_SIZE) {
+	if ((xs->txBuffBytesWritten + stringLen) >= MSG_MAX_SIZE) {
 		debug(DEBUG_UNEXPECTED, "Message exceeds MSG_MAX_SIZE (%d) -- not sent!", MSG_MAX_SIZE);
-		debug(DEBUG_UNEXPECTED, "** Partial message is [%s]", xp->txBuff);
+		debug(DEBUG_UNEXPECTED, "** Partial message is [%s]", xs->txBuff);
 		return FALSE;
 	}
 
 	/* Copy the text in */
-	memcpy(&xp->txBuff[xp->txBuffBytesWritten], theString, stringLen);
-	xp->txBuffBytesWritten += stringLen;
+	memcpy(&xs->txBuff[xs->txBuffBytesWritten], theString, stringLen);
+	xs->txBuffBytesWritten += stringLen;
 	/* Terminate the string */
-	xp->txBuff[xp->txBuffBytesWritten] = '\0';
+	xs->txBuff[xs->txBuffBytesWritten] = '\0';
 	return TRUE;
 }
 
@@ -546,80 +635,75 @@ static Bool appendText(xplObjPtr_t xp, String theString)
  * Write out the message 
  */
  
-static Bool formatMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
+static Bool formatMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
 {
 	xplNameValueLEPtr_t le;
 
 	/* Clear the write count */
-	xp->txBuffBytesWritten = 0;
+	xs->txBuffBytesWritten = 0;
 
 	/* Write header */
-	switch (theMessage->messageType) {
+	switch (xm->messageType) {
 		case XPL_MESSAGE_COMMAND:
-			WRITE_TEXT(xp, "xpl-cmnd");
+			WRITE_TEXT(xs, "xpl-cmnd");
 			break;
 		case XPL_MESSAGE_STATUS:
-			WRITE_TEXT(xp, "xpl-stat");
+			WRITE_TEXT(xs, "xpl-stat");
 			break;
 		case XPL_MESSAGE_TRIGGER:
-			WRITE_TEXT(xp, "xpl-trig");
+			WRITE_TEXT(xs, "xpl-trig");
 			break;
 		default:
 			ASSERT_FAIL(0);
 	}
 
 	/* Write hop and source info */
-	WRITE_TEXT(xp, "\n{\nhop=1\nsource=");
-	WRITE_TEXT(xp, theMessage->sourceVendor);
-	WRITE_TEXT(xp, "-");
-	WRITE_TEXT(xp, theMessage->sourceDeviceID);
-	WRITE_TEXT(xp, ".");
-	WRITE_TEXT(xp, theMessage->sourceInstanceID);
-	WRITE_TEXT(xp, "\n");
+	WRITE_TEXT(xs, "\n{\nhop=1\nsource=");
+	WRITE_TEXT(xs, xm->sourceVendor);
+	WRITE_TEXT(xs, "-");
+	WRITE_TEXT(xs, xm->sourceDeviceID);
+	WRITE_TEXT(xs, ".");
+	WRITE_TEXT(xs, xm->sourceInstanceID);
+	WRITE_TEXT(xs, "\n");
 
 	/* Write target */
-	if (theMessage->isBroadcastMessage){
-		WRITE_TEXT(xp, "target=*");
+	if (xm->isBroadcastMessage){
+		WRITE_TEXT(xs, "target=*");
 	} else{
-		if (theMessage->isGroupMessage) {
-			WRITE_TEXT(xp, "target=XPL-GROUP.");
-			WRITE_TEXT(xp, theMessage->groupName);
-		} else{
-			WRITE_TEXT(xp, "target=");
-			WRITE_TEXT(xp, theMessage->targetVendor);
-			WRITE_TEXT(xp,"-");
-			WRITE_TEXT(xp, theMessage->targetDeviceID);
-			WRITE_TEXT(xp, ".");
-			WRITE_TEXT(xp, theMessage->targetInstanceID);
-		}
+		WRITE_TEXT(xs, "target=");
+		WRITE_TEXT(xs, xm->targetVendor);
+		WRITE_TEXT(xs,"-");
+		WRITE_TEXT(xs, xm->targetDeviceID);
+		WRITE_TEXT(xs, ".");
+		WRITE_TEXT(xs, xm->targetInstanceID);
 	}
-	WRITE_TEXT(xp, "\n}\n");
+	WRITE_TEXT(xs, "\n}\n");
 
 	/* Write the schema out */
-	WRITE_TEXT(xp, theMessage->schemaClass);
-	WRITE_TEXT(xp, ".");
-	WRITE_TEXT(xp, theMessage->schemaType);
-	WRITE_TEXT(xp, "\n{\n");
+	WRITE_TEXT(xs, xm->schemaClass);
+	WRITE_TEXT(xs, ".");
+	WRITE_TEXT(xs, xm->schemaType);
+	WRITE_TEXT(xs, "\n{\n");
 
 	/* Write Name/Value Pairs out */
-	for (le = theMessage->nvHead; le; le = le->next) {
-		WRITE_TEXT(xp, le->itemName);
-		WRITE_TEXT(xp, "=");
+	for (le = xm->nvHead; le; le = le->next) {
+		WRITE_TEXT(xs, le->itemName);
+		WRITE_TEXT(xs, "=");
 
 		/* Write data content out */
 		if (le->itemValue != NULL) {
-			WRITE_TEXT(xp, le->itemValue);
+			WRITE_TEXT(xs, le->itemValue);
 		}
 
 		/* Terminate line/entry */
-		WRITE_TEXT(xp, "\n");
+		WRITE_TEXT(xs, "\n");
 	}
 
 	/* Write message terminator */
-	WRITE_TEXT(xp, "}\n");
+	WRITE_TEXT(xs, "}\n");
 
 	/* Terminate and return text */
-	xp->txBuff[xp->txBuffBytesWritten] = '\0';
+	xs->txBuff[xs->txBuffBytesWritten] = '\0';
 	return TRUE;
 }
 
@@ -630,16 +714,16 @@ static Bool formatMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
  * TRUE is returned.  
  */ 
                                                     
-static Bool sendMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
+static Bool sendMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
 {
 	/* Write the message to text */
-	if (FALSE == formatMessage(xp, theMessage)){
+	if (FALSE == formatMessage(xs, xm)){
 		return FALSE;
 	}
 	
 	/* Attempt to broadcast it */
-	debug(DEBUG_INCOMPLETE, "*** About to broadcast %d bytes as: \n%s\n", xp->txBuffBytesWritten, xp->txBuff);
-	if (!sendRawMessage(xp)){
+	debug(DEBUG_INCOMPLETE, "*** About to broadcast %d bytes as: \n%s\n", xs->txBuffBytesWritten, xs->txBuff);
+	if (!sendRawMessage(xs)){
 		return FALSE;
 	}
 	return TRUE;
@@ -650,29 +734,29 @@ static Bool sendMessage(xplObjPtr_t xp, xplMessagePtr_t theMessage)
  * Create a new message based on a service
  */
  
-static xplMessagePtr_t createSendableMessage(xplServicePtr_t theService, XPLMessageType_t messageType) {
-  xplMessagePtr_t theMessage;
+static xplMessagePtr_t createSendableMessage(xplServicePtr_t xs, XPLMessageType_t messageType) {
+  xplMessagePtr_t xm;
   
   /* Allocate the message (owned by the service context) */
-  MALLOC_FAIL(theMessage = talloc_zero(theService, xplMessage_t))
+  MALLOC_FAIL(xm = talloc_zero(xs, xplMessage_t))
   
   /* Install references back to service and master objects */
-  theMessage->xplObj = theService->xplObj;
-  theMessage->serviceObj = theService; /* A sendable message will include a reference to a service */
+  xm->xplObj = xs->xplObj;
+  xm->serviceObj = xs; /* A sendable message will include a reference to a service */
    
 
   /* Set the version */
-  theMessage->messageType = messageType;
-  theMessage->hopCount = 1;
+  xm->messageType = messageType;
+  xm->hopCount = 1;
 
-  theMessage->sourceVendor = theService->serviceVendor;
-  theMessage->sourceDeviceID = theService->serviceDeviceID;
-  theMessage->sourceInstanceID = theService->serviceInstanceID;
+  xm->sourceVendor = xs->serviceVendor;
+  xm->sourceDeviceID = xs->serviceDeviceID;
+  xm->sourceInstanceID = xs->serviceInstanceID;
   
   /* Validate the message */
-  theMessage->magic = XM_MAGIC;
+  xm->magic = XM_MAGIC;
   
-  return theMessage;
+  return xm;
 }
 
 /*
@@ -699,16 +783,16 @@ static void postpendToNameValueList(xplNameValueLEPtr_t *listHeadPtrPtr, xplName
  * Add a name value pair to an existing message
  */
  
-static void addMessageNamedValue(xplMessagePtr_t theMessage, String name, String value )
+static void addMessageNamedValue(xplMessagePtr_t xm, String name, String value )
 {
 	xplNameValueLEPtr_t newNVLE;
 	
-	if(!theMessage->nvCTX){ 
+	if(!xm->nvCTX){ 
 		/* Create a new context from the NV pool for the list to make it simple to delete */
-		MALLOC_FAIL(theMessage->nvCTX = talloc_new(theMessage));
+		MALLOC_FAIL(xm->nvCTX = talloc_new(xm));
 	}
 	/* Create a new list entry */
-	MALLOC_FAIL(newNVLE = talloc_zero(theMessage->nvCTX, xplNameValueLE_t))
+	MALLOC_FAIL(newNVLE = talloc_zero(xm->nvCTX, xplNameValueLE_t))
 	
 	/* Add the name */
 	MALLOC_FAIL(newNVLE->itemName = talloc_strdup(newNVLE, name))
@@ -716,7 +800,7 @@ static void addMessageNamedValue(xplMessagePtr_t theMessage, String name, String
 	/* Add the value */
 	MALLOC_FAIL(newNVLE->itemValue = talloc_strdup(newNVLE, value))
 	
-	postpendToNameValueList(&theMessage->nvHead, &theMessage->nvTail, newNVLE);
+	postpendToNameValueList(&xm->nvHead, &xm->nvTail, newNVLE);
 }
 
 
@@ -724,60 +808,52 @@ static void addMessageNamedValue(xplMessagePtr_t theMessage, String name, String
  * Create a message suitable for sending to a specific receiver
  */
  
-static xplMessagePtr_t createTargetedMessage(xplServicePtr_t theService, XPLMessageType_t messageType, 
+static xplMessagePtr_t createTargetedMessage(xplServicePtr_t xs, XPLMessageType_t messageType, 
 	String theVendor, String theDevice, String theInstance) 
 {
 
-	xplMessagePtr_t theMessage = createSendableMessage(theService, messageType);
-	MALLOC_FAIL(theMessage->targetVendor = talloc_strdup(theMessage, theVendor))
-	MALLOC_FAIL(theMessage->targetDeviceID = talloc_strdup(theMessage, theDevice))
-	MALLOC_FAIL(theMessage->targetInstanceID = talloc_strdup(theMessage, theInstance))
-	return theMessage;
+	xplMessagePtr_t xm = createSendableMessage(xs, messageType);
+	MALLOC_FAIL(xm->targetVendor = talloc_strdup(xs, theVendor))
+	MALLOC_FAIL(xm->targetDeviceID = talloc_strdup(xm, theDevice))
+	MALLOC_FAIL(xm->targetInstanceID = talloc_strdup(xm, theInstance))
+	return xm;
 }
 
-#if(0)
-/* Create a message suitable for sending to a group */
-static xplMessagePtr_t createGroupTargetedMessage(xplServicePtr_t theService, XPLMessageType_t messageType, String theGroup) 
-{
-	xplMessagePtr_t theMessage = createSendableMessage(theService, messageType);
-	MALLOC_FAIL(theMessage->groupName = talloc_strdup(theMessage, theGroup))
-	return theMessage;
-}
-#endif
 
 /* Create a message suitable for broadcasting to all listeners */
-static xplMessagePtr_t createBroadcastMessage(xplServicePtr_t theService, XPLMessageType_t messageType) 
+static xplMessagePtr_t createBroadcastMessage(xplServicePtr_t xs, XPLMessageType_t messageType) 
 {
-	xplMessagePtr_t theMessage = createSendableMessage(theService, messageType);
-	theMessage->isBroadcastMessage = TRUE;
-	return theMessage;
+	xplMessagePtr_t xm = createSendableMessage(xs, messageType);
+	xm->isBroadcastMessage = TRUE;
+	return xm;
 }
 
 /*
  * Create a heartbeat message
  */
  
-static xplMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, xplServicePtr_t theService, Heartbeat_t heartbeatType) 
+static xplMessagePtr_t createHeartbeatMessage(xplServicePtr_t xs, Heartbeat_t heartbeatType) 
 {
 	xplMessagePtr_t theHeartbeat;
+	xplObjPtr_t xp = xs->xplObj;
 	String portStr;
 	String interval = "";
 
 	/* Create the Heartbeat message */
-	theHeartbeat = createBroadcastMessage(theService, XPL_MESSAGE_STATUS);
+	theHeartbeat = createBroadcastMessage(xs, XPL_MESSAGE_STATUS);
     
 	/* Configure the heartbeat */
 	switch (heartbeatType) {
 		case HBEAT_NORMAL:
 			theHeartbeat->schemaClass = "hbeat";
 			theHeartbeat->schemaType = "app";
-			MALLOC_FAIL(interval = talloc_asprintf(theHeartbeat, "%d", theService->heartbeatInterval / 60))
+			MALLOC_FAIL(interval = talloc_asprintf(theHeartbeat, "%d", xs->heartbeatInterval / 60))
 			break;
 
 		case HBEAT_NORMAL_END:
 			theHeartbeat->schemaClass = "hbeat";
 			theHeartbeat->schemaType = "end";
-			MALLOC_FAIL(interval = talloc_asprintf(theHeartbeat, "%d", theService->heartbeatInterval / 60))
+			MALLOC_FAIL(interval = talloc_asprintf(theHeartbeat, "%d", xs->heartbeatInterval / 60))
 			break;
 
 		case HBEAT_CONFIG:
@@ -796,13 +872,15 @@ static xplMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, xplServicePtr_t th
 			ASSERT_FAIL(0)
 	}
 	addMessageNamedValue(theHeartbeat, "interval", interval);
+	/* Free interval string as it was copied when it was inserted into the name/value list */
+	talloc_free(interval);
 	
 	/* Add standard heartbeat data */
 	MALLOC_FAIL(portStr = talloc_asprintf(theHeartbeat, "%d", xp->localConnPort))
 	addMessageNamedValue(theHeartbeat, "port", portStr);
 	addMessageNamedValue(theHeartbeat, "remote-ip", xp->remoteIP);
-	if (theService->serviceVersion) {
-		addMessageNamedValue(theHeartbeat, "version", theService->serviceVersion);
+	if (xs->serviceVersion) {
+		addMessageNamedValue(theHeartbeat, "version", xs->serviceVersion);
 	}    
   return theHeartbeat;
 }
@@ -812,7 +890,7 @@ static xplMessagePtr_t createHeartbeatMessage(xplObjPtr_t xp, xplServicePtr_t th
  * Send a standard XPL Heartbeat immediately 
  */
  
-static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t xs)
+static Bool sendHeartbeat(xplServicePtr_t xs)
 {
 	xplMessagePtr_t theHeartbeat;
 	unsigned hbi;
@@ -821,10 +899,10 @@ static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t xs)
 	if (!xs->heartbeatMessage){
 		/* Configure the heartbeat */
 		if (xs->configurableService && !xs->serviceConfigured){
-			theHeartbeat = createHeartbeatMessage(xp, xs, HBEAT_CONFIG);
+			theHeartbeat = createHeartbeatMessage(xs, HBEAT_CONFIG);
 		} 
 		else {
-			theHeartbeat = createHeartbeatMessage(xp, xs, HBEAT_NORMAL);
+			theHeartbeat = createHeartbeatMessage(xs, HBEAT_NORMAL);
 		}
 
 		/* Install a new heartbeat message */
@@ -836,7 +914,7 @@ static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t xs)
 	}
     
 	/* Send the message */
-	if (!sendMessage(xp, theHeartbeat)){
+	if (!sendMessage(xs, theHeartbeat)){
 		return FALSE;
 	}
 
@@ -883,20 +961,22 @@ static Bool sendHeartbeat(xplObjPtr_t xp, xplServicePtr_t xs)
  * Send an Goodbye XPL Heartbeat immediately
  */
  
-static Bool sendGoodbyeHeartbeat(xplObjPtr_t xp, xplServicePtr_t theService)
+static Bool sendGoodbyeHeartbeat(xplServicePtr_t xs)
 {
+
 	xplMessagePtr_t theHeartbeat;
+	
   
 	/* Create a shutdown message */
-	if (theService->configurableService && !theService->serviceConfigured){
-		theHeartbeat = createHeartbeatMessage(xp, theService, HBEAT_CONFIG_END);
+	if (xs->configurableService && !xs->serviceConfigured){
+		theHeartbeat = createHeartbeatMessage(xs, HBEAT_CONFIG_END);
 	}
 	else{
-		theHeartbeat = createHeartbeatMessage(xp, theService, HBEAT_NORMAL_END);
+		theHeartbeat = createHeartbeatMessage(xs, HBEAT_NORMAL_END);
 	}
     
 	/* Send the message */
-	if (!sendMessage(xp, theHeartbeat)){
+	if (!sendMessage(xs, theHeartbeat)){
 		return FALSE;
 	}
 
@@ -929,7 +1009,7 @@ static Bool isHeartbeatMessage(xplMessagePtr_t xm)
  */
 
 static int parseBlock(void *nvListContext, xplNameValueLEPtr_t *nvListHead, xplNameValueLEPtr_t *nvListTail,
-String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
+String theText, String blockHeader, int blockHeaderLength)
 {
 	int curState = 0, curIndex, theLength = strlen(theText), charCount = 0;
 	char theChar;
@@ -944,12 +1024,6 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
 	/* Parse character by character */
 	for (curIndex = 0; curIndex < theLength; curIndex++){
 		theChar = theText[curIndex];
-
-		/* Convert identifiers to upper case */
-		
-		if (forceUpperCase && (theChar >= 97) && (theChar <= 122)){
-			theChar -= 32;
-		}
     
 		switch(curState) {
 			case 0: /* Parse block header part of message */
@@ -1124,9 +1198,10 @@ String theText, String blockHeader, int blockHeaderLength, Bool forceUpperCase)
  * we return TRUE.  Otherwise, FALSE.
  */
 
-static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNameValueLEPtr_t nameValueList)
+static Bool parseMessageHeader(xplMessagePtr_t xm, xplNameValueLEPtr_t nameValueList)
 {
 	int hopCount;
+	xplObjPtr_t xp = xm->xplObj;
 	xplNameValueLEPtr_t theNameValue;
 	String theVendor, theDeviceID, theInstanceID;
 
@@ -1139,7 +1214,7 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
 		debug(DEBUG_UNEXPECTED, "Message HOP Count invalid");
 		return FALSE;
 	}
-	theMessage->hopCount = hopCount;
+	xm->hopCount = hopCount;
 
 	/* Parse the source */
 	if(!(theNameValue = getNamedValue(nameValueList, "source"))){
@@ -1166,9 +1241,9 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
 	*theInstanceID++ = '\0';
 
 	/* Install source into message */
-	MALLOC_FAIL(theMessage->sourceVendor = talloc_strdup(theMessage, theVendor))
-	MALLOC_FAIL(theMessage->sourceDeviceID = talloc_strdup(theMessage, theDeviceID))
-	MALLOC_FAIL(theMessage->sourceInstanceID = talloc_strdup(theMessage, theInstanceID))
+	MALLOC_FAIL(xm->sourceVendor = talloc_strdup(xm, theVendor))
+	MALLOC_FAIL(xm->sourceDeviceID = talloc_strdup(xm, theDeviceID))
+	MALLOC_FAIL(xm->sourceInstanceID = talloc_strdup(xm, theInstanceID))
 
 	/* Release mangled copy of source tag */
 	talloc_free(theVendor);
@@ -1183,7 +1258,7 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
   
 	/* Check for a wildcard */
 	if(!strcmp(theNameValue->itemValue, "*")){
-		theMessage->isBroadcastMessage = TRUE;
+		xm->isBroadcastMessage = TRUE;
 	} 
 	else{
 		/* Not wildcard. Parse target tag */
@@ -1204,9 +1279,9 @@ static Bool parseMessageHeader(xplObjPtr_t xp, xplMessagePtr_t theMessage, xplNa
 		*theInstanceID++ = '\0';
 		
 		/* Install target into message */
-		MALLOC_FAIL(theMessage->targetVendor = talloc_strdup(theMessage, theVendor))
-		MALLOC_FAIL(theMessage->targetDeviceID = talloc_strdup(theMessage, theDeviceID))
-		MALLOC_FAIL(theMessage->targetInstanceID = talloc_strdup(theMessage, theInstanceID))
+		MALLOC_FAIL(xm->targetVendor = talloc_strdup(xm, theVendor))
+		MALLOC_FAIL(xm->targetDeviceID = talloc_strdup(xm, theDeviceID))
+		MALLOC_FAIL(xm->targetInstanceID = talloc_strdup(xm, theInstanceID))
 
 
 		/* Release mangled string */
@@ -1228,52 +1303,52 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
 	String blockDelimPtr,classType;
 	xplNameValueLEPtr_t listHead = NULL, listTail = NULL;
 	void *listCTX;
-	xplMessagePtr_t theMessage;
+	xplMessagePtr_t xm;
 	char blockHeader[64];
 	
   
 	/* Allocate a message */
-	theMessage = createReceivedMessage(xp, XPL_MESSAGE_ANY);
+	xm = createReceivedMessage(xp, XPL_MESSAGE_ANY);
 	
 	/* Allocate the header list context so we can easily free it later */
 	MALLOC_FAIL(listCTX = talloc_new(xp->generalPool))
 
 	/* Parse the header */
-	if ((parsedThisTime = parseBlock(listCTX, &listHead, &listTail, theText, blockHeader, 64, FALSE)) <= 0) {
+	if ((parsedThisTime = parseBlock(listCTX, &listHead, &listTail, theText, blockHeader, 64)) <= 0) {
 		debug(DEBUG_UNEXPECTED, "Error parsing message header");
-		releaseMessage(theMessage);
+		releaseMessage(xm);
 		return NULL;
 	}
 
 
 	/* Parse the header */
 	if (!strcmp(blockHeader, "xpl-cmnd")){
-		theMessage->messageType = XPL_MESSAGE_COMMAND;
+		xm->messageType = XPL_MESSAGE_COMMAND;
 	} 
 	else if(!strcmp(blockHeader, "xpl-stat")){
-		theMessage->messageType = XPL_MESSAGE_STATUS;
+		xm->messageType = XPL_MESSAGE_STATUS;
 	} 
 	else if(!strcmp(blockHeader, "xpl-trig")){
-		theMessage->messageType = XPL_MESSAGE_TRIGGER;
+		xm->messageType = XPL_MESSAGE_TRIGGER;
 	}
 	else{
 		debug(DEBUG_UNEXPECTED, "Unknown message header of %s - bad message", blockHeader);
-		releaseMessage(theMessage);
+		releaseMessage(xm);
 		return NULL;
 	}
 	
 	/* Must have a header name value list. */
 	if(!listHead){
 		debug(DEBUG_UNEXPECTED, "No name value list for header");
-		releaseMessage(theMessage);
+		releaseMessage(xm);
 		return NULL;
 	}
 	
 
 	/* Parse the message header name/values into the message */
-	if (!parseMessageHeader(xp, theMessage, listHead)){
+	if (!parseMessageHeader(xm, listHead)){
 		debug(DEBUG_UNEXPECTED, "Unable to parse message header");
-		releaseMessage(theMessage);
+		releaseMessage(xm);
 		return NULL;
 	}
 	
@@ -1284,10 +1359,10 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
 
 
 	/* Parse the next block */
-	if ((parsedThisTime = parseBlock(theMessage, &theMessage->nvHead, &theMessage->nvTail,
-	theText + parsedThisTime, blockHeader, 64, FALSE)) < 0){
+	if ((parsedThisTime = parseBlock(xm, &xm->nvHead, &xm->nvTail,
+	theText + parsedThisTime, blockHeader, 64)) < 0){
 		debug(DEBUG_UNEXPECTED, "Error parsing message block");
-		releaseMessage(theMessage);
+		releaseMessage(xm);
 		return NULL;
 	}
     
@@ -1296,20 +1371,20 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
 	/* Parse the block header */
 	if ((blockDelimPtr = strchr(classType, '.')) == NULL) {
 		debug(DEBUG_UNEXPECTED, "Malformed message block header - %s", blockHeader);
-		releaseMessage(theMessage); 
+		releaseMessage(xm); 
 		talloc_free(classType); 
 		return NULL;
 	}
 	*blockDelimPtr++ = '\0';
 
 	/* Record the message schema class/type */
-	MALLOC_FAIL(theMessage->schemaClass = talloc_strdup(theMessage, classType))
-	MALLOC_FAIL(theMessage->schemaType = talloc_strdup(theMessage, blockDelimPtr))	
+	MALLOC_FAIL(xm->schemaClass = talloc_strdup(xm, classType))
+	MALLOC_FAIL(xm->schemaType = talloc_strdup(xm, blockDelimPtr))	
 	
 	talloc_free(classType);
 	
 	/* Return the message */
-	return theMessage;
+	return xm;
 }
 
 
@@ -1323,13 +1398,13 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
  * Change the current heartbeat interval 
  */
  
-static void setHeartbeatInterval(xplServicePtr_t theService, int newInterval)
+static void setHeartbeatInterval(xplServicePtr_t xs, int newInterval)
 {
 	/* Skip out of range values */
 	if ((newInterval < 0) || (newInterval > 172800)){
 		return;
 	}
-	theService->heartbeatInterval = newInterval;
+	xs->heartbeatInterval = newInterval;
 }
 /*
  * Create an XPL service 
@@ -1337,34 +1412,37 @@ static void setHeartbeatInterval(xplServicePtr_t theService, int newInterval)
  
 static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String theDeviceID, String theInstanceID, String theVersion) 
 {
-	xplServicePtr_t theService;
+	xplServicePtr_t xs;
 	
 	/* Allocate space for the service object */
-	MALLOC_FAIL(theService = talloc_zero(xp->generalPool, xplService_t))
+	MALLOC_FAIL(xs = talloc_zero(xp->generalPool, xplService_t))
+	
+	/* Allocate the raw message buffer */
+	MALLOC_FAIL(xs->txBuff = talloc_zero_array(xs, char, MSG_MAX_SIZE))
 	
 	/* Install reference to master object */
-	theService->xplObj = xp;
+	xs->xplObj = xp;
 
 	/* Install info */
-	MALLOC_FAIL(theService->serviceVendor = talloc_strdup(theService, theVendor))
-	MALLOC_FAIL(theService->serviceDeviceID = talloc_strdup(theService, theDeviceID))
-	MALLOC_FAIL(theService->serviceInstanceID = talloc_strdup(theService, theInstanceID))
+	MALLOC_FAIL(xs->serviceVendor = talloc_strdup(xs, theVendor))
+	MALLOC_FAIL(xs->serviceDeviceID = talloc_strdup(xs, theDeviceID))
+	MALLOC_FAIL(xs->serviceInstanceID = talloc_strdup(xs, theInstanceID))
 	if(theVersion){
-		MALLOC_FAIL(theService->serviceVersion = talloc_strdup(theService, theVersion))
+		MALLOC_FAIL(xs->serviceVersion = talloc_strdup(xs, theVersion))
 	}
 	
-	setHeartbeatInterval(theService, DEFAULT_HEARTBEAT_INTERVAL);
+	setHeartbeatInterval(xs, DEFAULT_HEARTBEAT_INTERVAL);
 	
 	/* Validate the object */
-	theService->magic = XS_MAGIC;
-	return theService;
+	xs->magic = XS_MAGIC;
+	return xs;
 }
 
 /* 
  * Set service state
  */
  
-static void setServiceState(xplObjPtr_t xp, xplServicePtr_t xs, Bool newState)
+static void setServiceState(xplServicePtr_t xs, Bool newState)
 {
 	
 	/* Skip if there's no change to the enable state */
@@ -1385,34 +1463,12 @@ static void setServiceState(xplObjPtr_t xp, xplServicePtr_t xs, Bool newState)
 		/* Start sending discovery heartbeats */
 		xs->discoveryState = XPL_HUB_UNCONFIRMED;
 		xs->discoveryTries = 0;
-		sendHeartbeat(xp, xs);
+		sendHeartbeat(xs);
 	} else {
 		/* Send goodbye heartbeat */
-		sendGoodbyeHeartbeat(xp, xs);
+		sendGoodbyeHeartbeat(xs);
 	}
 }
-
-/* 
- * Send a message out from this service.  
- * If the message has not had it's
- * source set or the source does not match the sending service, it is
- * updated and the message sent
- */
-#if(0) 
-static Bool sendServiceMessage(xplObjPtr_t xp, xplServicePtr_t theService, xplMessagePtr_t theMessage)
-{
-	if ((theService == NULL) || (theMessage == NULL)){
-	  return FALSE;
-	}
-
-	/* Ensure the message comes from this service */
-	theMessage->sourceVendor = theService->serviceVendor;
-	theMessage->sourceDeviceID = theService->serviceDeviceID;
-	theMessage->sourceInstanceID = theService->serviceInstanceID;
-
-	return sendMessage(xp, theMessage);
-}
-#endif
 
 
 /*
@@ -1436,7 +1492,7 @@ void XplDestroy(void *xplObj)
 	/* Traverse the service list and disable any services which are enabled */
 	for(xs = xp->servHead; xs; xs = xs->next){
 		if(xs->serviceEnabled){
-			setServiceState(xp, xs, FALSE);
+			setServiceState(xs, FALSE);
 		}	
 	}
 	
@@ -1549,9 +1605,6 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 	xp->poller = Poller;
 	
 	
-	/* Allocate the raw message buffer */
-	MALLOC_FAIL(xp->txBuff = talloc_zero_array(xp, char, MSG_MAX_SIZE))
-	
 	/* Allocate a working string pool */
 	MALLOC_FAIL(xp->generalPool = talloc_pool(xp, GENERAL_POOL_SIZE))
 
@@ -1608,7 +1661,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
  * 1. Pointer to master XPL object
  * 2. String with vendor name (required).
  * 3. String with device ID (required).
- * 4. String with instance ID (required).
+ * 4. String with instance ID or NULL for a randomly generated instance ID
  * 5. String with the service version or NULL
  * 
  * Return value:
@@ -1621,13 +1674,27 @@ void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String t
 {	
 	xplServicePtr_t xs;
 	xplObjPtr_t xp = xplObj;
+	String id;
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	ASSERT_FAIL(theVendor)
 	ASSERT_FAIL(theDeviceID)
-	ASSERT_FAIL(theInstanceID)
 	
-	xs = createService(xp, theVendor, theDeviceID, theInstanceID, theVersion);
+	/* If user passed a NULL for the instance ID, they want it autogenerated */
+	if(!theInstanceID){
+		id = generateFairlyUniqueID(xplObj);
+	}
+	else{
+		/* User supplied the ID */
+		id = theInstanceID;
+	}
+	/* Create the service */
+	xs = createService(xp, theVendor, theDeviceID, id, theVersion);
+	
+	/* If ID was autogenerated, release the string */
+	if(!theInstanceID){
+		talloc_free(id);
+	}
 	
 	/* Install new service object in service list */
 	if(!xp->servHead){
@@ -1662,7 +1729,7 @@ Bool XplDestroyService(void *servToDestroy)
 		if(xst == xs){
 			/* Found it */
 			if(xs->serviceEnabled){ /* Disable service if enabled */
-				setServiceState(xp, xs, FALSE);
+				setServiceState(xs, FALSE);
 			}
 			break;
 		}
@@ -1720,7 +1787,7 @@ void XplEnableService(void *servToEnable)
 	ASSERT_FAIL(xp = xs->xplObj)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	
-	setServiceState(xp, xs, TRUE);
+	setServiceState(xs, TRUE);
 }
 
 /*
@@ -1739,7 +1806,7 @@ void XplDisableService(void *servToDisable)
 	ASSERT_FAIL(xp = xs->xplObj)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	
-	setServiceState(xp, xs, FALSE);
+	setServiceState(xs, FALSE);
 }
 
 /*
@@ -1866,17 +1933,17 @@ void XplClearNameValues(void *XPLMessage)
  
 Bool XplSendMessage(void *XPLMessage)
 {
-	xplObjPtr_t xp;
+	xplServicePtr_t xs;
 	xplMessagePtr_t xm = XPLMessage;
 	ASSERT_FAIL(xm) /* Object must exist */
 	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
 	ASSERT_FAIL(xm->serviceObj) /* Message must be sendable */
-	xp = xm->xplObj; /* Re-create pointer to master object */
-	ASSERT_FAIL(xp) /* Master object must exist */
-	ASSERT_FAIL(XP_MAGIC == xp->magic) /* Master object must be valid */
+	xs = xm->serviceObj; /* Re-create pointer to service object */
+	ASSERT_FAIL(xs) /* Service object must exist */
+	ASSERT_FAIL(XS_MAGIC == xs->magic) /* Service object must be valid */
 	ASSERT_FAIL(xm->schemaClass)
 	ASSERT_FAIL(xm->schemaType)
-	return sendMessage(xp, xm);	
+	return sendMessage(xs, xm);	
 }
 
 /*
