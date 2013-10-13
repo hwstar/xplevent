@@ -407,7 +407,8 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 							/* Report it if it was us who sent it */
 							reportIt = isUs;
 						}
-						if(!reportIt){ /* If nothing is reportable, then try to match a broadcast, group, or targetted message */
+						if(!reportIt){ /* If nothing is reportable so far */
+							/* Try to match a broadcast, group, or targetted message */
 							if(xm->isBroadcastMessage){
 								if(!isUs){
 									reportIt = TRUE;
@@ -415,10 +416,11 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 							}
 							else{
 								if(xm->isGroupMessage){
-									/* Is group message. Report it if enabled*/
+									/* Is group message. Report it if enabled */
 									reportIt = cse->reportGroupMessages;
 								}
 								else{
+									/* Test to see if it was targetted at this service */
 									if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
 										matchCount = 0;
 										if((!strcmp(xm->targetDeviceID, cse->serviceDeviceID))){
