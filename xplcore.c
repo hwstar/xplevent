@@ -103,10 +103,11 @@ typedef struct {
 	String schemaClass;
 	String schemaType;
 	
+	XPLMessageClass_t messageClass;
+	Bool isUs;
 	Bool isBroadcastMessage;
-	Bool isGroupMessage;
-	Bool isHeartbeatMessage;
-
+	
+	
 	
 	void *xplObj; /* Pointer back to master object */
 	void *serviceObj; /* Set to point to service object on TX messages, is set to NULL on receive messages */
@@ -133,6 +134,7 @@ typedef struct xplService_s {
 	time_t lastHeartbeatAt;
 	XPLListenerReportMode_t reportMode;
 	Bool reportGroupMessages;
+
 	
 	String serviceVendor; 
 	String serviceDeviceID;
@@ -179,7 +181,7 @@ typedef enum { HBEAT_NORMAL, HBEAT_CONFIG, HBEAT_NORMAL_END, HBEAT_CONFIG_END } 
 static Bool sendHeartbeat(xplServicePtr_t theService);
 static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText);
 static void releaseMessage(xplMessagePtr_t xm);
-static Bool isHeartbeatMessage(xplMessagePtr_t xm);
+
 
 
 /*
@@ -318,10 +320,10 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
 	xplServicePtr_t cse = NULL;
-	Bool isUs;
+	Bool isApp;
 	Bool reportIt;
 	int matchCount;
-	XPLMessageID_t msgID;
+
 	char buf[8];
 	String theString;
 	xplMessagePtr_t xm = NULL;
@@ -334,139 +336,148 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 		debug(DEBUG_UNEXPECTED,"%s: read error", __func__);
 	}
 	else{	
-
 		debug(DEBUG_ACTION, "%s: Ding! RX ready", __func__);
 		/* Fetch any strings from the queue */
 		while((theString = XplrxDQRawString(xp, xp->rcvr))){
-			if(theString){
-				if(notify_get_debug_level() >= 5){
-					debug(DEBUG_EXPECTED, "Processing received message: length = %d", strlen(theString));
-					debug(DEBUG_INCOMPLETE,"***Packet received:\n%s\n", theString);
-				}
-				/* Process the string contents */
-				xm = parseMessage(xp, theString);
-				if(xm){
-					debug(DEBUG_ACTION, "Message parsed OK");
+			/* Log or print the message contents if at max debug */
+			if(notify_get_debug_level() >= 5){
+				debug(DEBUG_EXPECTED, "Processing received message: length = %d", strlen(theString));
+				debug(DEBUG_INCOMPLETE,"***Packet received:\n%s\n", theString);
+			}
+			/* Process the string contents */
+			xm = parseMessage(xp, theString);
+			if(xm){
+				debug(DEBUG_ACTION, "Message parsed OK");
 
+				
+				/* Dispatch message to appropriate handler */
+				
+				/* Traverse the service list */
+				for(cse = xp->servHead; cse; cse = cse->next){
+					reportIt = FALSE;
+					matchCount = 0;
+					xm->isUs = FALSE;
 					
-					/* Dispatch message to appropriate handler */
 					
-					/* Traverse the service list */
-					for(cse = xp->servHead; cse; cse = cse->next){
-						reportIt = FALSE;
-						matchCount = 0;
-						isUs = FALSE;
-						
-						/* See if it is us who sent the message */
-						ASSERT_FAIL(xm->sourceVendor)
-						ASSERT_FAIL(xm->sourceDeviceID)
-						ASSERT_FAIL(xm->sourceInstanceID)
-						
-						/* Test for heartbeat message */
-						xm->isHeartbeatMessage = isHeartbeatMessage(xm);
-						
-						/* Test for is us */
-						
-						if((!strcmp(xm->sourceDeviceID, cse->serviceDeviceID))){
-							matchCount++;
-						}
-						if((!strcmp(xm->sourceVendor, cse->serviceVendor))){
-							matchCount++;
-						}
-						if((!strcmp(xm->sourceInstanceID, cse->serviceInstanceID))){
-							matchCount++;
-						}
-						if(matchCount >= 3){
-							isUs = TRUE;
-							/* If no hub confirmed, see if we have heard a heartbeat echo */
-							if(cse->discoveryState != XPL_HUB_CONFIRMED){
-								if(xm->isHeartbeatMessage){
-									debug(DEBUG_EXPECTED, "******* Hub confirmed! *******");
-									cse->discoveryState = XPL_HUB_CONFIRMED;
-									cse->heartbeatTimer = cse->heartbeatInterval;
-								}
-								
-								
+			
+					/* All necessary fields must be present */
+					ASSERT_FAIL(xm->sourceVendor)
+					ASSERT_FAIL(xm->sourceDeviceID)
+					ASSERT_FAIL(xm->sourceInstanceID)
+					ASSERT_FAIL(xm->schemaType)
+					ASSERT_FAIL(xm->schemaClass)
+					
+					/* Classify the message */
+					isApp = (0 == strcmp(xm->schemaType, "app"));
+				
+					if( isApp && (!strcmp(xm->schemaClass, "hbeat"))){
+						xm->messageClass = XPL_MSG_CLASS_HEARTBEAT;
+					}
+					else if((!strcmp(xm->schemaType, "xpl")) && (!strcmp(xm->schemaClass, "group"))){
+						xm->messageClass = XPL_MSG_CLASS_GROUP;
+					}
+					else if(isApp && (!strcmp(xm->sourceDeviceID, "config"))){
+						xm->messageClass = XPL_MSG_CLASS_CONFIG;
+					}
+					else{
+						xm->messageClass = XPL_MSG_CLASS_NORMAL;
+					}
+	
+					
+					
+					/* Test for is us */
+					
+					if((!strcmp(xm->sourceDeviceID, cse->serviceDeviceID))){
+						matchCount++;
+					}
+					if((!strcmp(xm->sourceVendor, cse->serviceVendor))){
+						matchCount++;
+					}
+					if((!strcmp(xm->sourceInstanceID, cse->serviceInstanceID))){
+						matchCount++;
+					}
+					if(matchCount >= 3){
+						xm->isUs = TRUE;
+						/* If no hub confirmed, see if we have heard a heartbeat echo */
+						if(cse->discoveryState != XPL_HUB_CONFIRMED){
+							if(XPL_MSG_CLASS_HEARTBEAT == xm->messageClass){
+								debug(DEBUG_EXPECTED, "******* Hub confirmed! *******");
+								cse->discoveryState = XPL_HUB_CONFIRMED;
+								cse->heartbeatTimer = cse->heartbeatInterval;
 							}
 							
-						}
-						/* Test for xpl-group */
-						if((!strcmp(xm->sourceVendor, "xpl")) && (!strcmp(xm->sourceDeviceID, "group"))){
-							xm->isGroupMessage = TRUE;
-						}
-						else{
-							xm->isGroupMessage = FALSE;
+							
 						}
 						
-						/* Decide what to report */
-						if(XPL_REPORT_EVERYTHING == cse->reportMode){
-							/* Report it all */
-							reportIt = TRUE;
+					}
+					/* Decide what to report */
+					if(XPL_REPORT_EVERYTHING == cse->reportMode){
+						/* Report it all */
+						reportIt = TRUE;
+					}
+					else if (XPL_REPORT_OWN_MESSAGES == cse->reportMode){
+						/* Report it if it was us who sent it */
+						reportIt = xm->isUs;
+					}
+					else if (XPL_REPORT_CONFIG_MESSAGES_ONLY == cse->reportMode){
+						if(XPL_MSG_CLASS_CONFIG == xm->messageClass){
+							goto callit; /* Call user handler */
 						}
-						else if (XPL_REPORT_OWN_MESSAGES == cse->reportMode){
-							/* Report it if it was us who sent it */
-							reportIt = isUs;
+						goto cleanup; /* Ignore everything else */
+					}
+					
+					if(!reportIt){ /* If nothing is reportable so far */
+						/* Try to match a broadcast, group, or targetted message */
+						if(xm->isBroadcastMessage){
+							if(!xm->isUs){
+								reportIt = TRUE;
+							}
 						}
-						if(!reportIt){ /* If nothing is reportable so far */
-							/* Try to match a broadcast, group, or targetted message */
-							if(xm->isBroadcastMessage){
-								if(!isUs){
-									reportIt = TRUE;
-								}
+						else{
+							if(XPL_MSG_CLASS_GROUP == xm->messageClass){
+								/* Is group message. Report it if enabled */
+								reportIt = cse->reportGroupMessages;
 							}
 							else{
-								if(xm->isGroupMessage){
-									/* Is group message. Report it if enabled */
-									reportIt = cse->reportGroupMessages;
-								}
-								else{
-									/* Test to see if it was targetted at this service */
-									if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
-										matchCount = 0;
-										if((!strcmp(xm->targetDeviceID, cse->serviceDeviceID))){
-											matchCount++;
-										}
-										if((!strcmp(xm->targetVendor, cse->serviceVendor))){
-											matchCount++;
-										}
-										if((!strcmp(xm->targetInstanceID, cse->serviceInstanceID))){
-											matchCount++;
-										}
-										if(matchCount >= 3){
-											reportIt = TRUE;
-										}
+								/* Test to see if it was targetted at this service */
+								if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
+									matchCount = 0;
+									if((!strcmp(xm->targetDeviceID, cse->serviceDeviceID))){
+										matchCount++;
+									}
+									if((!strcmp(xm->targetVendor, cse->serviceVendor))){
+										matchCount++;
+									}
+									if((!strcmp(xm->targetInstanceID, cse->serviceInstanceID))){
+										matchCount++;
+									}
+									if(matchCount >= 3){
+										reportIt = TRUE;
 									}
 								}
 							}
-							if(reportIt && cse->listener){
-								/* Generate the message ID */
-								if(xm->isHeartbeatMessage){
-									msgID = XPL_MSG_ID_HEARTBEAT;
-								}
-								else if(xm->isGroupMessage){
-									msgID = XPL_MSG_ID_GROUP;
-								}
-								else{
-									msgID = XPL_MSG_ID_NORMAL;
-								}
-							
+						}
+						/* If it needs to be reported, do it here */
+						if(reportIt){
+callit: /* From config heartbeat test above */
+							if(cse->listener){
 								/* Call user listener function with the message and the user object */
-								(*cse->listener)( xm, cse, cse->userListenerObject, msgID, xm->isBroadcastMessage);
+								(*cse->listener)( xm, cse, cse->userListenerObject, xm->messageClass, 
+								xm->isUs, xm->isBroadcastMessage);
 							}
 						}
 					}
-					
-					/* Destroy the message */
-					releaseMessage(xm);
 				}
-				else{
-					debug(DEBUG_UNEXPECTED, "Message parse error");
-				}
-				talloc_free(theString);
+cleanup: /* From config heartbeat test above */					
+				/* Release the message */
+				releaseMessage(xm);
 			}
 			else{
-				break;
+				debug(DEBUG_UNEXPECTED, "Message parse error");
 			}
+			/* Release the message string */
+			talloc_free(theString);
+
 		}
 	}
 }
@@ -565,22 +576,25 @@ static void xplTick(int id, void *objPtr)
 	debug(DEBUG_INCOMPLETE, "XPL tick");
 	/* Traverse the service list */
 	for(xs = xp->servHead; xs; xs = xs->next){
-		/* Is the heartbeat timer expired ? */
-		if(!xs->heartbeatTimer){
-			debug(DEBUG_ACTION, "Sending refresh heartbeat");
-			if(FALSE == sendHeartbeat(xs)){
-				debug(DEBUG_UNEXPECTED, "Refresh heartbeat send failed");
-			}		
+		if(FALSE == xs->configurableService){
+			/* Is normal service */
+			/* Is the heartbeat timer expired ? */
+			if(!xs->heartbeatTimer){
+				debug(DEBUG_ACTION, "Sending refresh heartbeat");
+				if(FALSE == sendHeartbeat(xs)){
+					debug(DEBUG_UNEXPECTED, "Refresh heartbeat send failed");
+				}		
+			}
+			else{
+				/* Decrement timer and continue */
+				xs->heartbeatTimer--;
+			}
 		}
 		else{
-			/* Decrement timer and continue */
-			xs->heartbeatTimer--;
-		}	
+			/* is Config Service */
+			/* TODO Add config service support */
+		}
 	}
-	
-	
-
-
 }
 
 /*
@@ -1022,19 +1036,6 @@ static Bool sendGoodbyeHeartbeat(xplServicePtr_t xs)
 	return TRUE;
 }
 
-/*
- * Test message to see if it is a heartbeat message
- */
- 
-static Bool isHeartbeatMessage(xplMessagePtr_t xm)
-{
-	if((!strcmp(xm->schemaType, "app")) && (!strcmp(xm->schemaClass, "hbeat"))){
-		return TRUE;
-	}
-	return FALSE;
-	
-}
-
 /* 
  * Parse data until end of block as a block.  If the block is valid, then the number of bytes 
  * parsed is returned.  If there is an error, a negated number of bytes read thus far is      
@@ -1465,7 +1466,7 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
 	if(theVersion){
 		MALLOC_FAIL(xs->serviceVersion = talloc_strdup(xs, theVersion))
 	}
-	
+	xs->configurableService = FALSE; /* Not a config service */
 	setHeartbeatInterval(xs, DEFAULT_HEARTBEAT_INTERVAL);
 	
 	/* Validate the object */

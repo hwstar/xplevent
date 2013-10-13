@@ -3,12 +3,17 @@
 
 /* Possible XPL message types */
 typedef enum { XPL_MESSAGE_ANY = 0, XPL_MESSAGE_COMMAND, XPL_MESSAGE_STATUS, XPL_MESSAGE_TRIGGER } XPLMessageType_t;
-typedef enum { XPL_REPORT_MODE_NORMAL = 0, XPL_REPORT_OWN_MESSAGES, XPL_REPORT_EVERYTHING } XPLListenerReportMode_t;
+/* Message reporting mode */
+typedef enum { XPL_REPORT_MODE_NORMAL = 0, XPL_REPORT_OWN_MESSAGES, XPL_REPORT_EVERYTHING,
+XPL_REPORT_CONFIG_MESSAGES_ONLY } XPLListenerReportMode_t;
+/* Hub confirmation states */
 typedef enum { XPL_HUB_UNCONFIRMED = 0, XPL_HUB_NO_ECHO, XPL_HUB_CONFIRMED } XPLDiscoveryState_t;
-typedef enum { XPL_MSG_ID_NORMAL = 0, XPL_MSG_ID_GROUP, XPL_MSG_ID_HEARTBEAT } XPLMessageID_t;
+/* Message classification */
+typedef enum { XPL_MSG_CLASS_NORMAL = 0, XPL_MSG_CLASS_GROUP, XPL_MSG_CLASS_HEARTBEAT, XPL_MSG_CLASS_CONFIG } XPLMessageClass_t;
 
 /* Signature of a service message listener function */
-typedef void (* XPLListenerFunc_t )(void *XPLMessage, void *XPLService, void *userObj, XPLMessageID_t msgID, Bool broadcast);
+typedef void (* XPLListenerFunc_t )(void *XPLMessage, void *XPLService, void *userObj, XPLMessageClass_t messageClass,
+Bool isUs, Bool broadcast);
 /* Signature of a name-value callback function */
 typedef void (* XPLIterateNVCallback_t)(void *userObj, const String name, const String value);
 

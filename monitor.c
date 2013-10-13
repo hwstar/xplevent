@@ -642,7 +642,7 @@ static void logTriggerMessage(void *theMessage, String sourceDevice)
 
 
 
-static void xPLListener(void *theMessage, void *theService, void *userValue, XPLMessageID_t msgID, Bool broadcast)
+static void xPLListener(void *theMessage, void *theService, void *userValue, XPLMessageClass_t msgClass, Bool isUs, Bool broadcast)
 {
 	String class, type;
 	void *tempCTX;
@@ -658,7 +658,7 @@ static void xPLListener(void *theMessage, void *theService, void *userValue, XPL
 		XPLMessageType_t mtype = XplGetMessageType(theMessage);
 		XplGetMessageSchema(theMessage, tempCTX, &class,  &type);
 	
-		if((mtype == XPL_MESSAGE_STATUS) && (msgID == XPL_MSG_ID_HEARTBEAT)){
+		if((mtype == XPL_MESSAGE_STATUS) && (msgClass == XPL_MSG_CLASS_HEARTBEAT)){
 			/* Log heartbeat messages */
 			logHeartBeatMessage(theMessage);
 		}
