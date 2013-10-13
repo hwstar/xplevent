@@ -167,6 +167,7 @@ typedef struct xplObj_s {
 	String remoteIP; /* IP of ethernet interface to use */
 	String broadcastIP; /* Broadcast address on the interface */
 	String internalIP; /* Listen address for hub transmissions */
+	String uniqPrefix; /* Unique 4 digit prefix based on IP address passed in */
 	xplServicePtr_t servHead; /* Head for linked list of services */
 	xplServicePtr_t servTail; /* Tail for linked list of services */
 	struct sockaddr_storage broadcastAddr; /* Holds the broadcast address data for sending XPL packets */
@@ -182,6 +183,13 @@ static Bool sendHeartbeat(xplServicePtr_t theService);
 static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText);
 static void releaseMessage(xplMessagePtr_t xm);
 
+/*
+ * In memory constants
+ */
+ static const char base36Table[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
+	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+	'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+	'u', 'v', 'w', 'x', 'y', 'z' };
 
 
 /*
@@ -190,18 +198,42 @@ static void releaseMessage(xplMessagePtr_t xm);
  **************************************************************************
  */
 
+/*
+ * Generate a unique 4 digit prefix based on the buffer passed in
+ */
+
+static void genUniquePrefix(String prefStr, void *buffer, unsigned buflen)
+{
+	unsigned char *p = buffer;
+	uint32_t i, hash;
+	for(hash = i = 0; i < buflen; ++i){
+		hash += p[i];
+		hash += (hash << 10);
+		hash ^= (hash >> 6);
+	}
+	hash += (hash << 3);
+	hash ^= (hash >> 11);
+	hash += (hash << 15);
+	debug(DEBUG_INCOMPLETE,"%s: 32 bit hash of buffer: %08X", __func__, hash);
+	for(i = 0; i < 4; i++){
+		prefStr[i] = base36Table[hash % 36];
+		hash /= 36;
+	}
+	prefStr[i] = 0;
+	debug(DEBUG_INCOMPLETE, "%s: Unique Prefix based on base36 encoding of hash: %s",__func__, prefStr);
+}
+
+
+
 /* 
  * Convert a long value into an 8 digit base36 number 
  * and concatenate it onto the passed string   
  *        
  */
  
-static void longToBase32(unsigned long theValue, String theBuffer) {
+static void longToBase36(unsigned long theValue, String theBuffer) {
 	int charPtr, buffLen;
-	static char base36Table[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
-			      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-			      'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
-			      'u', 'v', 'w', 'x', 'y', 'z' };
+
 
 	/* Fill with zeros */
 	strcat(theBuffer, "00000000");
@@ -221,28 +253,6 @@ static void longToBase32(unsigned long theValue, String theBuffer) {
   }
 }
 
-/* Calculate CRC over buffer using polynomial: X^16 + X^12 + X^5 + 1 */
-
-static uint16_t crc16(void *buf, int len)
-{
-	uint8_t i;
-	uint16_t crc = 0;
-	uint8_t *b = (uint8_t *) buf;
-	
-	if(!len)
-		return 0;
-
-	while(len--){
-		crc ^= (((uint16_t) *b++) << 8);
-		for ( i = 0 ; i < 8 ; ++i ){
-			if (crc & 0x8000)
-				crc = (crc << 1) ^ 0x1021;
-			else
-				crc <<= 1;
-          	}
-	}
-	return crc;
-}
 
 /*
  * Create a fairly unique 16 character identifier string
@@ -260,14 +270,14 @@ const String generateFairlyUniqueID(xplObjPtr_t xp)
 	String res;
 	
 	
-	/* Generate a unique prefix from the stuff in sockaddr */
-	sprintf(newIdent, "%04X", (uint32_t) crc16(&xp->broadcastAddr, xp->broadcastAddrLen));
+	/* Start with the unique prefix generated at initialization */
+	strcpy(newIdent, xp->uniqPrefix);
 	
-	/* Now tack on the time of day, radix-32 encoded (which allows   */
+	/* Now tack on the time of day, radix-36 encoded (which allows   */
 	/* packing in a lot more uniqueness for the 8 characters we have */
 	gettimeofday(&rightNow, NULL);
 	timeInMillis = (rightNow.tv_sec * 1000) + (rightNow.tv_usec / 1000);
-	longToBase32(timeInMillis, newIdent);
+	longToBase36(timeInMillis, newIdent);
 	if (strlen(newIdent) > 16){
 		newIdent[16] = '\0';
 	}
@@ -1576,7 +1586,7 @@ void XplDestroy(void *xplObj)
 
 void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 {
-	xplObjPtr_t xp;
+	xplObjPtr_t xp = NULL;
 	char interfaceAddr[INET6_ADDRSTRLEN];
 	char broadcastAddr[INET6_ADDRSTRLEN];
 	struct ifaddrs *interfaceList = NULL, *curIFEntry = NULL;
@@ -1584,6 +1594,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 	int res;
 	int addrFamily;
 	Bool found = FALSE;
+	char uniqPrefix[5];
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(Poller)
@@ -1600,7 +1611,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 			}
 			/* Convert address to presentation */
 			addrPtr = SocketFixAddrPointer(curIFEntry->ifa_addr);
-			inet_ntop(curIFEntry->ifa_addr->sa_family, addrPtr, interfaceAddr, sizeof(interfaceAddr));
+			inet_ntop(addrFamily, addrPtr, interfaceAddr, sizeof(interfaceAddr));
 		
 			if(AF_INET == addrFamily){
 				if(!curIFEntry->ifa_ifu.ifu_broadaddr){
@@ -1614,7 +1625,9 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 				continue;
 			}	
 			/* We have a useable address */
-			found = TRUE;	
+			found = TRUE;
+			/* Generate 4 digit prefix for unique instance ID's */
+			genUniquePrefix(uniqPrefix, addrPtr, (addrFamily == AF_INET6) ? 16 : 4);
 			debug(DEBUG_ACTION, "Interface Name: %s", curIFEntry->ifa_name);
 			debug(DEBUG_ACTION, "Interface Address: %s", interfaceAddr);
 			addrPtr = SocketFixAddrPointer(curIFEntry->ifa_ifu.ifu_broadaddr);
@@ -1645,6 +1658,8 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 	MALLOC_FAIL(xp->broadcastIP = talloc_strdup(xp, broadcastAddr )) 
 	/* Save the remote IP address */
 	MALLOC_FAIL(xp->remoteIP = talloc_strdup(xp, interfaceAddr ))
+	/* Save the unique prefix */
+	MALLOC_FAIL(xp->uniqPrefix = talloc_strdup(xp, uniqPrefix))
 	
 	/* Release the getifaddrs info */
 	freeifaddrs(interfaceList);   
