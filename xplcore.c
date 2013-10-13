@@ -97,14 +97,16 @@ typedef struct {
 	String sourceVendor;
 	String sourceDeviceID;
 	String sourceInstanceID;
-
-	Bool isBroadcastMessage;
 	String targetVendor;
 	String targetDeviceID;
 	String targetInstanceID;
-
 	String schemaClass;
 	String schemaType;
+	
+	Bool isBroadcastMessage;
+	Bool isGroupMessage;
+	Bool isHeartbeatMessage;
+
 	
 	void *xplObj; /* Pointer back to master object */
 	void *serviceObj; /* Set to point to service object on TX messages, is set to NULL on receive messages */
@@ -130,6 +132,7 @@ typedef struct xplService_s {
 	XPLDiscoveryState_t discoveryState;
 	time_t lastHeartbeatAt;
 	XPLListenerReportMode_t reportMode;
+	Bool reportGroupMessages;
 	
 	String serviceVendor; 
 	String serviceDeviceID;
@@ -318,6 +321,7 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 	Bool isUs;
 	Bool reportIt;
 	int matchCount;
+	XPLMessageID_t msgID;
 	char buf[8];
 	String theString;
 	xplMessagePtr_t xm = NULL;
@@ -354,9 +358,15 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 						isUs = FALSE;
 						
 						/* See if it is us who sent the message */
-						ASSERT_FAIL(xm->sourceDeviceID)
+						ASSERT_FAIL(xm->sourceVendor)
 						ASSERT_FAIL(xm->sourceDeviceID)
 						ASSERT_FAIL(xm->sourceInstanceID)
+						
+						/* Test for heartbeat message */
+						xm->isHeartbeatMessage = isHeartbeatMessage(xm);
+						
+						/* Test for is us */
+						
 						if((!strcmp(xm->sourceDeviceID, cse->serviceDeviceID))){
 							matchCount++;
 						}
@@ -370,7 +380,7 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 							isUs = TRUE;
 							/* If no hub confirmed, see if we have heard a heartbeat echo */
 							if(cse->discoveryState != XPL_HUB_CONFIRMED){
-								if(isHeartbeatMessage(xm)){
+								if(xm->isHeartbeatMessage){
 									debug(DEBUG_EXPECTED, "******* Hub confirmed! *******");
 									cse->discoveryState = XPL_HUB_CONFIRMED;
 									cse->heartbeatTimer = cse->heartbeatInterval;
@@ -380,7 +390,15 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 							}
 							
 						}
-
+						/* Test for xpl-group */
+						if((!strcmp(xm->sourceVendor, "xpl")) && (!strcmp(xm->sourceDeviceID, "group"))){
+							xm->isGroupMessage = TRUE;
+						}
+						else{
+							xm->isGroupMessage = FALSE;
+						}
+						
+						/* Decide what to report */
 						if(XPL_REPORT_EVERYTHING == cse->reportMode){
 							/* Report it all */
 							reportIt = TRUE;
@@ -389,35 +407,50 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 							/* Report it if it was us who sent it */
 							reportIt = isUs;
 						}
-						if(!reportIt){ /* If nothing is reportable, then try to match a broadcast or targetted message */
+						if(!reportIt){ /* If nothing is reportable, then try to match a broadcast, group, or targetted message */
 							if(xm->isBroadcastMessage){
 								if(!isUs){
 									reportIt = TRUE;
 								}
 							}
 							else{
-								if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
-									matchCount = 0;
-									if((!strcmp(xm->targetDeviceID, cse->serviceDeviceID))){
-										matchCount++;
-									}
-									if((!strcmp(xm->targetVendor, cse->serviceVendor))){
-										matchCount++;
-									}
-									if((!strcmp(xm->targetInstanceID, cse->serviceInstanceID))){
-										matchCount++;
-									}
-									if(matchCount >= 3){
-										reportIt = TRUE;
+								if(xm->isGroupMessage){
+									/* Is group message. Report it if enabled*/
+									reportIt = cse->reportGroupMessages;
+								}
+								else{
+									if(xm->targetDeviceID && xm->targetVendor && xm->targetInstanceID){
+										matchCount = 0;
+										if((!strcmp(xm->targetDeviceID, cse->serviceDeviceID))){
+											matchCount++;
+										}
+										if((!strcmp(xm->targetVendor, cse->serviceVendor))){
+											matchCount++;
+										}
+										if((!strcmp(xm->targetInstanceID, cse->serviceInstanceID))){
+											matchCount++;
+										}
+										if(matchCount >= 3){
+											reportIt = TRUE;
+										}
 									}
 								}
 							}
-						if(reportIt && cse->listener){
-							/* Call user listener function with the message and the user object */
-							(*cse->listener)( xm, cse, cse->userListenerObject);
-						}
+							if(reportIt && cse->listener){
+								/* Generate the message ID */
+								if(xm->isHeartbeatMessage){
+									msgID = XPL_MSG_ID_HEARTBEAT;
+								}
+								else if(xm->isGroupMessage){
+									msgID = XPL_MSG_ID_GROUP;
+								}
+								else{
+									msgID = XPL_MSG_ID_NORMAL;
+								}
 							
-							
+								/* Call user listener function with the message and the user object */
+								(*cse->listener)( xm, cse, cse->userListenerObject, msgID, xm->isBroadcastMessage);
+							}
 						}
 					}
 					
@@ -1832,27 +1865,49 @@ XPLDiscoveryState_t XplGetHubDiscoveryState(void  *servToCheck)
  * Create a new message block
  */
  
-void *XplInitMessage(void *XPLServ, XPLMessageType_t messageType, 
+void *XplInitTargettedMessage(void *XPLServ, XPLMessageType_t messageType, 
 String theVendor, String theDeviceID, String theInstanceID)
 {
 	xplServicePtr_t xs = XPLServ;
 	ASSERT_FAIL(xs)
 	ASSERT_FAIL(XS_MAGIC == xs->magic)
-	if(!theVendor){
-		/* Is to be a broadcast message */
-		return createBroadcastMessage(xs, messageType); 
-	}
-	else{
-		/* Is to be a targetted message */
-		ASSERT_FAIL(theDeviceID)
-		ASSERT_FAIL(theInstanceID)
-		return createTargetedMessage(xs, messageType, theVendor, theDeviceID, theInstanceID);
-	}
+	ASSERT_FAIL(theVendor)
+	ASSERT_FAIL(theDeviceID)
+	ASSERT_FAIL(theInstanceID)
+	return createTargetedMessage(xs, messageType, theVendor, theDeviceID, theInstanceID);
 	 
 		
 	
 	
 }
+
+/*
+ * Send a broadcast message
+ */
+void *XplInitBroadcastMessage(void *XPLServ, XPLMessageType_t messageType)
+{
+	xplServicePtr_t xs = XPLServ;
+	ASSERT_FAIL(xs)
+	ASSERT_FAIL(XS_MAGIC == xs->magic)
+	return createBroadcastMessage(xs, messageType); 
+}
+
+
+/*
+ * Send a group message
+ */
+
+void *XplInitGroupMessage(void *XPLServ, XPLMessageType_t messageType, String controlGroup)
+{
+	xplServicePtr_t xs = XPLServ;
+	ASSERT_FAIL(xs)
+	ASSERT_FAIL(XS_MAGIC == xs->magic);
+	ASSERT_FAIL(controlGroup);
+	
+	return XplInitTargettedMessage(xs, messageType, "xpl", "group", controlGroup);
+}
+
+
 
 /*
  * Destroy an existing message block
@@ -1897,12 +1952,10 @@ void XplSetMessageClassType(void *xplMessage, const String theClass, const Strin
 	ASSERT_FAIL(xm->serviceObj)
 
 	if(theClass){
-		STR_FREE(xm->schemaClass);
-		MALLOC_FAIL(xm->schemaClass = talloc_strdup(xplMessage, theClass))
+		UtilReplaceString(&xm->schemaClass, xm, theClass);
 	}	
 	if(theType){
-		STR_FREE(xm->schemaType);
-		MALLOC_FAIL(xm->schemaType = talloc_strdup(xplMessage, theType))
+		UtilReplaceString(&xm->schemaType, xm, theType);
 	}
 }
 
@@ -1946,17 +1999,20 @@ Bool XplSendMessage(void *XPLMessage)
 	return sendMessage(xs, xm);	
 }
 
+
 /*
  * Add a message listener function to the service
  */
  
-void XplAddMessageListener(void *XPLService, XPLListenerReportMode_t reportMode, void *userObj, XPLListenerFunc_t listener)
+void XplAddMessageListener(void *XPLService, XPLListenerReportMode_t reportMode, Bool reportGroupMessages,
+	void *userObj, XPLListenerFunc_t listener)
 {
 	xplServicePtr_t xs = XPLService;
 	ASSERT_FAIL(xs); /* Object must exist */
 	ASSERT_FAIL(XS_MAGIC == xs->magic) /* Object must be valid */
 	ASSERT_FAIL(listener) /* Must have supplied a listening function */
 	xs->reportMode = reportMode;
+	xs->reportGroupMessages = reportGroupMessages;
 	xs->userListenerObject = userObj;
 	xs->listener = listener;
 }
@@ -2038,19 +2094,6 @@ void XplGetMessageSchema(void *XPLMessage, TALLOC_CTX *stringCTX, String *theCla
 		MALLOC_FAIL(*theType = talloc_strdup(stringCTX, xm->schemaType))
 	}
 	
-}
-
-/*
- * Return TRUE if the message is a broadcast message
- */
-
-Bool XplMessageIsBroadcast(void *XPLMessage)
-{
-	xplMessagePtr_t xm = XPLMessage;
-	ASSERT_FAIL(xm) /* Object must exist */
-	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
-	
-	return xm->isBroadcastMessage; /* Return the flag */
 }
 
 /*

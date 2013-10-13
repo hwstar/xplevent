@@ -642,7 +642,7 @@ static void logTriggerMessage(void *theMessage, String sourceDevice)
 
 
 
-static void xPLListener(void *theMessage, void *theService, void *userValue)
+static void xPLListener(void *theMessage, void *theService, void *userValue, XPLMessageID_t msgID, Bool broadcast)
 {
 	String class, type;
 	void *tempCTX;
@@ -654,11 +654,11 @@ static void xPLListener(void *theMessage, void *theService, void *userValue)
 	}
 		
 	
-	if(XplMessageIsBroadcast(theMessage)){ /* If broadcast message */
+	if(broadcast){ /* If broadcast message */
 		XPLMessageType_t mtype = XplGetMessageType(theMessage);
 		XplGetMessageSchema(theMessage, tempCTX, &class,  &type);
 	
-		if((mtype == XPL_MESSAGE_STATUS) && !strcmp(class, "hbeat") && !strcmp(type, "app")){
+		if((mtype == XPL_MESSAGE_STATUS) && (msgID == XPL_MSG_ID_HEARTBEAT)){
 			/* Log heartbeat messages */
 			logHeartBeatMessage(theMessage);
 		}
@@ -1253,7 +1253,7 @@ void MonitorRun(void)
 	PollRegTimeout(Globals->poller, tickHandler, NULL);
 
   	/* And a listener for all xPL messages */
-  	XplAddMessageListener(Globals->xplEventService, XPL_REPORT_MODE_NORMAL, NULL, xPLListener);
+  	XplAddMessageListener(Globals->xplEventService, XPL_REPORT_MODE_NORMAL, FALSE, NULL, xPLListener);
   	
 
 	/* Add a listener for the command socket */

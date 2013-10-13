@@ -38,7 +38,28 @@
 #include "notify.h"
 #include "util.h"
 
-                                                          
+/*
+ * Replace a string with a new one freeing the existing string if the pointer is non-null, or
+ * initializing the pointer with a copy of the new string if it is null. This is useful for
+ * replacing old strings in a data structure with a new version of the string.
+ */
+ 
+String UtilReplaceString(String *ptrToStringPtr, TALLOC_CTX *newCTX, String newStringToCopy)
+{
+	ASSERT_FAIL(ptrToStringPtr)
+	ASSERT_FAIL(newCTX)
+	ASSERT_FAIL(newStringToCopy)
+	if(*ptrToStringPtr){
+		/* Free existing string */
+		talloc_free(*ptrToStringPtr);
+	}
+	/* Allocate a new string and store it in the pointer provided */
+	MALLOC_FAIL(*ptrToStringPtr = talloc_strdup(newCTX, newStringToCopy))
+	return *ptrToStringPtr;
+	
+}
+
+                                                       
 
 /*
  * Duplicate a string stripping out all of the white space

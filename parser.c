@@ -413,7 +413,7 @@ static void sendXPLCommand(PcodeHeaderPtr_t ph, PcodePtr_t pi)
 	if(ph->xplServicePtr){ /* if this is NULL, it is to be a dry run */
 			
 		/* Create xpl command message */
-		msg = XplInitMessage(ph->xplServicePtr, XPL_MESSAGE_COMMAND, vendor, device, instance);
+		msg = XplInitTargettedMessage(ph->xplServicePtr, XPL_MESSAGE_COMMAND, vendor, device, instance);
 		ASSERT_FAIL(msg)
 		
 		/* Set message schema */
