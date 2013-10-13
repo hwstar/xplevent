@@ -320,7 +320,8 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
 	xplServicePtr_t cse = NULL;
-	Bool isApp;
+	xplNameValueLEPtr_t xnv;
+	Bool isApp,isHbeat;
 	Bool reportIt;
 	int matchCount;
 
@@ -369,8 +370,9 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 					
 					/* Classify the message */
 					isApp = (0 == strcmp(xm->schemaType, "app"));
+					isHbeat = (0 == strcmp(xm->schemaClass, "hbeat"));
 				
-					if( isApp && (!strcmp(xm->schemaClass, "hbeat"))){
+					if( isApp && isHbeat){
 						xm->messageClass = XPL_MSG_CLASS_HEARTBEAT;
 					}
 					else if((!strcmp(xm->schemaType, "xpl")) && (!strcmp(xm->schemaClass, "group"))){
@@ -379,6 +381,16 @@ static void rxReadyAction(int fd, int event, void *objPtr)
 					else if(isApp && (!strcmp(xm->sourceDeviceID, "config"))){
 						xm->messageClass = XPL_MSG_CLASS_CONFIG;
 					}
+					else if(isHbeat && (!strcmp(xm->schemaType, "request"))){
+						/* It it is a command to send a heartbeat, do so */
+						xnv = getNamedValue(xm->nvHead, "command");
+						if(!strcmp(xnv->itemValue, "request")){
+							cse->heartbeatTimer %= 7;
+							if(cse->heartbeatTimer < 2){
+								cse->heartbeatTimer += 2;
+							}
+						}
+					}	
 					else{
 						xm->messageClass = XPL_MSG_CLASS_NORMAL;
 					}
