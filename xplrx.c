@@ -309,17 +309,7 @@ static void *rxThread(void *objPtr)
 	XH_LOCK
 	ASSERT_FAIL(XH_MAGIC == xh->magic)
 	
-		
-	/* Allocate the receive string pool */
-	MALLOC_FAIL(xh->rxStringPool = talloc_pool(xh, RXBUFFPOOLSIZE));
-	
-	/* Allocate the queue entry pool */
-	MALLOC_FAIL(xh->rxQEPool = talloc_pool(xh, RXQEPOOLSIZE));
 
-	/* Allocate the receive buffer */
-	xh->rxBuffSize = RXBUFFSIZE;
-	MALLOC_FAIL(xh->rxBuff = talloc_array(xh, char, xh->rxBuffSize))
-	
 	
 	/* Copy the polling resource pointer */
 	poller = xh->rxPoller;
@@ -423,18 +413,30 @@ void XplRXDestroy(void *objPtr)
  * Initialization function
  */
 
-void *XplRXInit(TALLOC_CTX *ctx, int localConnFD, int localConnPort, int rxReadyFD)
+void *XplRXInit(int localConnFD, int localConnPort, int rxReadyFD)
 {
 	pthread_attr_t attrs;
 	int res;
 	rxHeadPtr_t xh;
 	
 	/* Allocate a Header */
-	MALLOC_FAIL(xh = talloc_zero(ctx, rxHead_t))
+	MALLOC_FAIL(xh = talloc_zero(NULL, rxHead_t))
 	
 
 	/* Initialize the guarding mutex */
 	ASSERT_FAIL( 0 == pthread_mutex_init(&xh->lock, NULL))
+	
+			
+	/* Allocate the receive string pool */
+	MALLOC_FAIL(xh->rxStringPool = talloc_pool(xh, RXBUFFPOOLSIZE));
+	
+	/* Allocate the queue entry pool */
+	MALLOC_FAIL(xh->rxQEPool = talloc_pool(xh, RXQEPOOLSIZE));
+
+	/* Allocate the receive buffer */
+	xh->rxBuffSize = RXBUFFSIZE;
+	MALLOC_FAIL(xh->rxBuff = talloc_array(xh, char, xh->rxBuffSize))
+	
 	
 	/* Note the local connection FD and the port */
 	xh->localConnFD = localConnFD;

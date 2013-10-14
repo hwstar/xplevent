@@ -1706,7 +1706,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 	}
 	
 	/* Initialize receiver thread */
-	if(NULL == (xp->rcvr = XplRXInit(xp, xp->localConnFD, xp->localConnPort, xp->rxReadyFD))){
+	if(NULL == (xp->rcvr = XplRXInit(xp->localConnFD, xp->localConnPort, xp->rxReadyFD))){
 		debug(DEBUG_UNEXPECTED, "%s: Could not initialize xpl recever thread", __func__);
 		XplDestroy(xp);
 		return NULL;
