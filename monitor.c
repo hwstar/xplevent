@@ -1136,13 +1136,7 @@ void MonitorSendScript(TALLOC_CTX *ctx, int userSock, String theScript, String i
 
 void MonitorSetup(void)
 {
-	/* XPL Setup before forking into the background */
-	if(!(Globals->poller = PollInit(Globals, 4))){
-		fatal("Could not create poller object");
-	}
-	if(!Globals->ipAddr){
-		fatal("No IP address specified");
-	}
+
 	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, Globals->xplService))){
 		fatal("Could not create XPL  object, is the interface up?");
 	}
