@@ -709,7 +709,7 @@ int main(int argc, char *argv[])
 	Globals->cmdHostName = "::1";
 	Globals->pidFile = DEF_PID_FILE;
 	Globals->dbFile = DEF_DB_FILE;
-	Globals->logFile = DEF_LOG_FILE;
+	MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, DEF_LOG_FILE))
 	Globals->instanceID = DEF_INSTANCE_ID;
 	Globals->xplService = DEF_XPL_SERVICE_NAME;
 	Globals->lat = 33.0;
@@ -806,10 +806,8 @@ int main(int argc, char *argv[])
 			case 'L':
 				/* Override log path*/
 				clOverride.log_path = 1;
+				talloc_free(Globals->logFile);
 				MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, optarg));
-				debug(DEBUG_ACTION,"New log path is: %s",
-				Globals->logFile);
-
 				break;
 				
 
@@ -943,7 +941,9 @@ int main(int argc, char *argv[])
 						
 		/* log path */
 		if((!clOverride.log_path) && (p = ConfReadValueBySectKey(configInfo, "general", "log-path"))){
-			MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, p));
+			talloc_free(Globals->logFile);
+			MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, p))
+
 		}
 		
 		/* db-file */
@@ -994,6 +994,24 @@ int main(int argc, char *argv[])
 			}
  		}
 	}
+	
+
+	/*
+	* Convert path to lof file into an absolute path if it isn't already
+	*/
+	if(Globals->logFile[0]){
+		MALLOC_FAIL(maxPath = talloc_array(Globals, char, PATH_MAX))
+		if(!realpath(Globals->logFile, maxPath)){
+			fatal_with_reason(errno, "%s: Can't resolve log file path", __func__);
+		}
+		talloc_free(Globals->logFile); /* Free existing path */
+		MALLOC_FAIL(Globals->logFile = talloc_strdup(Globals, maxPath))
+		talloc_free(maxPath); /* Free max path holding string */
+		debug(DEBUG_ACTION, "Absolute path to log file: %s", Globals->logFile);
+	}	
+
+
+	
 	
 	/* Check for utility commands */
 	if(utilityCommand){
