@@ -1066,20 +1066,6 @@ int main(int argc, char *argv[])
 		fatal("%s is already running as pid: %d", Globals->progName, pid);
 	}
 	
-	
-
-	/* XPL Setup before forking into the background */
-	if(!(Globals->poller = PollInit(Globals, 4))){
-		fatal("Could not create poller object");
-	}
-	if(!Globals->ipAddr){
-		fatal("No IP address specified");
-	}
-	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, Globals->xplService))){ /* Fixme port number */ 
-		fatal("Could not create XPL  object, is the interface up?");
-	}
-	
-	
 	/* Fork into the background. */	
 	if(Globals->noBackground) {
 		if((UtilPIDWrite(Globals->pidFile, getpid()) != 0)) {
@@ -1112,11 +1098,16 @@ int main(int argc, char *argv[])
 				fatal_with_reason(errno, "parent fork");
     		}
     		
+    	/* We forked successfully */
+    	
+    	/* Write the pid file */	
 		if((UtilPIDWrite(Globals->pidFile, getpid()) != 0)) {
 			debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", Globals->pidFile);
 		}
+		/* Indicate we wrote the pid file */
 		Globals->weWroteThePIDFile = TRUE;
-
+		
+	
 		/*
 		* The child creates a new session leader
 		* This divorces us from the controlling TTY
@@ -1155,17 +1146,18 @@ int main(int argc, char *argv[])
 		close(0);
 		close(1);
 		close(2);
+		
+		/* Set up the monitor using the forked and detached process */
+
+
  
 	}
-	/* Create the pid file */
-	if(UtilPIDWrite(Globals->pidFile, getpid())){
-		fatal("pid file write error");
-	}
-	
-	
-	
 	
 	debug(DEBUG_STATUS,"Initializing Monitor");
+	
+	MonitorSetup();
+	
+	debug(DEBUG_STATUS,"Running Monitor");
 	
 	MonitorRun();
 
