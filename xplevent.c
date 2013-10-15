@@ -1137,6 +1137,24 @@ int main(int argc, char *argv[])
  
 	}
 	
+	/*
+	* Create poller object
+	*/
+	
+	if(!(Globals->poller = PollInit(Globals, 4))){
+		fatal("Could not create poller object");
+	}
+	
+	/*
+	* Must have IP address
+	*/
+	
+	if(!Globals->ipAddr){
+		fatal("No IP address specified");
+	}
+	
+	/* Initialize monitor */
+	
 	debug(DEBUG_STATUS,"Initializing Monitor");
 	
 	MonitorSetup();
@@ -1151,7 +1169,7 @@ int main(int argc, char *argv[])
 	
 	debug(DEBUG_STATUS,"Running Monitor");
 	
-	MonitorRun();
+	MonitorRun(); /* This does not return unless there was a poll error */
 
 	exit(1);
 }
