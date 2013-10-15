@@ -770,7 +770,7 @@ int main(int argc, char *argv[])
 
 			/* Was it a utility file switch? */
 			case 'f':
-				utilityFile = talloc_strndup(Globals, optarg, WS_SIZE);
+				utilityFile = talloc_strndup(Globals, optarg, PATH_MAX);
 				debug(DEBUG_ACTION,"New utility file path is: %s", utilityFile);
 				break;
 				
