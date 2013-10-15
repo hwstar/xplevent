@@ -33,8 +33,6 @@ typedef XPLEvGlobals_t * XPLEvGlobalsPtr_t;
 	
 extern XPLEvGlobalsPtr_t Globals;
 
-Bool XpleventCheckExit(void);
-
 #endif
 
 

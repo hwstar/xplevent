@@ -803,11 +803,6 @@ static void tickHandler(int userVal, void *obj)
 			SchedulerDo(Globals->sch);
 		}
 	}
-	
-	/* Terminate if requested to do so */
-	if(XpleventCheckExit()){
-		exit(0);
-	}
 }
 
 /*

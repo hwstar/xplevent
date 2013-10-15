@@ -46,6 +46,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/signalfd.h>
 #include <string.h>
 #include <talloc.h>
 #include  "defs.h"
@@ -101,7 +102,6 @@ typedef union cloverrides{
 
 
 XPLEvGlobalsPtr_t Globals = NULL;
-static volatile sig_atomic_t exitRequest, gotHup;
 static clOverride_t clOverride;
 static Bool forceFlag = FALSE;
 static Bool dbDirectFlag = FALSE;
@@ -144,49 +144,6 @@ static struct option longOptions[] = {
 };
 
 
-
-
-
-/*
-* When the user hits ^C, logically shutdown
-* (including telling the network the service is ending)
-*
-* Arguments:
-*
-* 1. Signal number
-* 2. Signal info (see sigaction documentation for details)
-* 3. Generic pointer (not used, see sigaction docunent for details)
-*
-* Return value:
-*
-* None
-*/
-
-static void shutdownHandler(int signal, siginfo_t *info, void *ucontext)
-{
-	exitRequest = TRUE;
-}
-
-/*
-* When a hangup signal is sent, make a note of it, so the log file
-* can be closed and re-opened.
-*
-* Arguments:
-*
-* 1. Signal number
-* 2. Signal info (see sigaction documentation for details)
-* 3. Generic pointer (not used, see sigaction docunent for details)
-*
-* Return value:
-*
-* None
-*/
-
-
-static void hupHandler(int signal, siginfo_t *info, void *ucontext)
-{
-	gotHup = TRUE;
-}
 
 
 /*
@@ -660,33 +617,52 @@ static void prepareUtilityCommand(int command, String optarg)
 }
 
 /*
-* Check to see if the user has requested that daemon be stopped. Close and re-open log file if
-* HUP was received.
-*
-* Arguments:
-*
-* None
-*
-* Return value
-*
-* Return TRUE, if user has requested that daemon be stopped, otherwise FALSE
-* 
-*/
-
-Bool XpleventCheckExit(void)
+ * Handle signals
+ */
+ 
+static void signalHandler(int fd, int event, void *userObject)
 {
-	if(gotHup){
-		gotHup = FALSE;
-		if(Globals->logFile[0]){
-			debug(DEBUG_EXPECTED, "Closing %s", Globals->logFile);
-			notify_logpath(Globals->logFile);
-			debug(DEBUG_EXPECTED, "Re-opening %s", Globals->logFile);
-		}
-	}
+	struct signalfd_siginfo fdsi;
+	ssize_t s;
 	
-	return (Bool) exitRequest;
+	debug(DEBUG_EXPECTED, "\nSignal handler called");
+	
+	for(;;){
+		if((s = read(fd, &fdsi, sizeof(fdsi))) < 0){
+			if(EAGAIN == errno){
+				break; /* Nothing left to process */
+			}
+			else{
+				fatal_with_reason(errno, "%s: error reading signal info", __func__);
+			}	
+		}
+		
+		switch(fdsi.ssi_signo){
+			case SIGINT:
+			case SIGTERM:
+			case SIGQUIT:
+				exit(0);
+				
+			case SIGHUP:
+				if(Globals->noBackground){
+					exit(0);
+				}
+				else{
+					if(Globals->logFile[0]){
+						debug(DEBUG_EXPECTED, "Closing %s", Globals->logFile);
+						notify_logpath(Globals->logFile);
+						debug(DEBUG_EXPECTED, "Re-opening %s", Globals->logFile);
+					}
+				}
+				break;
+		
+			default:
+				debug(DEBUG_UNEXPECTED,"Unhandled signal: %d", fdsi.ssi_signo);
+		}
+		
+	
+	}
 }
-
 
 
 /*
@@ -708,12 +684,14 @@ int main(int argc, char *argv[])
 	int longindex;
 	int optchar;
 	int i;
+	int sfd;
 	pid_t pid;
 	String p;
 	String maxPath = NULL, fullPath = NULL;
 	String configFiles;
 	String *configPaths;
-	static struct sigaction sa_int, sa_term, sa_hup, sa_chld;
+	struct sigaction sa_chld;
+	sigset_t mask;
 
 	notify_init(argv[0]);
 
@@ -723,9 +701,6 @@ int main(int argc, char *argv[])
 	if(!(Globals = talloc_zero(NULL, XPLEvGlobals_t))){
 		fatal("Memory allocation failed in file %s on line %d\n", __FILE__, __LINE__);
 	}
-	
-	
-
 	
 	/* Initialize defaults in Globals */
 	
@@ -740,7 +715,8 @@ int main(int argc, char *argv[])
 	Globals->lat = 33.0;
 	Globals->lon = -117.0;
 	
-
+	/* Add the shutdown hook */
+	
 	atexit(xpleventShutdown);
 
 	/* Parse the arguments. */
@@ -1003,34 +979,7 @@ int main(int argc, char *argv[])
 	ConfReadFree(configInfo);
 	configInfo = NULL;
 	
-	
-	/* Install signal traps for proper shutdown */
-	sigemptyset(&sa_term.sa_mask);
-	sigaddset(&sa_term.sa_mask, SIGINT);
-	sigaddset(&sa_term.sa_mask, SIGHUP);
-	sa_term.sa_sigaction = shutdownHandler;
-	sa_term.sa_flags = SA_SIGINFO;
-	sigaction(SIGTERM, &sa_term, NULL);
-
-	sigemptyset(&sa_int.sa_mask);
-	sigaddset(&sa_int.sa_mask, SIGTERM);
-	sigaddset(&sa_int.sa_mask, SIGHUP);
-	sa_int.sa_sigaction = shutdownHandler;
-	sa_int.sa_flags = SA_SIGINFO;
-	sigaction(SIGINT, &sa_int, NULL);
-	
-	if(!Globals->noBackground){
-		sigemptyset(&sa_hup.sa_mask);
-		sigaddset(&sa_hup.sa_mask, SIGTERM);
-		sigaddset(&sa_hup.sa_mask, SIGINT);
-		sa_hup.sa_sigaction = hupHandler;
-		sa_hup.sa_flags = SA_SIGINFO;
-		sigaction(SIGHUP, &sa_hup, NULL);
-	}
-	
-	sigemptyset(&sa_chld.sa_mask);
-	sa_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
-	sigaction(SIGCHLD, &sa_chld, NULL);
+	/* Set the debug level */
 
 	notify_set_debug_level(Globals->debugLvl);
 
@@ -1059,7 +1008,24 @@ int main(int argc, char *argv[])
 		doUtilityCommand(utilityCommand, utilityArg, utilityFile);
 	}
 	
+	/* Let kernel reap dead children */
 	
+	sigemptyset(&sa_chld.sa_mask);
+	sa_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
+	sigaction(SIGCHLD, &sa_chld, NULL);
+
+	
+	/* Mask off the signals we will handle with signalfd */
+
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGQUIT);
+    sigaddset(&mask, SIGTERM);
+    sigaddset(&mask, SIGHUP);
+ 
+    if(sigprocmask(SIG_BLOCK, &mask, NULL) < 0){
+		fatal_with_reason(errno, "%s: Error masking signals", __func__);
+	}
 
 	/* Make sure we are not already running (.pid file check). */
 	if((pid = UtilPIDRead(Globals->pidFile)) != -1){
@@ -1156,6 +1122,14 @@ int main(int argc, char *argv[])
 	debug(DEBUG_STATUS,"Initializing Monitor");
 	
 	MonitorSetup();
+	
+	/* Create the signalfd and add it to the poller object */
+	if(-1 == (sfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC))){
+		fatal_with_reason(errno, "%s: signalfd:", __func__);
+	}
+	if(FAIL == PollRegEvent(Globals->poller, sfd, POLL_WT_IN, signalHandler, NULL)){
+		fatal("Cannot register signal handler");
+	}
 	
 	debug(DEBUG_STATUS,"Running Monitor");
 	
