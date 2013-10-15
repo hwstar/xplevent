@@ -68,9 +68,6 @@ enum {UC_CHECK_SYNTAX = 1, UC_GET_SCRIPT, UC_PUT_SCRIPT, UC_SEND_CMD, UC_GENERAT
 
 #define SHORT_OPTIONS "b:C:cd:Def:Fg:GHh:i:L:nO:o:P:p:s:S:Vx:"
 
-#define WS_SIZE 256
-
-
 #define DEF_CONFIG_FILE		"./xplevent.conf,/etc/xplevent/xplevent.conf"
 #define DEF_PID_FILE		"/tmp/xplevent.pid"
 #define DEF_DB_FILE			"./xplevent.sqlite3"
