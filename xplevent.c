@@ -292,8 +292,10 @@ static void confDefErrorHandler( int etype, int linenum, const String info)
 static void xpleventShutdown(void)
 {
 	DBClose(Globals->db);
-	(void) unlink(Globals->pidFile);
 	
+	if(TRUE == Globals->weWroteThePIDFile){
+		(void) unlink(Globals->pidFile);
+	}
 	
 	/* If running in the foreground and the debug level is 4, print talloc report on exit */
 	if(Globals->noBackground && (Globals->debugLvl == 4)){
@@ -706,6 +708,7 @@ int main(int argc, char *argv[])
 	int longindex;
 	int optchar;
 	int i;
+	pid_t pid;
 	String p;
 	String maxPath = NULL, fullPath = NULL;
 	String configFiles;
@@ -737,6 +740,7 @@ int main(int argc, char *argv[])
 	Globals->lat = 33.0;
 	Globals->lon = -117.0;
 	
+
 	atexit(xpleventShutdown);
 
 	/* Parse the arguments. */
@@ -1058,9 +1062,10 @@ int main(int argc, char *argv[])
 	
 
 	/* Make sure we are not already running (.pid file check). */
-	if(UtilPIDRead(Globals->pidFile) != -1){
-		fatal("%s is already running", Globals->progName);
+	if((pid = UtilPIDRead(Globals->pidFile)) != -1){
+		fatal("%s is already running as pid: %d", Globals->progName, pid);
 	}
+	
 	
 
 	/* XPL Setup before forking into the background */
@@ -1074,10 +1079,18 @@ int main(int argc, char *argv[])
 		fatal("Could not create XPL  object, is the interface up?");
 	}
 	
+	
 	/* Fork into the background. */	
-	if(!Globals->noBackground) {
+	if(Globals->noBackground) {
+		if((UtilPIDWrite(Globals->pidFile, getpid()) != 0)) {
+			debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", Globals->pidFile);
+		}
+		Globals->weWroteThePIDFile = TRUE;
+	}
+	else{
 		int retval;
 		
+
 		debug(DEBUG_STATUS, "Forking into background");
 
     	/* 
@@ -1085,9 +1098,10 @@ int main(int argc, char *argv[])
     	* the path to the logfile is defined
 		*/
 
-		if((Globals->debugLvl) && (Globals->logFile[0]))                          
+		if((Globals->logFile[0])){
+			note("Logging to file: %s, debug level: %d", Globals->logFile, Globals->debugLvl);                          
 			notify_logpath(Globals->logFile);
-			
+		}	
 	
 		/* Fork and exit the parent */
 
@@ -1097,11 +1111,11 @@ int main(int argc, char *argv[])
 			else
 				fatal_with_reason(errno, "parent fork");
     		}
-	
-		if(!Globals->noBackground && (UtilPIDWrite(Globals->pidFile, getpid()) != 0)) {
+    		
+		if((UtilPIDWrite(Globals->pidFile, getpid()) != 0)) {
 			debug(DEBUG_UNEXPECTED, "Could not write pid file '%s'.", Globals->pidFile);
 		}
-
+		Globals->weWroteThePIDFile = TRUE;
 
 		/*
 		* The child creates a new session leader
