@@ -1138,14 +1138,6 @@ int main(int argc, char *argv[])
 	}
 	
 	/*
-	* Create poller object
-	*/
-	
-	if(!(Globals->poller = PollInit(Globals, 4))){
-		fatal("Could not create poller object");
-	}
-	
-	/*
 	* Must have IP address
 	*/
 	
@@ -1153,12 +1145,15 @@ int main(int argc, char *argv[])
 		fatal("No IP address specified");
 	}
 	
-	/* Initialize monitor */
+	/*
+	* Create poller object
+	*/
 	
-	debug(DEBUG_STATUS,"Initializing Monitor");
+	if(!(Globals->poller = PollInit(Globals, 4))){
+		fatal("Could not create poller object");
+	}
 	
-	MonitorSetup();
-	
+		
 	/* Create the signalfd and add it to the poller object */
 	if(-1 == (sfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC))){
 		fatal_with_reason(errno, "%s: signalfd:", __func__);
@@ -1166,6 +1161,13 @@ int main(int argc, char *argv[])
 	if(FAIL == PollRegEvent(Globals->poller, sfd, POLL_WT_IN, signalHandler, NULL)){
 		fatal("Cannot register signal handler");
 	}
+	
+	
+	/* Initialize monitor */
+	
+	debug(DEBUG_STATUS,"Initializing Monitor");
+	
+	MonitorSetup();
 	
 	debug(DEBUG_STATUS,"Running Monitor");
 	
