@@ -615,6 +615,18 @@ static void prepareUtilityCommand(int command, String optarg)
 
 /*
  * Handle signals
+ *
+ * This is called from the poller object whenever signalfd is ready to read
+ *
+ * Arguments:
+ *
+ * 1. File descriptor of signalfd
+ * 2. Event (not used)
+ * 3. User object (not used)
+ *
+ * Return value:
+ *
+ * None
  */
  
 static void signalHandler(int fd, int event, void *userObject)
