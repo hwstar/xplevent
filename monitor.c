@@ -270,6 +270,16 @@ static int parseAndExecScript(TALLOC_CTX *ctx, String hcl)
 /*
  * Callback function for getting all of the name value pairs for
  * parseAndExecTrig()
+ *
+ * Arguments:
+ *
+ * 1. Pointer to pcode header as (void *)
+ * 2. Name as a string
+ * 3. Value as a string
+ *
+ * Return value:
+ *
+ * None
  */
  
 
@@ -1132,6 +1142,17 @@ void MonitorSendScript(TALLOC_CTX *ctx, int userSock, String theScript, String i
 
 /*
  * Set up the poller and initialize the xpl object 
+ *
+ * Requires that a poller resource be set up, an IP address for the interface be defined,
+ * and a serice name or port number be defined/
+ *
+ * Arguments:
+ *
+ * None
+ *
+ * Return value:
+ *
+ * None
  */
 
 void MonitorSetup(void)
