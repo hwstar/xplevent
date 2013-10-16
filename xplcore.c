@@ -199,7 +199,17 @@ static void releaseMessage(xplMessagePtr_t xm);
  */
 
 /*
- * Generate a unique 4 digit prefix based on the buffer passed in
+ * Generate a unique 4 digit base36 prefix based on the buffer passed in
+ * Arguments:
+ *
+ * 1. Prefix string (output). Must be pre-allocated.
+ * 2. Buffer to hash (usually a sockaddr_storage struct)
+ * 3. Length of buffer to hash
+ *
+ *
+ * Return value:
+ *
+ * None
  */
 
 static void genUniquePrefix(String prefStr, void *buffer, unsigned buflen)
@@ -227,7 +237,15 @@ static void genUniquePrefix(String prefStr, void *buffer, unsigned buflen)
 
 /* 
  * Convert a long value into an 8 digit base36 number 
- * and concatenate it onto the passed string   
+ * and concatenate it onto the passed string.
+ * Arguments:
+ *
+ * 1. the long int. to use
+ * 2. A pointer to a pre-allocated buffer of 13 bytes.
+ *
+ * Return value:
+ *
+ * None
  *        
  */
  
@@ -259,7 +277,15 @@ static void longToBase36(unsigned long theValue, String theBuffer) {
  * 
  * String returned was talloc'd of of xplObj, and must be
  * talloc_free'd when no longer required
- 
+ *
+ *
+ * Arguments:
+ *
+ * 1. Pointer to allocated xpl object
+ *
+ * Return value:
+ *
+ * String with ID
  */
  
 const String generateFairlyUniqueID(xplObjPtr_t xp)
@@ -290,7 +316,14 @@ const String generateFairlyUniqueID(xplObjPtr_t xp)
  
 
 /*
- * Create a new name value list entry 
+ * Create a new name value list entry
+ * Arguments:
+ *
+ * 1. A talloc context for the new entry.
+ *
+ * Return value:
+ *
+ * A pointer to the newly allocated name/value entry.
  */
 
 static xplNameValueLEPtr_t newNameValueListEntry(void *nvListContext)
@@ -302,6 +335,14 @@ static xplNameValueLEPtr_t newNameValueListEntry(void *nvListContext)
 }
 /*
  * Retrieve a value from a name/value list
+ * Arguments:
+ *
+ * 1. Pointer ro the name/value list head
+ * 2. Pointer to a string with the name to match.
+ *
+ * Return value:
+ *
+ * A pointer to the name/value entry which matches the name or NULL if no match.
  */
 
 static xplNameValueLEPtr_t getNamedValue(xplNameValueLEPtr_t nvListHead, const String name)
@@ -324,6 +365,17 @@ static xplNameValueLEPtr_t getNamedValue(xplNameValueLEPtr_t nvListHead, const S
 /*
  * Process notification of buffer add
  * This is where we parse receive messages.
+ * The poller will call this function when an rx event occurs.
+ *
+ * Arguments:
+ *
+ * 1. The eventfd for the rx event.
+ * 2. The event ID (not used)
+ * 3. A pointer to the master xpl object.
+ *
+ * Return value:
+ *
+ * None
  */
 
 static void rxReadyAction(int fd, int event, void *objPtr)
