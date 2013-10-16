@@ -1014,11 +1014,13 @@ int main(int argc, char *argv[])
 	if(utilityCommand){
 		if((clOverride.instance_id) ||
 		(clOverride.interface) ||
+		(clOverride.cmdserv) ||
+		(clOverride.xplserv) ||
 		(clOverride.log_path) ||
 		(clOverride.pid_file) || 
 		(Globals->noBackground) || 
 		(Globals->exitOnErr)){
-			fatal("Switches: -n -e -i -L -P or -s are not valid with utility command");
+			fatal("Switches: -n -e -i -L -O -P -S or -s are not valid with utility command");
 		}
 		doUtilityCommand(utilityCommand, utilityArg, utilityFile);
 	}
@@ -1168,7 +1170,10 @@ int main(int argc, char *argv[])
 	
 	debug(DEBUG_STATUS,"Running Monitor");
 	
-	MonitorRun(); /* This does not return unless there was a poll error */
+	
+	if(FAIL == PollWait(Globals->poller, 1000, NULL)){
+		fatal("Poll error detected");
+	}
 
 	exit(1);
 }

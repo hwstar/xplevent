@@ -1140,6 +1140,28 @@ void MonitorSetup(void)
 	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, Globals->xplService))){
 		fatal("Could not create XPL  object, is the interface up?");
 	}
+		
+	/* Create a service and set our application version */
+	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID, VERSION);
+	
+
+	/* Add 1 second tick service */
+	PollRegTimeout(Globals->poller, tickHandler, NULL);
+
+  	/* And a listener for all xPL messages */
+  	XplAddMessageListener(Globals->xplEventService, XPL_REPORT_MODE_NORMAL, FALSE, NULL, xPLListener);
+  	
+
+	/* Add a listener for the command socket */
+	if(SocketCreateMultiple(Globals, Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, NULL,
+	    addIPSocket ) == FAIL){
+		fatal("Can't create listening socket(s)");
+	}	
+
+ 	/* Enable the service */
+  	XplEnableService(Globals->xplEventService);
+
+	atexit(xplShutdown);
 }
 
 
@@ -1236,60 +1258,4 @@ Bool MonitorRecvScript(MonRcvInfoPtr_t ri, String line)
 
 
 
-
-/*
-* Run monitor. This function sets up the xPL service, registers the necessaty handlers,
-* enables the xPL service, and registers the cleanup code. It then calls the xPL library
-* message processing function. This function never returns.
-*
-* Arguments:
-*
-* None
-*
-* Return value:
-*
-* None
-*/
-
-void MonitorRun(void)
-{
-	
-	
-	/* Create a service and set our application version */
-	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID, VERSION);
-	
-
-	/* Add 1 second tick service */
-	PollRegTimeout(Globals->poller, tickHandler, NULL);
-
-  	/* And a listener for all xPL messages */
-  	XplAddMessageListener(Globals->xplEventService, XPL_REPORT_MODE_NORMAL, FALSE, NULL, xPLListener);
-  	
-
-	/* Add a listener for the command socket */
-	if(SocketCreateMultiple(Globals, Globals->cmdBindAddress, Globals->cmdService, AF_UNSPEC, SOCK_STREAM, NULL,
-	    addIPSocket ) == FAIL){
-		fatal("Can't create listening socket(s)");
-	}	
-
-	
- 	/* Enable the service */
-  	XplEnableService(Globals->xplEventService);
-
-	atexit(xplShutdown);
-	
-
-	
- 	/** Main Loop **/
-
-	for (;;) {
-		/* Let Poller run forever */
-		if(FAIL == PollWait(Globals->poller, 1000, NULL)){
-			fatal("Poll error detected");
-		}
-		
-		
-		
-  	}
-}
 
