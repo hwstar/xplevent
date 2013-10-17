@@ -41,7 +41,17 @@
 /*
  * Replace a string with a new one freeing the existing string if the pointer is non-null, or
  * initializing the pointer with a copy of the new string if it is null. This is useful for
- * replacing old strings in a data structure with a new version of the string.
+ * replacing old strings in a data structures with a new version of the string.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to a string pointer to modify
+ * 2. A talloc context to use for allocating the new string.
+ * 3. The string to copy
+ *
+ * Return value
+ *
+ * New string.
  */
  
 String UtilReplaceString(String *ptrToStringPtr, TALLOC_CTX *newCTX, String newStringToCopy)
@@ -63,6 +73,16 @@ String UtilReplaceString(String *ptrToStringPtr, TALLOC_CTX *newCTX, String newS
 
 /*
  * Duplicate a string stripping out all of the white space
+ *
+ * Arguments:
+ *
+ * 1. Pointer a talloc context to hang the new string off of. 
+ * 2. The string to strip the white space from.
+
+ *
+ * Return value
+ *
+ * Stripped string.
  */
 
 String UtilStripWhite(TALLOC_CTX *ctx, String orig)
