@@ -90,6 +90,15 @@ typedef PollHeader_t * PollHeaderPtr_t;
 
 /*
  * Remove a poll item from the list
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ * 2. Pointer to entry to remove
+ *
+ * Return value
+ *
+ * None
  */
 
 static void removePollItem(PollHeaderPtr_t ph, PollEntryPtr_t e)
@@ -121,6 +130,15 @@ static void removePollItem(PollHeaderPtr_t ph, PollEntryPtr_t e)
 
 /*
  * Remove a timeout item from the list
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ * 2. Pointer to time out item to remove.
+ *
+ * Return value
+ *
+ * None
  */
  
 
@@ -154,6 +172,17 @@ static void removeTimeOutItem(PollHeaderPtr_t ph, TimeOutEntryPtr_t e)
 
 /*
  * Create/Modify/Delete a poll event
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ * 2. File descriptor to register/modify/unregister
+ * 3. Watch type (See poll.h)
+ * 4. Function to call when event occurs.
+ * 5. A user object to pass to the function when the event occurs.
+ *
+ * Return value
+ *
+ * PASS if success, otherwise FAIL
  */
  
 static Bool pollFDOp(void *pHead, int regFD, int op, uint32_t watchType, 
@@ -228,6 +257,14 @@ void (*action)(int fd, int event, void *userObject), void *userObject)
 
 /*
  * Run through the list of timeout handlers calling each action function
+ *
+ * Arguments:
+ *
+ * 1. Pointer to the poll object
+ *
+ * Return value
+ *
+ * None
  */
  
 static void doTimeoutHandlers(PollHeaderPtr_t ph)
@@ -246,6 +283,15 @@ static void doTimeoutHandlers(PollHeaderPtr_t ph)
 
 /*
  * Run through the list of events returned
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object
+ * 2. Number of events to check
+ *
+ * Return value
+ *
+ * None
  */
  
 static void doEventList(PollHeaderPtr_t ph, int numEvents)
@@ -303,7 +349,17 @@ static void doEventList(PollHeaderPtr_t ph, int numEvents)
 
 
 /*
- * Create the poll object
+ * Create a poll object
+ *
+ * Arguments:
+ *
+ * 1. Talloc context to use to allocate memory. 
+ * 2. Maximum number of events to process per wakeup. (Affects amount of memory allocated)
+ *
+ *
+ * Return value
+ *
+ * The new poll object if successful, otherwise NULL.
  */	
 
 void *PollInit(TALLOC_CTX *ctx, unsigned maxEvents)
@@ -337,7 +393,15 @@ void *PollInit(TALLOC_CTX *ctx, unsigned maxEvents)
 }
 
 /*
- *  Destroy the poll object 
+ * Destroy a poll object 
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ *
+ * Return value
+ *
+ * PASS if successful, oherwise FAIL
  */
 
 Bool PollDestroy(void *pHead)
@@ -356,6 +420,18 @@ Bool PollDestroy(void *pHead)
 
 /*
  * Register an event
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ * 2. The file descriptor to register
+ * 3. The watch types to monitor (See poll.h)
+ * 4. A pointer to a function to call when the file descriptor meets the criteria of the watch types
+ * 5. A pointer to a user object.
+ *
+ * Return value
+ *
+ * PASS if successful, otherwise FAIL
  */
 
 Bool PollRegEvent(void *pHead, int regFD, uint32_t watchType, void (*action)(int fd, int event, void *userObject), void *userObject)
@@ -375,6 +451,16 @@ Bool PollRegEvent(void *pHead, int regFD, uint32_t watchType, void (*action)(int
 
 /*
  * Unregister an event
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ * 2. The file descriptor to unregister
+ *
+ *
+ * Return value
+ *
+ * PASS if successful, otherwise FAIL
  */
 
 Bool PollUnRegEvent(void *pHead, int regFD)
@@ -425,6 +511,16 @@ Bool PollUnRegEvent(void *pHead, int regFD)
 
 /*
  * Register a timeout
+ *
+ * Arguments:
+ *
+ * 1. Pointer to a poll object 
+ * 2. Pointer to a function to call when the timeout occurs.
+ * 3. Pointer to the a user object.
+ *
+ * Return value
+ *
+ * PASS if successful, otherwise FAIL
  */
 
 int PollRegTimeout(void *pHead, void (*action)(int id, void *userObject), void *userObject)
@@ -463,6 +559,18 @@ int PollRegTimeout(void *pHead, void (*action)(int id, void *userObject), void *
 
 /*
  * Unregister a timeout
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ * 2. A talloc context to use for allocating the component strings.
+ * 3. An address for the vendor string.
+ * 4. An address for the device ID string.
+ * 5. An address for the instance ID string.
+ *
+ * Return value
+ *
+ * None
  */
 
 Bool PollUnRegTimeout(void *pHead, int id)
@@ -507,6 +615,17 @@ Bool PollUnRegTimeout(void *pHead, int id)
 
 /* 
  * Wait for a poll event to occur
+ *
+ * Arguments:
+ *
+ * 1. Pointer to poll object 
+ * 2. A time out in milliseconds for the timeout handlers, or -1 to disable the use of timeout handlers.
+ * 3. A signal mask set or NULL if not used.
+ *
+ * Return value
+ *
+ * Normally, this function should not return unless the underlying epoll_pwait fails.
+ * If that happens, then the function will return FAIL.
  */
  
 
