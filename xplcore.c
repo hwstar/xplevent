@@ -1018,6 +1018,14 @@ static void postpendToNameValueList(xplNameValueLEPtr_t *listHeadPtrPtr, xplName
 
 /*
  * Add a name value pair to an existing message
+ *
+ * 1. Pointer to the message object to add the name-value pair to.
+ * 2. The name string to add
+ * 3. The value string to add.
+ *
+ * Return value
+ *
+ * None.
  */
  
 static void addMessageNamedValue(xplMessagePtr_t xm, String name, String value )
@@ -1043,6 +1051,16 @@ static void addMessageNamedValue(xplMessagePtr_t xm, String name, String value )
 
 /* 
  * Create a message suitable for sending to a specific receiver
+ *
+ * 1. Pointer to service object to use
+ * 2. Message type to create
+ * 3. Target vendor
+ * 4. Target device ID
+ * 5. Target instance ID
+ *
+ * Return value
+ *
+ * Returns a pointer to a message object
  */
  
 static xplMessagePtr_t createTargetedMessage(xplServicePtr_t xs, XPLMessageType_t messageType, 
@@ -1057,7 +1075,18 @@ static xplMessagePtr_t createTargetedMessage(xplServicePtr_t xs, XPLMessageType_
 }
 
 
-/* Create a message suitable for broadcasting to all listeners */
+/* 
+ * Create a message suitable for broadcasting to all listeners
+ *
+ *
+ * 1. Pointer to service object to use
+ * 2. Message type to create
+ *
+ * Return value
+ *
+ * Returns a pointer to a message object
+*/
+
 static xplMessagePtr_t createBroadcastMessage(xplServicePtr_t xs, XPLMessageType_t messageType) 
 {
 	xplMessagePtr_t xm = createSendableMessage(xs, messageType);
@@ -1067,6 +1096,13 @@ static xplMessagePtr_t createBroadcastMessage(xplServicePtr_t xs, XPLMessageType
 
 /*
  * Create a heartbeat message
+ *
+ * 1. Pointer to service object to use
+ * 2. Heartbeat Message type to create
+ *
+ * Return value
+ *
+ * Returns a pointer to a message object
  */
  
 static xplMessagePtr_t createHeartbeatMessage(xplServicePtr_t xs, Heartbeat_t heartbeatType) 
@@ -1125,6 +1161,12 @@ static xplMessagePtr_t createHeartbeatMessage(xplServicePtr_t xs, Heartbeat_t he
  
 /*
  * Send a standard XPL Heartbeat immediately 
+ *
+ * 1. Pointer to service object to use
+ *
+ * Return value
+ *
+ * Returns TRUE if the heartbeat was sent successfully, otherwise FALSE
  */
  
 static Bool sendHeartbeat(xplServicePtr_t xs)
@@ -1196,6 +1238,13 @@ static Bool sendHeartbeat(xplServicePtr_t xs)
 
 /* 
  * Send an Goodbye XPL Heartbeat immediately
+ *
+ * 1. Pointer to service object to use
+ *
+ * Return value
+ *
+ * Returns TRUE if the goodbye heartbeat was sent successfully, otherwise FALSE
+ *
  */
  
 static Bool sendGoodbyeHeartbeat(xplServicePtr_t xs)
@@ -1229,7 +1278,21 @@ static Bool sendGoodbyeHeartbeat(xplServicePtr_t xs)
  * parsed is returned.  If there is an error, a negated number of bytes read thus far is      
  * returned (ABS of this number points to the failing character)                              
  * If we run out of bytes before we start a new block, it's likely end of stream garbage and  
- * we return 0 (which means parsing this message is done) 
+ * we return 0 (which means parsing this message is done)
+ *
+ * Arguments:
+ *
+ * 1. name/value list tallock context to use to talloc the name-value list
+ * 2. Pointer to the address of a name value list head pointer.
+ * 3. Pointer to the address of a name value list tail pointer.
+ * 4. String containing the received message text.
+ * 5. String to store the block header in.
+ * 6. Size of the block header string.
+ *
+ *
+ * Return value
+ *
+ * See above
  */
 
 static int parseBlock(void *nvListContext, xplNameValueLEPtr_t *nvListHead, xplNameValueLEPtr_t *nvListTail,
