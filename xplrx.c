@@ -98,6 +98,13 @@ typedef struct rxHead_s {
  * Send RX ready event to FD passed in at initialization
  * 
  * Must be called locked.
+ * Arguments:
+ *
+ * 1. Pointer to receive header
+ *
+ * Return value
+ *
+ * Returns PASS if successful, otherwise FAIL
  */
  
 static Bool rxSendReady(rxHeadPtr_t xh )
@@ -122,7 +129,17 @@ static Bool rxSendReady(rxHeadPtr_t xh )
 
 /*
  * RX Control Action
- * Called from poller
+ * Called from poller when a control message is ready
+ *
+ * Arguments:
+ *
+ * 1. FD with message
+ * 2. event ID (not used)
+ * 3. A pointer to the receive header object
+ *
+ * Return value
+ *
+ * None
  */
 
 static void rxControlAction(int fd, int event, void *objPtr)
@@ -159,6 +176,15 @@ static void rxControlAction(int fd, int event, void *objPtr)
 /*
  * Place new queue entry on at the end of the list.
  * Make a copy of the string passed in.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to receive header 
+ * 2. The raw message string to queue.
+ *
+ * Return value
+ *
+ * None
  * 
  * Must be called locked
  */
@@ -189,7 +215,18 @@ static void rxQueueRawString(rxHeadPtr_t xh, String rawStr)
 
 /*
  * RX Incoming Action
+ *
  * Called from poller
+ *
+ * Arguments:
+ *
+ * 1. FD with message to read 
+ * 2. Event (not used)
+ * 3. Pointer to the receive header
+ *
+ * Return value
+ *
+ * None
  */
 
 static void rxIncomingAction(int fd, int event, void *objPtr)
@@ -227,16 +264,20 @@ static void rxIncomingAction(int fd, int event, void *objPtr)
 	
 }
 
-
-
-
-
 /*
  * Remove a queue entry from the queue, and return the string.
  * 
  * 
  * Must be called locked
  * Returned String must be talloc_freed while locked.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to receive header
+ *
+ * Return value:
+ *
+ * String with message text
  */
  
 static String rxDQRawString(rxHeadPtr_t xh)
@@ -279,7 +320,16 @@ static String rxDQRawString(rxHeadPtr_t xh)
 }
 
 /*
- * RX thread time out handler
+ * RX thread tick handler
+ *
+ * Arguments:
+ *
+ * 1. Tick id (not used)
+ * 2. Pointer to the receive header
+ *
+ * Return value
+ *
+ * None
  */
  
 static void rxTick(int id, void *objPtr)
@@ -294,7 +344,18 @@ static void rxTick(int id, void *objPtr)
 }
 
 /*
- * Rx Thread
+ * Rx Thread main line code
+ *
+ * This function calls the poll object and waits for either a message, or a conrol command
+ * from the main thread.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to receive header
+ *
+ * Return value
+ *
+ * None
  */
  
 static void *rxThread(void *objPtr)
@@ -326,7 +387,16 @@ static void *rxThread(void *objPtr)
 
 
 /*
- * Send an event to the RX thread 
+ * Send an control message to the RX thread 
+ *
+ * Arguments:
+ *
+ * 1. Pointer to receive header
+ * 2. Control message code to send
+ *
+ * Return value
+ *
+ * PASS if message sent successfully, otherwise FAIL
  */
  
 Bool XplrxSendControlMsg(void *objPtr, int val)
@@ -354,9 +424,18 @@ Bool XplrxSendControlMsg(void *objPtr, int val)
 /*
  * Destroy the receiver. 
  * 
+ * Called from the main thread.
  * Kills the receiver thread, 
- * kills the poller, closes the control FD.
+ * destroys the receiver poll object, closes the control FD.
  * and frees all memory used.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to receive header 
+ *
+ * Return value
+ *
+ * None
  */
  
 void XplRXDestroy(void *objPtr)
@@ -416,7 +495,23 @@ void XplRXDestroy(void *objPtr)
 
 
 /*
- * Initialization function
+ * Receiver Initialization function
+ *
+ * Allocates memory pools and buffers.
+ * Creates an eventfd for control messages.
+ * Creates a receiver poll object.
+ * Creates the receiver thread.
+ *
+ * Arguments:
+ *
+ * 1. FD for local hub connection
+ * 2. Ephemeral port for hub connection
+ * 3. FD to use to send RX ready events.
+ *
+ *
+ * Return value
+ *
+ * Pointer to Receive header
  */
 
 void *XplRXInit(int localConnFD, int localConnPort, int rxReadyFD)
@@ -516,7 +611,18 @@ void *XplRXInit(int localConnFD, int localConnPort, int rxReadyFD)
 }
 
 /*
- * Remove a string from the receive queue and return a copy of it
+ * Remove a string from the receive queue and return a copy of it.
+ *
+ * Used by the main thread to get a message from the queue.
+ *
+ * Arguments:
+ *
+ * 1. Talloc context to hang the message string off of. 
+ * 2. Pointer to the receive header.
+ *
+ * Return value
+ *
+ * Message string or NULL if there is no message in the queue.
  */
  
 String XplrxDQRawString(TALLOC_CTX *ctx, void *objPtr)
