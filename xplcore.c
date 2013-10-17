@@ -1480,7 +1480,15 @@ String theText, String blockHeader, int blockHeaderLength)
 }
 
 /* 
- * Parse the header name/value pairs for this message.  
+ * Parse the header name/value pairs for this message.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object with the message string.
+ * 2. Head of the name value list to check.
+ *
+ * Return value
+ *
  * If they are all found and valid, then  
  * we return TRUE.  Otherwise, FALSE.
  */
@@ -1581,7 +1589,16 @@ static Bool parseMessageHeader(xplMessagePtr_t xm, xplNameValueLEPtr_t nameValue
 }
 
 /* 
- * Convert a text message into a xPL message.  Return the message
+ * Convert a text message into a xPL message.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to master XPL object
+ * 2. String with the message text.
+ *
+ * Return value:
+ *
+ * Return the message
  * or NULL if there is a parse error
  */
  
@@ -1682,7 +1699,17 @@ static xplMessagePtr_t parseMessage(xplObjPtr_t xp, String theText) {
  */
  
 /* 
- * Change the current heartbeat interval 
+ * Change the current heartbeat interval
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object.
+ * 2. The new heartbeat interval in seconds
+ *
+ * Return value
+ *
+ * None
+ *
  */
  
 static void setHeartbeatInterval(xplServicePtr_t xs, int newInterval)
@@ -1693,8 +1720,20 @@ static void setHeartbeatInterval(xplServicePtr_t xs, int newInterval)
 	}
 	xs->heartbeatInterval = newInterval;
 }
+
 /*
- * Create an XPL service 
+ * Create an XPL service object
+ *
+ * Arguments:
+ *
+ * 1. Pointer to master XPL object
+ * 2. String with source vendor name
+ * 3. String wih source the device ID 
+ * 4. String with the source instance ID.
+ * 5. Optional version string
+ *
+ * Return value
+ *
  */
  
 static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String theDeviceID, String theInstanceID, String theVersion) 
@@ -1727,6 +1766,20 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
 
 /* 
  * Set service state
+ *
+ * This enables or disables a previously created service. If the service is enabled, heartbeat messages
+ * will start being sent at the preset interval. If the service is disabled, then a goodbye heartbeat
+ * message will be sent.
+ 
+ * Arguments:
+ *
+ * 1. Pointer to service object to enable or disable
+ * 2. New enable state. TRUE = enable, FALSE = disable
+ *
+ * Return value:
+ *
+ * None
+ *
  */
  
 static void setServiceState(xplServicePtr_t xs, Bool newState)
@@ -1766,7 +1819,20 @@ static void setServiceState(xplServicePtr_t xs, Bool newState)
 
 
 /*
- * Destroy an XPL object
+ * Destroy an XPL object.
+ *
+ * Disables all active services, kills the RX thread, removes FD's from the polling list,
+ * closes all open FD's, frees the master object. This should be called at program exit 
+ *
+ * Arguments:
+ *
+ * 1. Pointer to master object to destroy
+ *
+ * Return value:
+ *
+ * None
+ *
+ *
  */
 void XplDestroy(void *xplObj)
 {
@@ -1817,7 +1883,24 @@ void XplDestroy(void *xplObj)
 
 
 /*
- * Initialize XPL object
+ * Initialize XPL master object
+ *
+ * This function sets up the XPL subsystem and returns a master object to be used for all
+ * future references. It determines what IP address to broadcast on given an IP address 
+ * of an interface, creates the appopriate sockets for listening for and sending XPL messages.
+ * A dedicated receive (RX) thread is created and used to receive queue incoming messages
+ *
+ * Arguments:
+ *
+ * 1. The talloc context to use for allocating memory pools in the main thread.
+ * 2. A poll object. (See poll.c for details).
+ * 3. A string containing an IP address of the interface to use to broadcast messages.
+ * 4. A string containing the service name or port number to use. Usually set to "3865".
+ *
+ * Return value
+ *
+ * The XPL master object or NULL if there was an error.
+ *
  */
  
 
@@ -2032,7 +2115,16 @@ void *XplNewService(void *xplObj, String theVendor, String theDeviceID, String t
 
 /*
  * Destroy a service.
- * The service should be disabled before this is called. 
+ * The service should be disabled before this is called, but it will disable the service before destruction.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to destroy
+ *
+ * Return value
+ *
+ * TRUE if the service was found in the list and destroyed. FALSE otherwise.
+ *
  */
  
 Bool XplDestroyService(void *servToDestroy)
@@ -2094,6 +2186,15 @@ Bool XplDestroyService(void *servToDestroy)
  * Enable a previously created service object.
  * Enabling a service starts the heartbeat message generation, and 
  * also will allow message monitor callbacks to be called.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to enable.
+ *
+ * Return value
+ *
+ * None
+ *
  */
  
 void XplEnableService(void *servToEnable)
@@ -2113,6 +2214,15 @@ void XplEnableService(void *servToEnable)
  * Disable a previously created service object.
  * Sends a goodbye heartbeat message, and prevents
  * message monitor callbacks from being called.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to disable
+ *
+ * Return value
+ *
+ * None
+ *
  */
  
 void XplDisableService(void *servToDisable)
@@ -2130,6 +2240,15 @@ void XplDisableService(void *servToDisable)
 
 /*
  * Get Hub discovery state for the supplied service object
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to check.
+ *
+ * Return value
+ *
+ * Discovery state (See xplcore.h)
+ *
  */
 
 XPLDiscoveryState_t XplGetHubDiscoveryState(void  *servToCheck)
@@ -2148,7 +2267,20 @@ XPLDiscoveryState_t XplGetHubDiscoveryState(void  *servToCheck)
 
 
 /*
- * Create a new message block
+ * Create a new message object for a targetted message.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to link with the message object.
+ * 2. Message type (see xplcore.h)
+ * 3. The target vendor
+ * 4. The target device ID
+ * 5. The target instance ID
+ *
+ * Return value
+ *
+ * Pointer to the new message object.
+ *
  */
  
 void *XplInitTargettedMessage(void *XPLServ, XPLMessageType_t messageType, 
@@ -2168,7 +2300,17 @@ String theVendor, String theDeviceID, String theInstanceID)
 }
 
 /*
- * Send a broadcast message
+ * Create a broadcast message
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to link with the message object.
+ * 2. Message type (see xplcore.h)
+ *
+ * Return value
+ *
+ * Pointer to the new message object.
+ 
  */
 void *XplInitBroadcastMessage(void *XPLServ, XPLMessageType_t messageType)
 {
@@ -2181,6 +2323,17 @@ void *XplInitBroadcastMessage(void *XPLServ, XPLMessageType_t messageType)
 
 /*
  * Send a group message
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object to link with the message object.
+ * 2. Message type (see xplcore.h)
+ * 3. String with the message group name.
+ *
+ * Return value
+ *
+ * Pointer to the new message object.
+
  */
 
 void *XplInitGroupMessage(void *XPLServ, XPLMessageType_t messageType, String controlGroup)
@@ -2196,7 +2349,15 @@ void *XplInitGroupMessage(void *XPLServ, XPLMessageType_t messageType, String co
 
 
 /*
- * Destroy an existing message block
+ * Destroy an existing message object
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object to destroy
+ *
+ * Return value:
+ *
+ * None
  */
 
 void XplDestroyMessage(void *XPLMessage)
@@ -2212,6 +2373,16 @@ void XplDestroyMessage(void *XPLMessage)
 
 /*
  * Add Name-Value pair to message
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ * 2. The name as a string
+ * 3. The value as a string
+ *
+ * Return value
+ *
+ * None
  */
  
 void XplAddNameValue(void *XPLMessage, String theName, String theValue)
@@ -2225,6 +2396,16 @@ void XplAddNameValue(void *XPLMessage, String theName, String theValue)
 
 /*
  * Set the message schema class and type
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ * 2. The class as a string
+ * 3. The type as a string
+ *
+ * Return value
+ *
+ * None
  */
  
 
@@ -2247,6 +2428,14 @@ void XplSetMessageClassType(void *xplMessage, const String theClass, const Strin
 
 /* 
  * Delete Message Name/Value list
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ *
+ * Return value
+ *
+ * None
  */
  
 void XplClearNameValues(void *XPLMessage)
@@ -2268,6 +2457,14 @@ void XplClearNameValues(void *XPLMessage)
 
 /*
  * Send the message
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ *
+ * Return value
+ *
+ * TRUE if the message was sent successfully, otherwise FALSE
  */
  
 Bool XplSendMessage(void *XPLMessage)
@@ -2288,6 +2485,18 @@ Bool XplSendMessage(void *XPLMessage)
 
 /*
  * Add a message listener function to the service
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object 
+ * 2. The listener mode (see xplcore.h)
+ * 3. A flag to indicate whether to report group messages.
+ * 4. A pointer to a user-defined object.
+ * 5. A pointer to a listening function (see xplcore.h)
+ *
+ * Return value
+ *
+ * None
  */
  
 void XplAddMessageListener(void *XPLService, XPLListenerReportMode_t reportMode, Bool reportGroupMessages,
