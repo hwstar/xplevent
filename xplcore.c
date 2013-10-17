@@ -2514,6 +2514,16 @@ void XplAddMessageListener(void *XPLService, XPLListenerReportMode_t reportMode,
 
 /*
  * Remove the message listener from the service
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object 
+ *
+ *
+ * Return value:
+ *
+ * None
+ *
  */
 
 void XplRemoveMessageListener(void *XPLService)
@@ -2530,6 +2540,19 @@ void XplRemoveMessageListener(void *XPLService)
  * If a NULL is passed in for one of the string pointers, that element will be ignored.
  * 
  * The returned strings should be talloc_freed when they are no longer required.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ * 2. A talloc context to use for allocating the component strings.
+ * 3. An address for the vendor string.
+ * 4. An address for the device ID string.
+ * 5. An address for the instance ID string.
+ *
+ * Return value
+ *
+ * None
+ *
  */
 
 void XplGetMessageSourceTagComponents(void *XPLMessage, TALLOC_CTX *stringCTX,
@@ -2555,6 +2578,14 @@ void XplGetMessageSourceTagComponents(void *XPLMessage, TALLOC_CTX *stringCTX,
 
 /*
  * Get the message type
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ *
+ * Return value
+ *
+ * The message type (see xplcore.h)
  */
  
 XPLMessageType_t XplGetMessageType(void *XPLMessage)
@@ -2572,6 +2603,18 @@ XPLMessageType_t XplGetMessageType(void *XPLMessage)
  * If a NULL is passed in for one of the string pointers, that element will be ignored.
  * 
  * The returned strings should be talloc_freed when they are no longer required.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ * 2. A talloc context to use for allocating the component strings.
+ * 3. An address for the class string.
+ * 4. An address for the type string.
+ *
+ * Return value
+ *
+ * None
+ 
  */
 
 void XplGetMessageSchema(void *XPLMessage, TALLOC_CTX *stringCTX, String *theClass,  String *theType)
@@ -2593,6 +2636,14 @@ void XplGetMessageSchema(void *XPLMessage, TALLOC_CTX *stringCTX, String *theCla
 
 /*
  * Return TRUE if the message is a received message
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ *
+ * Return value
+ *
+ * TRUE if he message is a received message, otherwise FALSE which indicates it is a transmit message 
  */
 
 Bool XplMessageIsReceive(void *XPLMessage)
@@ -2611,6 +2662,16 @@ Bool XplMessageIsReceive(void *XPLMessage)
  * If the value doesn't exist, return NULL
  * 
  * An talloc'd string is returned, so it will need to talloc_freed when it is no longer required.
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object 
+ * 2. A talloc context to use for allocating the component strings.
+ * 3. The name to look up.
+ *
+ * Return value
+ *
+ * String with the associated value.
  */
  
 String XplGetMessageValueByName(void *XPLMessage, TALLOC_CTX *stringCTX, String theName)
@@ -2633,8 +2694,17 @@ String XplGetMessageValueByName(void *XPLMessage, TALLOC_CTX *stringCTX, String 
 }
 
 /* 
- * Return a string containing comma-separated list of name-value pairs
+ * Return a string containing comma-separated list of all name-value pairs associated with the message
  * String must be talloc_freed, when it is no longer required.
+ *
+ * Arguments:
+ *
+ * 1. A talloc context to use for allocating the component strings.
+ * 1. A pointer to the message object.
+ *
+ * Return value
+ *
+ * String containing the list.
  */
  
 String XplGetMessageNameValuesAsString(TALLOC_CTX *stringCTX, void *XPLMessage)
@@ -2664,6 +2734,16 @@ String XplGetMessageNameValuesAsString(TALLOC_CTX *stringCTX, void *XPLMessage)
 
 /*
  * Iterate through the name value list of a message, calling a user supplied callback function for each list entry
+ *
+ * Arguments:
+ *
+ * 1. Pointer to a message object 
+ * 2. Pointer to a user defined object.
+ * 3. Callback function (see xplcore.h)
+ *
+ * Return value
+ *
+ * None
  */
  
 void XplMessageIterateNameValues(void *XPLMessage, void *userObj, XPLIterateNVCallback_t callback )
