@@ -395,13 +395,19 @@ void XplRXDestroy(void *objPtr)
 		fatal("%s: Problem terminating RX thread", __func__);
 	}
 	
-	/* Destroy the poller */
-	PollDestroy(xh->rxPoller);
+
+	/* Unregister the local connection */
+	PollUnRegEvent(xh->rxPoller, xh->localConnFD);
+	/* Unregister the control FD */
+	PollUnRegEvent(xh->rxPoller, xh->rxControlFD);
 	
 	/* Close the control FD */
 	if(xh->rxControlFD > 0){
 		close(xh->rxControlFD);
 	}
+	
+	/* Destroy the poller */
+	PollDestroy(xh->rxPoller);
 	/* Invalidate then free the object */
 	xh->magic = 0;
 	talloc_free(xh);

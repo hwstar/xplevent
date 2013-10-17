@@ -36,6 +36,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/timerfd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/un.h>
@@ -158,7 +159,8 @@ typedef struct xplObj_s {
 	unsigned magic;
 	int localConnFD; /* FD for packets from HUB */
 	int broadcastFD; /* FD for broadcasts to network */
-	int rxReadyFD; /* Ent FC for RX packet ready from receiver */
+	int rxReadyFD; /* Event FD for RX packet ready from receiver */
+	int timerFD; /* Timer FD for timing heart beats */
 	int broadcastAddrLen; /* Indicates length of data in broadcastAddr stuct below */
 	int localConnPort; /* Ephemeral port for packets sent from local hub */
 	void *poller; /* Pointer to the poller object supplied by the user */
@@ -638,14 +640,20 @@ static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int s
  * XPL tick function
  */
 
-static void xplTick(int id, void *objPtr)
+static void xplTick(int fd, int id, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
 	xplServicePtr_t xs;
-
+	char tickBuff[8];
+	char eBuff[64];
 	
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
+	
+	if(8 != read(fd, tickBuff, 8)){
+		debug(DEBUG_UNEXPECTED, "%s: Could not read timerfd: %s", __func__, strerror_r(errno, eBuff, sizeof(eBuff)));
+		return;
+	}
 	
 	debug(DEBUG_INCOMPLETE, "XPL tick");
 	/* Traverse the service list */
@@ -1614,14 +1622,22 @@ void XplDestroy(void *xplObj)
 	if(xp->localConnFD != -1){
 		close(xp->localConnFD);
 	}
+	
 	/* Close the broadcast connection */
 	if(xp->broadcastFD != -1){
 		close(xp->broadcastFD);
 	}
 	
+	PollUnRegEvent(Globals->poller, xp->rxReadyFD);
 	/* Close the ready event FD */
 	if(xp->rxReadyFD != -1){
 		close(xp->rxReadyFD);
+	}
+
+	PollUnRegEvent(Globals->poller, xp->timerFD);
+	/* Close the timer FD */
+	if(xp->timerFD != -1){
+		close(xp->timerFD);
 	}
 	
 	/* Invalidate and free the object */
@@ -1642,6 +1658,7 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 	char interfaceAddr[INET6_ADDRSTRLEN];
 	char broadcastAddr[INET6_ADDRSTRLEN];
 	struct ifaddrs *interfaceList = NULL, *curIFEntry = NULL;
+	struct itimerspec its;
 	void *addrPtr;
 	int res;
 	int addrFamily;
@@ -1745,6 +1762,24 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 		return NULL;
 	}
 
+	
+	/* Create a timerfd to keep track of heartbeats */
+	if((xp->timerFD = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK)) < 0){
+		debug(DEBUG_UNEXPECTED, "%s: Could not create an timer FD", __func__);
+		XplDestroy(xp);
+		return NULL;
+	}
+	
+	/* Set the timerfd time interval */
+	its.it_value.tv_sec = its.it_interval.tv_sec = 1;
+	its.it_value.tv_nsec = its.it_interval.tv_nsec = 0;
+	if(timerfd_settime(xp->timerFD, 0, &its, NULL) < 0){
+		debug(DEBUG_UNEXPECTED, "%s: Could not set timer FD interval", __func__);
+		XplDestroy(xp);
+		return NULL;
+	}		
+
+
 	/* Add the RX ready FD to the poller */
 	if(FAIL == PollRegEvent(xp->poller, xp->rxReadyFD, POLL_WT_IN, rxReadyAction, xp)){
 		debug(DEBUG_UNEXPECTED, "%s: Could not register RX Ready eventfd", __func__);
@@ -1752,9 +1787,9 @@ void *XplInit(TALLOC_CTX *ctx, void *Poller, String IPAddr, String servicePort)
 		return NULL;
 	}
 	
-	/* Add the xplTick to the polling list */
-	if(FAIL == PollRegTimeout(xp->poller, xplTick, xp)){
-		fatal("%s: Could not register timeout", __func__);
+	/* Add the timerFD and xplTick to the polling list */
+	if(FAIL == PollRegEvent(xp->poller, xp->timerFD, POLL_WT_IN, xplTick, xp)){
+		fatal("%s: Could not register timerFD", __func__);
 	}
 	
 	/* Initialize receiver thread */
