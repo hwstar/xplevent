@@ -559,7 +559,23 @@ cleanup: /* From config heartbeat test above */
 }
 
 /*
- * Add local interface socket 
+ * Add local interface socket.
+ *
+ * Called from SocketCreate
+ *
+ * Arguments:
+ *
+ * 1. Socket to add
+ * 2. Socket address
+ * 3. Socket address length
+ * 4. Address family
+ * 5. Socket type
+ * 6. User object
+ *
+ * Return value
+ *
+ * FALSE 
+ *
  */
 
 static int addLocalSock(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
@@ -609,6 +625,21 @@ static int addLocalSock(int sock, void *addr, int addrlen, int family, int sockt
 
 /*
  * Add the broadcast socket
+ *
+ * Called from SocketCreate
+ *
+ * Arguments:
+ *
+ * 1. Socket to add
+ * 2. Socket address
+ * 3. Socket address length
+ * 4. Address family
+ * 5. Socket type
+ * 6. User object
+ *
+ * Return value
+ *
+ * FALSE 
  */
 
 static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int socktype, void *userObj)
@@ -638,6 +669,17 @@ static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int s
 
 /*
  * XPL tick function
+ * Called from the Poller
+ *
+ * Arguments:
+ *
+ * 1. FD to check
+ * 2. ID from poller (not used)
+ * 3. Pointer to master XPL object
+ *
+ * Return value
+ *
+ * None
  */
 
 static void xplTick(int fd, int id, void *objPtr)
@@ -687,6 +729,16 @@ static void xplTick(int fd, int id, void *objPtr)
 
 /*
  * Create a new name value list entry 
+ *
+ * Arguments:
+ *
+ * 1. Pointer to the master XPL object
+ * 2. Message type to create
+ *
+ *
+ * Return value
+ *
+ * A pointer to the talloc'd message object. This must be freed with a call to releaseMessage
  */
 
 static xplMessagePtr_t createReceivedMessage(xplObjPtr_t xp, XPLMessageType_t msgType)
@@ -703,6 +755,15 @@ static xplMessagePtr_t createReceivedMessage(xplObjPtr_t xp, XPLMessageType_t ms
 
 /*
  * Release (free) a message
+ *
+ *
+ * Arguments:
+ *
+ * 1. Pointer to message object to release
+ *
+ * Return value
+ *
+ * None
  */
 
 static void releaseMessage(xplMessagePtr_t xm)
@@ -715,8 +776,17 @@ static void releaseMessage(xplMessagePtr_t xm)
 
 
 /* 
- * Send the passed string and return TRUE if it appears it was transmitted successfully
+ * Send a message string in the tx Buffer in the service object. 
  * or FALSE if there was an error 
+ *
+ * Arguments:
+ *
+ * 1. Pointer to service object with the message string.
+ *
+ * Return value
+ *
+ * Returns TRUE if the message was broadcasted successfully, otherwise false.
+ *
  */  
               
 static Bool sendRawMessage(xplServicePtr_t xs)
@@ -739,7 +809,14 @@ static Bool sendRawMessage(xplServicePtr_t xs)
 }
 
 /* 
- * Append text and keep track of what we've used 
+ * Append text to the tx Buffer and keep track of what we've used 
+ *
+ * 1. Pointer to service object with the message string.
+ * 2. String to append.
+ *
+ * Return value
+ *
+ * Returns TRUE if the sting was appended, or FALSE if the message exceeds the maximum buffer size.
  */
  
 static Bool appendText(xplServicePtr_t xs, String theString) 
@@ -763,7 +840,14 @@ static Bool appendText(xplServicePtr_t xs, String theString)
 
 
 /* 
- * Write out the message 
+ * Format the message, and place it in the tx Buffer in the service object.
+ *
+ * 1. Pointer to service object with the message string.
+ * 2. Pointer to the message object to format.
+ *
+ * Return value
+ *
+ * Returns TRUE if the message was formatted successfully, otherwise FALSE.
  */
  
 static Bool formatMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
@@ -839,10 +923,16 @@ static Bool formatMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
 }
 
 /* 
- * Send an xpl message. 
+ * Send an XPL message.
+ *
+ * 1. Pointer to service object
+ * 2. Pointer to the message object to send.
+ *
+ * Return value
+ *
+ * Returns TRUE if the message was formatted and broadcasted successfully, otherwise FALSE.
  *  
- * If the message is valid and is successfully sent,
- * TRUE is returned.  
+ *
  */ 
                                                     
 static Bool sendMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
@@ -862,10 +952,18 @@ static Bool sendMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
 
 
 /* 
- * Create a new message based on a service
+ * Create a new transmit message based on a service
+ *
+ * 1. Pointer to service object with the message string.
+ * 2. The message type to create.
+ *
+ * Return value
+ *
+ * Returns a message object.
  */
  
-static xplMessagePtr_t createSendableMessage(xplServicePtr_t xs, XPLMessageType_t messageType) {
+static xplMessagePtr_t createSendableMessage(xplServicePtr_t xs, XPLMessageType_t messageType)
+{
   xplMessagePtr_t xm;
   
   /* Allocate the message (owned by the service context) */
@@ -891,7 +989,15 @@ static xplMessagePtr_t createSendableMessage(xplServicePtr_t xs, XPLMessageType_
 }
 
 /*
- * Postpend an entry to a name-value list
+ * Postpend an entry to a Message name-value list
+ *
+ * 1. Pointer to the address of the name-value list head pointer.
+ * 2. Pointer to the address of the name-value list tail pointer.
+ * 3. Pointer to the new name-vlaue list entry to add.
+ *
+ * Return value
+ *
+ * None
  */
  
 static void postpendToNameValueList(xplNameValueLEPtr_t *listHeadPtrPtr, xplNameValueLEPtr_t *listTailPtrPtr, 
