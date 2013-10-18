@@ -31,6 +31,7 @@
 #include <limits.h>
 #include <time.h>
 #include <sys/eventfd.h>
+#include <sys/timerfd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -83,6 +84,8 @@ typedef struct rxHead_s {
 	int localConnFD;
 	int rxReadyFD;
 	int rxControlFD;
+	int timerFD;
+	int wdogCounter;
 	unsigned rxControlVal;
 	unsigned rxBuffSize;
 	void *rxStringPool;
@@ -324,22 +327,37 @@ static String rxDQRawString(rxHeadPtr_t xh)
  *
  * Arguments:
  *
- * 1. Tick id (not used)
- * 2. Pointer to the receive header
+ * 1. timer file descriptor
+ * 2. event flags (not used)
+ * 3. Pointer to the receive header
  *
  * Return value
  *
  * None
  */
  
-static void rxTick(int id, void *objPtr)
+static void rxTick(int fd, int event, void *objPtr)
 {
 	rxHeadPtr_t xh = objPtr;
+	char tickBuff[8];
+	char eBuff[64];
+	
 
 	ASSERT_FAIL(xh)
 	ASSERT_FAIL(XH_MAGIC == xh->magic)
+		
+	if(sizeof(tickBuff) != read(fd, tickBuff, sizeof(tickBuff))){
+		debug(DEBUG_UNEXPECTED, "%s: Could not read timerfd: %s", __func__, strerror_r(errno, eBuff, sizeof(eBuff)));
+		return;
+	}
+	/* Bump watchdog counter each time through */
+	XH_LOCK
+	if(xh->wdogCounter < INT_MAX){
+		xh->wdogCounter++;
+	}
+	XH_UNLOCK
 	
-	debug(DEBUG_INCOMPLETE,"RX thread tick");
+	debug(DEBUG_INCOMPLETE, "RX thread tick");
 
 }
 
@@ -385,6 +403,47 @@ static void *rxThread(void *objPtr)
 	return NULL;
 }
 
+/*
+ * Cleanup RX FD's and resources, then destroy the object
+ *
+ * Arguments:
+ *
+ * 1. Pointer to receive header to destroy
+ *
+ * Return value
+ *
+ * Always NULL
+ */
+	
+void *destroyRX(rxHeadPtr_t xh)
+{
+
+	
+	/* Destroy the poller */
+	if(xh->rxPoller){
+		/* Unregister the local connection */
+		PollUnRegEvent(xh->rxPoller, xh->localConnFD);
+		/* Unregister the control FD */
+		PollUnRegEvent(xh->rxPoller, xh->rxControlFD);	
+		PollDestroy(xh->rxPoller);
+	}
+	
+		
+	/* Close the control FD */
+	if(xh->rxControlFD > 0){
+		close(xh->rxControlFD);
+	}
+		
+	/* Close the timer FD */
+	if(xh->timerFD > 0){
+		close(xh->timerFD);
+	}
+	
+	/* Invalidate then free the object */
+	xh->magic = 0;
+	talloc_free(xh);
+	return NULL;
+}
 
 /*
  * Send an control message to the RX thread 
@@ -473,23 +532,7 @@ void XplRXDestroy(void *objPtr)
 	else{
 		fatal("%s: Problem terminating RX thread", __func__);
 	}
-	
-
-	/* Unregister the local connection */
-	PollUnRegEvent(xh->rxPoller, xh->localConnFD);
-	/* Unregister the control FD */
-	PollUnRegEvent(xh->rxPoller, xh->rxControlFD);
-	
-	/* Close the control FD */
-	if(xh->rxControlFD > 0){
-		close(xh->rxControlFD);
-	}
-	
-	/* Destroy the poller */
-	PollDestroy(xh->rxPoller);
-	/* Invalidate then free the object */
-	xh->magic = 0;
-	talloc_free(xh);
+	destroyRX(xh);
 }
 
 
@@ -519,6 +562,7 @@ void *XplRXInit(int localConnFD, int localConnPort, int rxReadyFD)
 	pthread_attr_t attrs;
 	int res;
 	rxHeadPtr_t xh;
+	struct itimerspec its;
 	
 	/* Allocate a Header */
 	MALLOC_FAIL(xh = talloc_zero(NULL, rxHead_t))
@@ -545,65 +589,82 @@ void *XplRXInit(int localConnFD, int localConnPort, int rxReadyFD)
 	
 	/* Note the ready file descriptor */
 	xh->rxReadyFD = rxReadyFD;
+
+		
+	/* Create the timer FD */
+	if((xh->timerFD = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK)) < 0){
+		debug(DEBUG_UNEXPECTED, "%s: Could not create an timer FD", __func__);
+		return destroyRX(xh);
+	}
 	
-	/* Set the magic number */
-	xh->magic = XH_MAGIC;
+	/* Set the timerfd time interval */
+	its.it_value.tv_sec = its.it_interval.tv_sec = 1;
+	its.it_value.tv_nsec = its.it_interval.tv_nsec = 0;
+	if(timerfd_settime(xh->timerFD, 0, &its, NULL) < 0){
+		debug(DEBUG_UNEXPECTED, "%s: Could not set timer FD interval", __func__);
+		return destroyRX(xh);
+	}		
 	
 	/* Get an event FD for control */
 	if((xh->rxControlFD = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)) < 0){
 		debug(DEBUG_UNEXPECTED, "Could not create an event FD");
-		talloc_free(xh);
-		return NULL;
+		return destroyRX(xh);
 	}
 	
 	/* Create a polling resource */
 	if(!(xh->rxPoller = PollInit(xh, 4))){
 		debug(DEBUG_UNEXPECTED, "%s: Could not create polling resource", __func__);
+		return destroyRX(xh);
 	}
 
 	/* Add the control FD to the polling list */
 	if(FAIL == PollRegEvent(xh->rxPoller, xh->rxControlFD, POLL_WT_IN, rxControlAction, xh)){
 		debug(DEBUG_UNEXPECTED, "%s: Could not register RX Control eventfd", __func__);
+		return destroyRX(xh);
 	}
 	
 	/* Add the local connection FD to the polling list */
 	if(FAIL == PollRegEvent(xh->rxPoller, xh->localConnFD, POLL_WT_IN, rxIncomingAction, xh)){
 		debug(DEBUG_UNEXPECTED, "%s: Could not register local connection FD", __func__);
+		return destroyRX(xh);
 	}
+
 	
-	/* Add the rxTick to the polling list */
-	if(FAIL == PollRegTimeout(xh->rxPoller, rxTick, xh)){
-		fatal("%s: Could not register timeout", __func__);
+	/* Add the timer FD to the polling list */
+	if(FAIL == PollRegEvent(xh->rxPoller, xh->timerFD, POLL_WT_IN, rxTick, xh)){
+		debug(DEBUG_UNEXPECTED, "%s: Could not register local connection FD", __func__);
+		return destroyRX(xh);
 	}
 
 	
 	/* Initialize attr type */
 	if((res = pthread_attr_init(&attrs))){
 		debug(DEBUG_UNEXPECTED, "%s: Could not initialize pthread attribute: res = %d", __func__, res);
-		talloc_free(xh);
-		return NULL;
+		return destroyRX(xh);
 	}
 	
 	/* Set the detached state attr */
 	if((res = pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED))){
 		debug(DEBUG_UNEXPECTED, "%s: Could not set detach attribute: res = %d", __func__, res);
-		talloc_free(xh);
-		return NULL;
+		return destroyRX(xh);
 	}
 	
 	/* Set the stack size attr */
 	if((res = pthread_attr_setstacksize(&attrs, RXTHREADSTACKSIZE))){
 		debug(DEBUG_UNEXPECTED, "%s: Could not set stack size attribute: res = %d", __func__, res);
-		talloc_free(xh);
-		return NULL;
+		return destroyRX(xh);
 	}
 	
 	/* Create the thread */
 	if(pthread_create(&xh->rxThread, &attrs, rxThread, xh) < 0){
 		debug(DEBUG_UNEXPECTED, "%s: Could not create thread", __func__);
-		talloc_free(xh);
-		return NULL;
+		return destroyRX(xh);
 	}
+	
+		
+	/* Set the magic number */
+	xh->magic = XH_MAGIC;
+
 	
 	/* Return the object */
 	
@@ -653,5 +714,41 @@ String XplrxDQRawString(TALLOC_CTX *ctx, void *objPtr)
 	/* Return the string */
 	return res;
 }
+/*
+ * Return the watchdog counter count, and reset it back to 0
+ * 
+ * Arguments:
+ * 
+ * 1. Pointer to receive header
+ * 
+ * Return value:
+ * 
+ * Number of ticks counted since last read.
+ * 
+ */
+ 
+
+int XplrxGetAndResetWdogCounter(void *objPtr)
+{
+	rxHeadPtr_t xh = objPtr;
+	int res;
+	
+	/* Lock the mutex */
+	XH_LOCK
+	
+	/* Sanity checks */
+	ASSERT_FAIL(xh);
+	ASSERT_FAIL(XH_MAGIC == xh->magic);
+	
+	res = xh->wdogCounter;
+	xh->wdogCounter = 0;
+	
+	/* Unlock the mutex */
+	XH_UNLOCK
+	
+	return res;
+	
+}
+
 
 	

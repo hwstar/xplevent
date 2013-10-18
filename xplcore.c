@@ -107,8 +107,7 @@ typedef struct {
 	XPLMessageClass_t messageClass;
 	Bool isUs;
 	Bool isBroadcastMessage;
-	
-	
+
 	
 	void *xplObj; /* Pointer back to master object */
 	void *serviceObj; /* Set to point to service object on TX messages, is set to NULL on receive messages */
@@ -163,6 +162,7 @@ typedef struct xplObj_s {
 	int timerFD; /* Timer FD for timing heart beats */
 	int broadcastAddrLen; /* Indicates length of data in broadcastAddr stuct below */
 	int localConnPort; /* Ephemeral port for packets sent from local hub */
+	int ticks; /* Tick counter */
 	void *poller; /* Pointer to the poller object supplied by the user */
 	void *rcvr; /* Pointer to the receiver object */
 	void *generalPool; /* Pointer to general memory pool for strings and structs */
@@ -682,7 +682,7 @@ static int addBroadcastSock(int sock, void *addr, int addrlen, int family, int s
  * None
  */
 
-static void xplTick(int fd, int id, void *objPtr)
+static void xplTick(int fd, int event, void *objPtr)
 {
 	xplObjPtr_t xp = objPtr;
 	xplServicePtr_t xs;
@@ -692,6 +692,15 @@ static void xplTick(int fd, int id, void *objPtr)
 	ASSERT_FAIL(xp)
 	ASSERT_FAIL(XP_MAGIC == xp->magic)
 	
+	xp->ticks++;
+	
+	/* Test for RX thread running */
+	if(9 == xp->ticks % 10){
+		if(!XplrxGetAndResetWdogCounter(xp->rcvr)){
+			fatal("XPL RX thread is not responding");
+		}
+	}
+		
 	if(8 != read(fd, tickBuff, 8)){
 		debug(DEBUG_UNEXPECTED, "%s: Could not read timerfd: %s", __func__, strerror_r(errno, eBuff, sizeof(eBuff)));
 		return;
