@@ -1180,7 +1180,7 @@ int main(int argc, char *argv[])
 	
 	MonitorSetup();
 	
-	debug(DEBUG_STATUS,"Running Monitor");
+	debug(DEBUG_STATUS,"Waiting for poll events....");
 	
 	
 	if(FAIL == PollWait(Globals->poller, NULL)){
