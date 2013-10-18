@@ -1183,7 +1183,7 @@ int main(int argc, char *argv[])
 	debug(DEBUG_STATUS,"Running Monitor");
 	
 	
-	if(FAIL == PollWait(Globals->poller, 1000, NULL)){
+	if(FAIL == PollWait(Globals->poller, NULL)){
 		fatal("Poll error detected");
 	}
 
