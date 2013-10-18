@@ -25,8 +25,6 @@ Bool PollDestroy(void *pHead);
 Bool PollRegEvent(void *pHead, int regFD, uint32_t watchType, 
 void (*action)(int fd, int event, void *userObject), void *userObject);
 Bool PollUnRegEvent(void *pHead, int regFD);
-int PollRegTimeout(void *pHead, void (*action)(int id, void *userObject), void *userObject);
-Bool PollUnRegTimeout(void *pHead, int id);
-Bool PollWait(void *pHead, int timeoutMs, const sigset_t *sigmask);
+Bool PollWait(void *pHead, const sigset_t *sigmask);
 
 #endif
