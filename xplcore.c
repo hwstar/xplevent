@@ -75,7 +75,7 @@
 #define HUB_NO_ECHO_INTERVAL 60
 #define DISCOVERY_MAX_TRIES 40
 
-#define WRITE_TEXT(xp, x) if (!appendText(xp, x)) return FALSE;
+#define WRITE_TEXT(xm, x) if (!appendText(xm, x)) return FALSE;
 #define VALID_CHAR(theChar) (((theChar >= 32) && (theChar < 123)) || (theChar = 124) || (theChar = 126))
 #define STR_FREE(p) if(p){ talloc_free(p); p = NULL;}
 
@@ -94,6 +94,7 @@ typedef struct {
 	unsigned magic;
 	XPLMessageType_t messageType;
 	int hopCount;
+	unsigned txBuffBytesWritten; /* Holds the number of bytes in txBuff */
 
 	String sourceVendor;
 	String sourceDeviceID;
@@ -103,6 +104,7 @@ typedef struct {
 	String targetInstanceID;
 	String schemaClass;
 	String schemaType;
+	String txBuff; /* Holds the transmit string */
 	
 	XPLMessageClass_t messageClass;
 	Bool isUs;
@@ -129,7 +131,6 @@ typedef struct xplService_s {
 	unsigned heartbeatInterval;
 	unsigned heartbeatTimer;
 	unsigned discoveryTries;
-	unsigned txBuffBytesWritten; /* Holds the number of bytes in txBuff */
 	XPLDiscoveryState_t discoveryState;
 	time_t lastHeartbeatAt;
 	XPLListenerReportMode_t reportMode;
@@ -140,7 +141,7 @@ typedef struct xplService_s {
 	String serviceDeviceID;
 	String serviceInstanceID;
 	String serviceVersion;
-	String txBuff; /* Holds the transmit string */
+
 	
 	xplMessagePtr_t heartbeatMessage;
 
@@ -790,7 +791,7 @@ static void releaseMessage(xplMessagePtr_t xm)
  *
  * Arguments:
  *
- * 1. Pointer to service object with the message string.
+ * 1. Pointer to message object with the message string.
  *
  * Return value
  *
@@ -798,17 +799,17 @@ static void releaseMessage(xplMessagePtr_t xm)
  *
  */  
               
-static Bool sendRawMessage(xplServicePtr_t xs)
+static Bool sendRawMessage(xplMessagePtr_t xm)
 {
 	
 	int bytesSent;
 	char eStr[64];
-	xplObjPtr_t xp = xs->xplObj;
+	xplObjPtr_t xp = xm->xplObj;
 	
-	unsigned buffLen = xs->txBuffBytesWritten;
+	unsigned buffLen = xm->txBuffBytesWritten;
 
 	/* Try to send the message */
-	if ((bytesSent = sendto(xp->broadcastFD, xs->txBuff, buffLen, 0, 
+	if ((bytesSent = sendto(xp->broadcastFD, xm->txBuff, buffLen, 0, 
 		(struct sockaddr *) &xp->broadcastAddr, sizeof(struct sockaddr_storage))) != buffLen) {
 		debug(DEBUG_UNEXPECTED, "Unable to broadcast message, %s (%d)", strerror_r(errno, eStr, 64), errno);
 		return FALSE;
@@ -820,7 +821,7 @@ static Bool sendRawMessage(xplServicePtr_t xs)
 /* 
  * Append text to the tx Buffer and keep track of what we've used 
  *
- * 1. Pointer to service object with the message string.
+ * 1. Pointer to message object with the message string.
  * 2. String to append.
  *
  * Return value
@@ -828,22 +829,22 @@ static Bool sendRawMessage(xplServicePtr_t xs)
  * Returns TRUE if the sting was appended, or FALSE if the message exceeds the maximum buffer size.
  */
  
-static Bool appendText(xplServicePtr_t xs, String theString) 
+static Bool appendText(xplMessagePtr_t xm, String theString) 
 {
 	int stringLen = strlen(theString);
 
 	/* Make sure it fits in the TX buffer */
-	if ((xs->txBuffBytesWritten + stringLen) >= MSG_MAX_SIZE) {
+	if ((xm->txBuffBytesWritten + stringLen) >= MSG_MAX_SIZE) {
 		debug(DEBUG_UNEXPECTED, "Message exceeds MSG_MAX_SIZE (%d) -- not sent!", MSG_MAX_SIZE);
-		debug(DEBUG_UNEXPECTED, "** Partial message is [%s]", xs->txBuff);
+		debug(DEBUG_UNEXPECTED, "** Partial message is [%s]", xm->txBuff);
 		return FALSE;
 	}
 
 	/* Copy the text in */
-	memcpy(&xs->txBuff[xs->txBuffBytesWritten], theString, stringLen);
-	xs->txBuffBytesWritten += stringLen;
+	memcpy(&xm->txBuff[xm->txBuffBytesWritten], theString, stringLen);
+	xm->txBuffBytesWritten += stringLen;
 	/* Terminate the string */
-	xs->txBuff[xs->txBuffBytesWritten] = '\0';
+	xm->txBuff[xs->txBuffBytesWritten] = '\0';
 	return TRUE;
 }
 
@@ -851,83 +852,82 @@ static Bool appendText(xplServicePtr_t xs, String theString)
 /* 
  * Format the message, and place it in the tx Buffer in the service object.
  *
- * 1. Pointer to service object with the message string.
- * 2. Pointer to the message object to format.
+ * 1. Pointer to the message object to format.
  *
  * Return value
  *
  * Returns TRUE if the message was formatted successfully, otherwise FALSE.
  */
  
-static Bool formatMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
+static Bool formatMessage(xplMessagePtr_t xm)
 {
 	xplNameValueLEPtr_t le;
 
 	/* Clear the write count */
-	xs->txBuffBytesWritten = 0;
+	xm->txBuffBytesWritten = 0;
 
 	/* Write header */
 	switch (xm->messageType) {
 		case XPL_MESSAGE_COMMAND:
-			WRITE_TEXT(xs, "xpl-cmnd");
+			WRITE_TEXT(xm, "xpl-cmnd");
 			break;
 		case XPL_MESSAGE_STATUS:
-			WRITE_TEXT(xs, "xpl-stat");
+			WRITE_TEXT(xm, "xpl-stat");
 			break;
 		case XPL_MESSAGE_TRIGGER:
-			WRITE_TEXT(xs, "xpl-trig");
+			WRITE_TEXT(xm, "xpl-trig");
 			break;
 		default:
 			ASSERT_FAIL(0);
 	}
 
 	/* Write hop and source info */
-	WRITE_TEXT(xs, "\n{\nhop=1\nsource=");
-	WRITE_TEXT(xs, xm->sourceVendor);
-	WRITE_TEXT(xs, "-");
-	WRITE_TEXT(xs, xm->sourceDeviceID);
-	WRITE_TEXT(xs, ".");
-	WRITE_TEXT(xs, xm->sourceInstanceID);
-	WRITE_TEXT(xs, "\n");
+	WRITE_TEXT(xm, "\n{\nhop=1\nsource=");
+	WRITE_TEXT(xm, xm->sourceVendor);
+	WRITE_TEXT(xm, "-");
+	WRITE_TEXT(xm, xm->sourceDeviceID);
+	WRITE_TEXT(xm, ".");
+	WRITE_TEXT(xm, xm->sourceInstanceID);
+	WRITE_TEXT(xm, "\n");
 
 	/* Write target */
 	if (xm->isBroadcastMessage){
-		WRITE_TEXT(xs, "target=*");
+		WRITE_TEXT(xm, "target=*");
 	} else{
-		WRITE_TEXT(xs, "target=");
-		WRITE_TEXT(xs, xm->targetVendor);
-		WRITE_TEXT(xs,"-");
-		WRITE_TEXT(xs, xm->targetDeviceID);
-		WRITE_TEXT(xs, ".");
-		WRITE_TEXT(xs, xm->targetInstanceID);
+		WRITE_TEXT(xm, "target=");
+		WRITE_TEXT(xm, xm->targetVendor);
+		WRITE_TEXT(xm,"-");
+		WRITE_TEXT(xm, xm->targetDeviceID);
+		WRITE_TEXT(xm, ".");
+		WRITE_TEXT(xm, xm->targetInstanceID);
 	}
-	WRITE_TEXT(xs, "\n}\n");
+	WRITE_TEXT(xm, "\n}\n");
 
 	/* Write the schema out */
-	WRITE_TEXT(xs, xm->schemaClass);
-	WRITE_TEXT(xs, ".");
-	WRITE_TEXT(xs, xm->schemaType);
-	WRITE_TEXT(xs, "\n{\n");
+	WRITE_TEXT(xm, xm->schemaClass);
+	WRITE_TEXT(xm, ".");
+	WRITE_TEXT(xm, xm->schemaType);
+	WRITE_TEXT(xm, "\n{\n");
 
 	/* Write Name/Value Pairs out */
 	for (le = xm->nvHead; le; le = le->next) {
-		WRITE_TEXT(xs, le->itemName);
-		WRITE_TEXT(xs, "=");
+		WRITE_TEXT(xm, le->itemName);
+		WRITE_TEXT(xm, "=");
 
 		/* Write data content out */
 		if (le->itemValue != NULL) {
-			WRITE_TEXT(xs, le->itemValue);
+			WRITE_TEXT(xm, le->itemValue);
 		}
 
 		/* Terminate line/entry */
-		WRITE_TEXT(xs, "\n");
+		WRITE_TEXT(xm, "\n");
 	}
 
 	/* Write message terminator */
-	WRITE_TEXT(xs, "}\n");
+	WRITE_TEXT(xm, "}\n");
 
 	/* Terminate and return text */
-	xs->txBuff[xs->txBuffBytesWritten] = '\0';
+	xm->txBuff[xm->txBuffBytesWritten] = '\0';
 	return TRUE;
 }
 
@@ -944,16 +944,16 @@ static Bool formatMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
  *
  */ 
                                                     
-static Bool sendMessage(xplServicePtr_t xs, xplMessagePtr_t xm)
+static Bool sendMessage(xplMessagePtr_t xm)
 {
 	/* Write the message to text */
-	if (FALSE == formatMessage(xs, xm)){
+	if (FALSE == formatMessage(xm)){
 		return FALSE;
 	}
 	
 	/* Attempt to broadcast it */
-	debug(DEBUG_INCOMPLETE, "*** About to broadcast %d bytes as: \n%s\n", xs->txBuffBytesWritten, xs->txBuff);
-	if (!sendRawMessage(xs)){
+	debug(DEBUG_INCOMPLETE, "*** About to broadcast %d bytes as: \n%s\n", xm->txBuffBytesWritten, xm->txBuff);
+	if (!sendRawMessage(xm)){
 		return FALSE;
 	}
 	return TRUE;
@@ -977,6 +977,10 @@ static xplMessagePtr_t createSendableMessage(xplServicePtr_t xs, XPLMessageType_
   
   /* Allocate the message (owned by the service context) */
   MALLOC_FAIL(xm = talloc_zero(xs, xplMessage_t))
+  
+  /* Allocate a raw message buffer */
+  MALLOC_FAIL(xm->txBuff = talloc_zero_array(xm, char, MSG_MAX_SIZE))
+	
   
   /* Install references back to service and master objects */
   xm->xplObj = xs->xplObj;
@@ -1202,7 +1206,7 @@ static Bool sendHeartbeat(xplServicePtr_t xs)
 	}
     
 	/* Send the message */
-	if (!sendMessage(xs, theHeartbeat)){
+	if (!sendMessage(theHeartbeat)){
 		return FALSE;
 	}
 
@@ -1271,7 +1275,7 @@ static Bool sendGoodbyeHeartbeat(xplServicePtr_t xs)
 	}
     
 	/* Send the message */
-	if (!sendMessage(xs, theHeartbeat)){
+	if (!sendMessage(theHeartbeat)){
 		return FALSE;
 	}
 
@@ -1751,9 +1755,6 @@ static xplServicePtr_t createService(xplObjPtr_t xp, String theVendor, String th
 	
 	/* Allocate space for the service object */
 	MALLOC_FAIL(xs = talloc_zero(xp->generalPool, xplService_t))
-	
-	/* Allocate the raw message buffer */
-	MALLOC_FAIL(xs->txBuff = talloc_zero_array(xs, char, MSG_MAX_SIZE))
 	
 	/* Install reference to master object */
 	xs->xplObj = xp;
