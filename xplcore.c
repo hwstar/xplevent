@@ -844,7 +844,7 @@ static Bool appendText(xplMessagePtr_t xm, String theString)
 	memcpy(&xm->txBuff[xm->txBuffBytesWritten], theString, stringLen);
 	xm->txBuffBytesWritten += stringLen;
 	/* Terminate the string */
-	xm->txBuff[xs->txBuffBytesWritten] = '\0';
+	xm->txBuff[xm->txBuffBytesWritten] = '\0';
 	return TRUE;
 }
 
