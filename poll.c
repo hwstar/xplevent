@@ -59,31 +59,16 @@ typedef struct PollEntry_s {
 
 typedef PollEntry_t  * PollEntryPtr_t;
 
-/* Time out list entry */
-typedef struct TimeOutEntry_s {
-	unsigned magic;
-	int id;
-	void *userObject;
-	void (*action)(int id, void *userObject);
-	struct TimeOutEntry_s *prev;
-	struct TimeOutEntry_s *next;
-} TimeOutEntry_t;
-
-
-typedef TimeOutEntry_t * TimeOutEntryPtr_t;
-
 
 /* Poll header */
 typedef struct PollHeader_s {
 	unsigned magic;
 	int fd;
-	int toID;
 	unsigned maxevents;
 	struct epoll_event *eventlist;
 	PollEntryPtr_t peHead;
 	PollEntryPtr_t peTail;
-	TimeOutEntryPtr_t toHead;
-	TimeOutEntryPtr_t toTail;
+
 } PollHeader_t;
 
 typedef PollHeader_t * PollHeaderPtr_t;
@@ -119,47 +104,6 @@ static void removePollItem(PollHeaderPtr_t ph, PollEntryPtr_t e)
 		/* At the end of the list */
 		ph->peTail->prev->next = NULL;
 		ph->peTail = ph->peTail->prev;
-	}
-	else{
-		/* In the middle of the list */
-		e->prev->next = e->next;
-		e->next->prev = e->prev;
-
-	}
-}
-
-/*
- * Remove a timeout item from the list
- *
- * Arguments:
- *
- * 1. Pointer to poll object 
- * 2. Pointer to time out item to remove.
- *
- * Return value
- *
- * None
- */
- 
-
-static void removeTimeOutItem(PollHeaderPtr_t ph, TimeOutEntryPtr_t e)
-{			
-	if(!e->prev){
-		/* At the beginning of the list, and/or the only entry */
-		if(!e->next){
-			/* Only entry */
-			ph->toHead = ph->toTail = NULL;
-		}
-		else{
-			/* Entries follow */
-			ph->toHead->next->prev = NULL;
-			ph->toHead = ph->toHead->next;
-		}	
-	}
-	else if(!e->next){
-		/* At the end of the list */
-		ph->toTail->prev->next = NULL;
-		ph->toTail = ph->toTail->prev;
 	}
 	else{
 		/* In the middle of the list */
@@ -253,31 +197,6 @@ void (*action)(int fd, int event, void *userObject), void *userObject)
 	}
 	
 	return PASS;
-}
-
-/*
- * Run through the list of timeout handlers calling each action function
- *
- * Arguments:
- *
- * 1. Pointer to the poll object
- *
- * Return value
- *
- * None
- */
- 
-static void doTimeoutHandlers(PollHeaderPtr_t ph)
-{
-	TimeOutEntryPtr_t e;
-	
-	if(ph->toHead){ /* Entries to process? */
-		for(e = ph->toHead; e; e = e->next){
-			ASSERT_FAIL(TE_MAGIC == e->magic)
-			ASSERT_FAIL(e->action)
-			(*e->action)(e->id, e->userObject);
-		}
-	}	
 }
 
 
@@ -509,108 +428,6 @@ Bool PollUnRegEvent(void *pHead, int regFD)
 }
 
 
-/*
- * Register a timeout
- *
- * Arguments:
- *
- * 1. Pointer to a poll object 
- * 2. Pointer to a function to call when the timeout occurs.
- * 3. Pointer to the a user object.
- *
- * Return value
- *
- * PASS if successful, otherwise FAIL
- */
-
-int PollRegTimeout(void *pHead, void (*action)(int id, void *userObject), void *userObject)
-{
-	Bool res = PASS;
-	PollHeaderPtr_t ph = pHead;
-	TimeOutEntryPtr_t e = NULL;
-
-	ASSERT_FAIL(ph)
-	ASSERT_FAIL(PH_MAGIC == ph->magic)
-	ASSERT_FAIL(action)
-
-	/* Allocate a list entry */
-	MALLOC_FAIL(e = talloc_zero(pHead, TimeOutEntry_t))
-	e->magic = TE_MAGIC;
-	e->userObject = userObject;
-	e->id = ph->toID++;
-	ASSERT_FAIL(ph->toID < INT_MAX)
-	e->action = action;
-	
-	/* Append entry to list */
-	if(!ph->toHead){
-		/* Append to empty list */
-		ph->toHead = ph->toTail = e;
-	}
-	else{
-		/* Append to existing list */
-		e->prev = ph->toTail;
-		e->prev->next = e;
-		ph->toTail = e;	
-	}
-	
-	
-	return res;
-}
-
-/*
- * Unregister a timeout
- *
- * Arguments:
- *
- * 1. Pointer to message object 
- * 2. A talloc context to use for allocating the component strings.
- * 3. An address for the vendor string.
- * 4. An address for the device ID string.
- * 5. An address for the instance ID string.
- *
- * Return value
- *
- * None
- */
-
-Bool PollUnRegTimeout(void *pHead, int id)
-{
-	PollHeaderPtr_t ph = pHead;
-	TimeOutEntryPtr_t e;
-
-	ASSERT_FAIL(ph)
-	ASSERT_FAIL(PH_MAGIC == ph->magic)
-	ASSERT_FAIL(id >= 0)
-	ASSERT_FAIL(ph->toHead)
-
-	/*
-	 * Find the fd in the list.
-	 */
-
-	 
-	 for(e = ph->toHead; e; e = e->next){
-		 ASSERT_FAIL(TE_MAGIC == e->magic)
-		 if(e->id == id){
-			break;
-		}
-	 }
-	 
-	/* Was it found? */
-	if(!e){
-		debug(DEBUG_UNEXPECTED,"%s: id %d not in list", __func__, id); 
-		return FAIL;
-	}
-	/* Remove it */
-	removeTimeOutItem(ph, e);
-	
-	/* Free the poll entry */
-	
-	talloc_free(e);
-	
-	return PASS;
-}
-
-
 
 
 /* 
@@ -629,7 +446,7 @@ Bool PollUnRegTimeout(void *pHead, int id)
  */
  
 
-Bool PollWait(void *pHead, int timeoutMs, const sigset_t *sigmask )
+Bool PollWait(void *pHead, const sigset_t *sigmask )
 {
 	PollHeaderPtr_t ph = pHead;
 	int eventCount;
@@ -638,9 +455,8 @@ Bool PollWait(void *pHead, int timeoutMs, const sigset_t *sigmask )
 	ASSERT_FAIL(PH_MAGIC == ph->magic)
 	
 	for(;;){ /* Loop until a serious error occurs */
-		if((eventCount = epoll_pwait(ph->fd, ph->eventlist, ph->maxevents, timeoutMs, sigmask)) < 0){
+		if((eventCount = epoll_pwait(ph->fd, ph->eventlist, ph->maxevents, -1, sigmask)) < 0){
 			if(EINTR == errno){
-				doTimeoutHandlers(ph);
 				continue;
 				/* Timeout */
 			}
@@ -651,14 +467,11 @@ Bool PollWait(void *pHead, int timeoutMs, const sigset_t *sigmask )
 			}
 		}
 		else{
-			if(!eventCount){
-				/* no events: Time out */
-				doTimeoutHandlers(ph);
-			}
-			else{
+			if(eventCount){
 				/* got an event or series of events */
 				doEventList(ph, eventCount);
 			}
+			
 		}
 		
 	} 
