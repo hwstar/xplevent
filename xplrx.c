@@ -396,7 +396,7 @@ static void *rxThread(void *objPtr)
 	XH_UNLOCK
 	
 
-	PollWait(poller, 1000, NULL);
+	PollWait(poller, NULL);
 	debug(DEBUG_UNEXPECTED, "Poll returned serious error: %d", errno);
 	fatal("%s: Poll error in RX thread", __func__);
 	
