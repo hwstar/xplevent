@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/timerfd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/un.h>
@@ -697,9 +698,17 @@ static void xPLListener(void *theMessage, void *theService, void *userValue, XPL
 */
  
 
-static void xplShutdown(void)
+static void monitorShutdown(void)
 {
+		debug(DEBUG_STATUS, "Monitor shutdown");
 		XplDestroy(Globals->xplObj);
+		
+		if(Globals->timerFD > 0){
+			close(Globals->timerFD);
+		}
+		
+		PollDestroy(Globals->poller);
+		
 }
 /*
  * Scheduler handler for executing scripts
@@ -795,8 +804,15 @@ static Bool schedulerLoad(void)
 */
  
 
-static void tickHandler(int userVal, void *obj)
+static void tickHandler(int fd, int flags, void *obj)
 {
+	char tickBuff[8];
+	char eBuff[64];
+	
+	if(8 != read(fd, tickBuff, 8)){
+		debug(DEBUG_UNEXPECTED, "%s: Could not read timerfd: %s", __func__, strerror_r(errno, eBuff, sizeof(eBuff)));
+	}
+	debug(DEBUG_INCOMPLETE, "Monitor Tick\n");
 
 	if((Globals->xplEventService) && ( XPL_HUB_CONFIRMED == XplGetHubDiscoveryState(Globals->xplEventService))){
 		/* Hub must be confirmed to send data */
@@ -1157,6 +1173,7 @@ void MonitorSendScript(TALLOC_CTX *ctx, int userSock, String theScript, String i
 
 void MonitorSetup(void)
 {
+	struct itimerspec its;
 
 	if(!(Globals->xplObj = XplInit(Globals, Globals->poller, Globals->ipAddr, Globals->xplService))){
 		fatal("Could not create XPL  object, is the interface up?");
@@ -1167,7 +1184,22 @@ void MonitorSetup(void)
 	
 
 	/* Add 1 second tick service */
-	PollRegTimeout(Globals->poller, tickHandler, NULL);
+	/* Create a timerfd to keep track of heartbeats */
+	if((Globals->timerFD = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK)) < 0){
+		fatal("%s: Could not create an timer FD", __func__);
+	}
+	
+	/* Set the timerfd time interval */
+	its.it_value.tv_sec = its.it_interval.tv_sec = 6;
+	its.it_value.tv_nsec = its.it_interval.tv_nsec = 0;
+	if(timerfd_settime(Globals->timerFD, 0, &its, NULL) < 0){
+		fatal("%s: Could not set timer FD interval", __func__);
+	}	
+	
+	/* Register the timer */
+	if(FAIL == PollRegEvent(Globals->poller, Globals->timerFD, POLL_WT_IN, tickHandler, NULL)){
+		fatal("%s: Could not register poll event for timerFD", __func__);
+	}
 
   	/* And a listener for all xPL messages */
   	XplAddMessageListener(Globals->xplEventService, XPL_REPORT_MODE_NORMAL, FALSE, NULL, xPLListener);
@@ -1182,7 +1214,7 @@ void MonitorSetup(void)
  	/* Enable the service */
   	XplEnableService(Globals->xplEventService);
 
-	atexit(xplShutdown);
+	atexit(monitorShutdown);
 }
 
 

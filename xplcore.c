@@ -2483,7 +2483,6 @@ Bool XplSendMessage(void *XPLMessage)
 	ASSERT_FAIL(xm) /* Object must exist */
 	ASSERT_FAIL(XM_MAGIC == xm->magic) /* Object must be valid */
 	ASSERT_FAIL(xm->serviceObj) /* Message must be sendable */
-	xs = xm->serviceObj; /* Re-create pointer to service object */
 	ASSERT_FAIL(xm->schemaClass)
 	ASSERT_FAIL(xm->schemaType)
 	return sendMessage(xm);	

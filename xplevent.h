@@ -8,6 +8,7 @@ typedef struct XPLEvGlobals_s {
 	Bool noBackground;
 	Bool weWroteThePIDFile;
 	int debugLvl;
+	int timerFD;
 	String progName;
 	String cmdBindAddress;
 	String cmdHostName;
