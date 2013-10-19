@@ -1183,8 +1183,8 @@ void MonitorSetup(void)
 	Globals->xplEventService = XplNewService(Globals->xplObj, "hwstar", "xplevent", Globals->instanceID, VERSION);
 	
 
-	/* Add 1 second tick service */
-	/* Create a timerfd to keep track of heartbeats */
+	/* Add 6 second tick service */
+	/* Create a timerfd to poll the scheduler periodically */
 	if((Globals->timerFD = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK)) < 0){
 		fatal("%s: Could not create an timer FD", __func__);
 	}
