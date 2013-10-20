@@ -761,8 +761,17 @@ void schedulerExec(TALLOC_CTX *ctx, const String entryName, const String scriptN
 
 static int addScheduleEntry(void *data, int argc, String *argv, String *colnames)
 {
+	const String name = DBGetFieldByName(argv, colnames, "name");
+	const String param = DBGetFieldByName(argv, colnames, "param");
+	const String scriptname = DBGetFieldByName(argv, colnames, "scriptname");
+	
 	ASSERT_FAIL(argc == 4)
-	SchedulerAdd(data, argv[1], argv[2], schedulerExec, argv[3]);
+	ASSERT_FAIL(name)
+	ASSERT_FAIL(param)
+	ASSERT_FAIL(scriptname)
+	
+	SchedulerAdd(data, name, param, schedulerExec, scriptname);
+	debug(DEBUG_ACTION, "Added schedule entry: name = %s, param = %s, scriptname = %s", name, param, scriptname);
 	return 0;
 }
 

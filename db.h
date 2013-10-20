@@ -15,5 +15,6 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source);
 Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String script);
 Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table, unsigned limit, DBRecordCallBack_t callback);
 void DBGenFile(TALLOC_CTX *ctx, String theFile, Bool forceFlag);
+const String DBGetFieldByName(const String *argv, const String *colnames, const String colname);
 
 #endif

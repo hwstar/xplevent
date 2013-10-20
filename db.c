@@ -58,7 +58,7 @@ typedef callbackData_t * callbackDataPtr_t;
 * Boolean. Returns PASS if successful, FAIL if otherwise.
 */
 
-static Bool dbTxBegin(void *db, String id)
+static Bool dbTxBegin(void *db, const char *id)
 {
 	String errorMessage;
 	
@@ -86,7 +86,7 @@ static Bool dbTxBegin(void *db, String id)
 * None
 */
 
-static void dbTxEnd(void *db, String id, Bool type)
+static void dbTxEnd(void *db, const char *id, Bool type)
 {
 	String errorMessage;
 	
@@ -170,12 +170,12 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
  *
  * Return Value:
  *
- * The value in the column referenced argument 7 as a String.
+ * The value in the column referenced argument as a String.
  * A NULL indicates the record was not found.
  * Result must be talloc_free'd when no longer required
  */
 
-static const String dbReadField(void *db, TALLOC_CTX *ctx, String id, String table, 
+static const String dbReadField(void *db, TALLOC_CTX *ctx, const char *id, String table, 
 String keyColName, String key, String valueColName)
 {
 	String errorMessage;
@@ -226,7 +226,7 @@ String keyColName, String key, String valueColName)
  * Boolean. PASS indicates success,  FAIL indicates failure.
  */
  
-static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, String id, String table, String colName, String key)
+static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, const char *id, String table, String colName, String key)
 {
 	String sql;
 	String errorMessage;
@@ -328,22 +328,22 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 
 
 	String p = NULL;
-	static const String id = "DBReadNVState";
+
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(key)
 		
 	/* Transaction start */
-	if(dbTxBegin(db, id) != PASS){
+	if(dbTxBegin(db, __func__) != PASS){
 		return NULL;
 	}
 		
-	p = dbReadField(db, ctx, id, "nvstate", "key", key, "value");
+	p = dbReadField(db, ctx, __func__, "nvstate", "key", key, "value");
 	
 	/* Transaction commit */
 	
-	dbTxEnd(db, id, PASS);
+	dbTxEnd(db, __func__, PASS);
 
 	return p;
 }
@@ -369,7 +369,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 {
 	Bool res = PASS;
 	String errorMessage;
-	static const String id = "DBWriteNVState";
+	
 	String sql = NULL;
 	String p;
 	time_t now;
@@ -383,16 +383,16 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, id) != PASS){
+	if(dbTxBegin(db, __func__) != PASS){
 		return FAIL;
 	}
 	
 
 
-	p = dbReadField(db, ctx, id, "nvstate", "key", key, "value");
+	p = dbReadField(db, ctx, __func__, "nvstate", "key", key, "value");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, id, "nvstate", "key",  key);
+		res = dbDeleteRow(db, ctx, __func__, "nvstate", "key",  key);
 	}
 	
 	if(res == PASS){
@@ -404,7 +404,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
 			sqlite3_free(errorMessage);
 			res = FAIL;
 		}
@@ -417,7 +417,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 	/* Transaction end */
 	
-	dbTxEnd(db, id, res);
+	dbTxEnd(db, __func__, res);
 
 	return res;
 	
@@ -445,19 +445,18 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 {
 
 	String script = NULL;
-	static const String id = "DBFetchScript";
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(scriptName)
 
-	if(dbTxBegin(db, id) == FAIL){
+	if(dbTxBegin(db, __func__) == FAIL){
 		return NULL;
 	}
 	
-	script = dbReadField(db, ctx, id, "scripts", "scriptname", scriptName, "scriptcode");
+	script = dbReadField(db, ctx, __func__, "scripts", "scriptname", scriptName, "scriptcode");
 	
-	dbTxEnd(db, id, PASS);
+	dbTxEnd(db, __func__, PASS);
 	
 	return script;
 }
@@ -483,24 +482,23 @@ const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *db, const String tagSubAd
 
 	String scriptName = NULL;
 	String script = NULL;
-	static const String id = "DBFetchScriptName";
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(tagSubAddr)
 
-	if(dbTxBegin(db, id) == FAIL){
+	if(dbTxBegin(db, __func__) == FAIL){
 		return NULL;
 	}
 	
-	scriptName = dbReadField(db, ctx, id, "trigaction", "source", tagSubAddr, "action");
+	scriptName = dbReadField(db, ctx, __func__, "trigaction", "source", tagSubAddr, "action");
 	
 	if(scriptName){
-		script = dbReadField(db, ctx, id, "scripts", "scriptname", scriptName, "scriptcode");
+		script = dbReadField(db, ctx, __func__, "scripts", "scriptname", scriptName, "scriptcode");
 		talloc_free(scriptName);
 	}
 	
-	dbTxEnd(db, id, PASS);
+	dbTxEnd(db, __func__, PASS);
 	
 	return script;
 }
@@ -530,7 +528,6 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 {
 	Bool res = PASS;
 	String errorMessage;
-	static const String id = "DBUpdateTrigLog";
 	String sql = NULL;
 	String p;
 	time_t now;
@@ -545,16 +542,16 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, id) != PASS){
+	if(dbTxBegin(db, __func__) != PASS){
 		return FAIL;
 	}
 	
 
 
-	p = dbReadField(db, ctx, id, "triglog", "source", source, "nvpairs");
+	p = dbReadField(db, ctx, __func__, "triglog", "source", source, "nvpairs");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, id, "triglog", "source", source);
+		res = dbDeleteRow(db, ctx, __func__, "triglog", "source", source);
 	}
 	
 	if(res == PASS){
@@ -566,7 +563,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
 			sqlite3_free(errorMessage);
 			res = FAIL;
 		}
@@ -579,7 +576,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 
 	/* Transaction end */
 	
-	dbTxEnd(db, id, res);
+	dbTxEnd(db, __func__, res);
 
 	return res;
 	
@@ -607,7 +604,6 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 {
 	Bool res = PASS;
 	String errorMessage;
-	static const String id = "DBUpdateTrigLog";
 	String sql = NULL;
 	String p;
 	time_t now;
@@ -620,14 +616,14 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, id) != PASS){
+	if(dbTxBegin(db, __func__) != PASS){
 		return FAIL;
 	}
 	
-	p = dbReadField(db, ctx, id, "hbeatlog", "source", source, "source");
+	p = dbReadField(db, ctx, __func__, "hbeatlog", "source", source, "source");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, id, "hbeatlog", "source", source);
+		res = dbDeleteRow(db, ctx, __func__, "hbeatlog", "source", source);
 	}
 	
 	if(res == PASS){
@@ -639,7 +635,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
 			sqlite3_free(errorMessage);
 			res = FAIL;
 		}
@@ -651,7 +647,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 
 	/* Transaction end */
 	
-	dbTxEnd(db, id, res);
+	dbTxEnd(db, __func__, res);
 
 	return res;
 	
@@ -685,7 +681,6 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	
 	String scriptBuf;
 	String errorMessage;
-	static const String id = "DBUpdateScript";
 	String sql = NULL;
 	String p;
 
@@ -723,15 +718,15 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, id) != PASS){
+	if(dbTxBegin(db, __func__) != PASS){
 		talloc_free(scriptBuf);
 		return FAIL;
 	}
 	
-	p = dbReadField(db, ctx, id, "scripts", "scriptname", name, "scriptcode");
+	p = dbReadField(db, ctx, __func__, "scripts", "scriptname", name, "scriptcode");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, id, "scripts", "scriptname", name);
+		res = dbDeleteRow(db, ctx, __func__, "scripts", "scriptname", name);
 	}
 	
 	if(res == PASS){
@@ -743,7 +738,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", id, errorMessage);
+			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
 			sqlite3_free(errorMessage);
 			talloc_free(scriptBuf);
 			res = FAIL;
@@ -760,7 +755,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 
 	/* Transaction end */
 	
-	dbTxEnd(db, id, res);
+	dbTxEnd(db, __func__, res);
 
 	return res;
 	
@@ -795,25 +790,25 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 	Bool res;
 	String errorMessage;
 	String sql = NULL;
-	String id = "DBReadRecords";
+
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(callback)
 	
-	res = dbTxBegin(db, id);
+	res = dbTxBegin(db, __func__);
 	if(res == PASS)
 		sql = talloc_asprintf(ctx , "SELECT * FROM %s LIMIT %u", table, limit);
 		MALLOC_FAIL(sql);
 		sqlite3_exec((sqlite3 *) db, sql, callback, data , &errorMessage);
 		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"%s: Sqlite select error on select: ", id, errorMessage);
+			debug(DEBUG_UNEXPECTED,"%s: Sqlite select error on select: ", __func__, errorMessage);
 			sqlite3_free(errorMessage);
 			res = FAIL;
 		}
 	
-	dbTxEnd(db, id, res);
+	dbTxEnd(db, __func__, res);
 	
 	if(sql){
 		talloc_free(sql);
@@ -824,9 +819,51 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 }
 
 /*
+ * Return a field value by name
+ * 
+ * Arguments:
+ * 1. List of field values as an array of strings
+ * 2. List of column names as an array of strings
+ * 3. Column name to return the value for
+ * 
+ * Return value:
+ * 
+ * String with value, or NULL if column name does not exist
+ * 
+ */
+
+const String DBGetFieldByName(const String *argv, const String *colnames, const String colname)
+{
+	int i;
+	ASSERT_FAIL(argv)
+	ASSERT_FAIL(colnames)
+	ASSERT_FAIL(colname)
+	for(i = 0; colnames[i]; i++){
+		if(!strcmp(colnames[i], colname))
+			break;
+	}
+	if(colnames[i]){
+		return argv[i];
+	}
+	return NULL;
+}
+
+
+
+/*
  * Generate an empty database file with the correct tables in it
  * 
  * Note: This function will refuse to overwrite an existing file unless the force flag is set
+ * 
+ * Arguments:
+ * 
+ * 1. A talloc context for transitory data
+ * 2. The path to the file to generate
+ * 3. Flag to force the overwriting of an existing file
+ * 
+ * Return value:
+ * 
+ * None
  */
 
 void DBGenFile(TALLOC_CTX *ctx, String theFile, Bool forceFlag)
@@ -867,60 +904,35 @@ void DBGenFile(TALLOC_CTX *ctx, String theFile, Bool forceFlag)
 	}	
 	
 	/* Create nvstate table */
-	sql = "CREATE TABLE nvstate (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"key\" TEXT NOT NULL,\"value\" TEXT,\"timestamp\" INTEGER NOT NULL);";
+	sql = "CREATE TABLE nvstate (\"nvstateid\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"key\" TEXT NOT NULL,\"value\" TEXT,\"timestamp\" INTEGER NOT NULL);";
 	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	if(errorMessage){
 		fatal("Sqlite create table error on nvstate: %s", errorMessage);
 	}	
 	
-	/* Create index for nvstate table */
-	sql = "CREATE UNIQUE INDEX \"idx-key\" on nvstate (key ASC);";
-	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
-	if(errorMessage){
-		fatal("Sqlite create table error on nvstate index: %s", errorMessage);
-	}
 	
 	/* Create scripts table */
-	sql = "CREATE TABLE \"scripts\" (\"ID\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"scriptname\" TEXT NOT NULL,\"scriptcode\" TEXT NOT NULL);";
+	sql = "CREATE TABLE \"scripts\" (\"scriptsid\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"scriptname\" TEXT NOT NULL,\"scriptcode\" TEXT NOT NULL);";
 	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	if(errorMessage){
 		fatal("Sqlite create table error on scripts: %s", errorMessage);
 	}	
 
-	/* Create index for script table */
-	sql = "CREATE UNIQUE INDEX \"idx-scriptname\" on scripts (scriptname ASC);";
-	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
-	if(errorMessage){
-		fatal("Sqlite create table error on script index: %s", errorMessage);
-	}	
-
 	/* Create trigaction table */
-	sql = "CREATE TABLE trigaction (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"source\" TEXT NOT NULL,\"action\" TEXT NOT NULL);";
+	sql = "CREATE TABLE trigaction (\"trigactionid\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"source\" TEXT NOT NULL,\"action\" TEXT NOT NULL);";
 	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	if(errorMessage){
 		fatal("Sqlite create table error on trigaction: ", errorMessage);
 		}	
 	
-	/* Create index for trigaction table */
-	sql = "CREATE UNIQUE INDEX \"idx-source\" on trigaction (source ASC);";
-	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
-	if(errorMessage){
-		fatal("Sqlite create table error on trigaction index: %s", errorMessage);
-	}	
 
 	/* Create schedule table */
-	sql = "CREATE TABLE schedule (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"name\" TEXT NOT NULL,\"param\" TEXT NOT NULL,\"scriptname\" TEXT NOT NULL);";
+	sql = "CREATE TABLE schedule (\"scheduleid\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\"name\" TEXT NOT NULL,\"param\" TEXT NOT NULL,\"scriptname\" TEXT NOT NULL);";
 	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
 	if(errorMessage){
 		fatal("Sqlite create table error on schedule: ", errorMessage);
 		}	
 
-	/* Create index for schedule table */
-	sql = "CREATE UNIQUE INDEX \"idx-name\" on schedule (name ASC);";
-	sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
-	if(errorMessage){
-		fatal("Sqlite create table error on schedule index: %s", errorMessage);
-	}	
 	/* Close the database */
 	sqlite3_close(db);
 	note("sqlite3 database file created successfully");	
