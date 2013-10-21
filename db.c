@@ -36,6 +36,8 @@
 #include "db.h"
 #include "xplevent.h"
 
+typedef enum {TXTY_DEFERRED = 0, TXTY_IMMEDIATE, TXTY_EXCLUSIVE} txType_t;
+
 typedef struct callbackData_s {
 	TALLOC_CTX *ctx;
 	String valueName;
@@ -44,6 +46,41 @@ typedef struct callbackData_s {
 	
 typedef callbackData_t * callbackDataPtr_t;
 
+
+static Bool simpleTX(void *db, const char *id, const char *sql, int *res)
+{
+	int r;
+	sqlite3_stmt *stmt = NULL;
+		
+	/* Prepare */
+	if(SQLITE_OK != (r = sqlite3_prepare_v2(db, sql,1 + strlen(sql), &stmt, NULL))){
+		if(res){
+			*res = r;
+		}
+		debug(DEBUG_UNEXPECTED, "%s: Sqlite error on prepare statement: %s, error code = %d " , id, sql, r);
+		return FAIL;
+	}
+	
+	/* Step */
+	if(stmt){
+		if(SQLITE_DONE != (r = sqlite3_step(stmt))){
+			debug(DEBUG_UNEXPECTED, "%s: Sqlite error on step: %s, error code = %d " , id, sql, r);
+		}
+		sqlite3_reset(stmt);
+	}
+
+	/* Finalize */
+	if(SQLITE_OK != (r = sqlite3_finalize(stmt))){
+	
+		if(res){
+			*res = r;
+		}
+		debug(DEBUG_UNEXPECTED, "%s: Sqlite error on finalize: %s, error code = %d " , id, sql, r);
+		return FAIL;
+	}
+
+	return PASS;
+}
 
 /*
 * Begin a database transaction
@@ -58,18 +95,31 @@ typedef callbackData_t * callbackDataPtr_t;
 * Boolean. Returns PASS if successful, FAIL if otherwise.
 */
 
-static Bool dbTxBegin(void *db, const char *id)
+static Bool dbTxBegin(void *db, const char *id, txType_t txType)
 {
-	String errorMessage;
-	
-	/* Transaction start */
-	sqlite3_exec((sqlite3 *) db, "BEGIN TRANSACTION", NULL, NULL, &errorMessage);
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite error on %s begin tx: %s", id, errorMessage);
-		sqlite3_free(errorMessage);
-		return FAIL;
+	int res;
+	static String beginTx = "BEGIN DEFERRED";
+	static String beginImmedTx = "BEGIN IMMEDIATE";
+	static String beginExclTx = "BEGIN EXCLUSIVE";
+	String sql;
+	switch(txType){
+		case TXTY_DEFERRED:
+			sql = beginTx;
+			break;
+			
+		case TXTY_IMMEDIATE:
+			sql = beginImmedTx;
+			break;
+			
+		case TXTY_EXCLUSIVE:
+			sql = beginExclTx;
+			break;
+			
+		default:
+			ASSERT_FAIL(0);
 	}
-	return PASS;
+	
+	return simpleTX(db, id, sql, &res);
 }
 
 /*
@@ -88,25 +138,18 @@ static Bool dbTxBegin(void *db, const char *id)
 
 static void dbTxEnd(void *db, const char *id, Bool type)
 {
-	String errorMessage;
+	int res;
 	
 	/* Transaction commit */
 	if(type == PASS){
-		sqlite3_exec((sqlite3 *)db, "COMMIT TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite error on %s commit : %s", id, errorMessage);
-			sqlite3_free(errorMessage);
-			return;
-		}
+		simpleTX(db, id, "COMMIT TRANSACTION", &res);
+		return;
+
 	}
 	/* Transaction rollback */
 	else{
-		sqlite3_exec((sqlite3 *) db, "ROLLBACK TRANSACTION", NULL, NULL, &errorMessage);
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite rollback error on %s: %s", id, errorMessage);
-			sqlite3_free(errorMessage);
-			return;
-		}
+		simpleTX(db, id, "ROLLBACK TRANSACTION", &res);
+		return;
 	}
 }
 
@@ -335,7 +378,7 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 	ASSERT_FAIL(key)
 		
 	/* Transaction start */
-	if(dbTxBegin(db, __func__) != PASS){
+	if(dbTxBegin(db, __func__, TXTY_DEFERRED) != PASS){
 		return NULL;
 	}
 		
@@ -383,7 +426,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__) != PASS){
+	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
 		return FAIL;
 	}
 	
@@ -450,7 +493,7 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(scriptName)
 
-	if(dbTxBegin(db, __func__) == FAIL){
+	if(dbTxBegin(db, __func__, TXTY_DEFERRED) == FAIL){
 		return NULL;
 	}
 	
@@ -487,7 +530,7 @@ const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *db, const String tagSubAd
 	ASSERT_FAIL(db)
 	ASSERT_FAIL(tagSubAddr)
 
-	if(dbTxBegin(db, __func__) == FAIL){
+	if(dbTxBegin(db, __func__, TXTY_DEFERRED) == FAIL){
 		return NULL;
 	}
 	
@@ -542,7 +585,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__) != PASS){
+	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
 		return FAIL;
 	}
 	
@@ -616,7 +659,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__) != PASS){
+	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
 		return FAIL;
 	}
 	
@@ -718,7 +761,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__) != PASS){
+	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
 		talloc_free(scriptBuf);
 		return FAIL;
 	}
@@ -797,7 +840,7 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(callback)
 	
-	res = dbTxBegin(db, __func__);
+	res = dbTxBegin(db, __func__, TXTY_DEFERRED);
 	if(res == PASS)
 		sql = talloc_asprintf(ctx , "SELECT * FROM %s LIMIT %u", table, limit);
 		MALLOC_FAIL(sql);
