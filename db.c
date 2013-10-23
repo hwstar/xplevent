@@ -142,61 +142,39 @@ static void dbTxEnd(void *db, const char *id, Bool type)
 	
 	/* Transaction commit */
 	if(type == PASS){
-		simpleTX(db, id, "COMMIT TRANSACTION", &res);
+		simpleTX(db, id, "COMMIT", &res);
 		return;
 
 	}
 	/* Transaction rollback */
 	else{
-		simpleTX(db, id, "ROLLBACK TRANSACTION", &res);
+		simpleTX(db, id, "ROLLBACK", &res);
 		return;
 	}
 }
 
-
 /*
- * DBReadField callback function
- *
- * This is a standard SQLITE callback funcion used with an dbReadField function which
- * stores the selected result in a data structure for use by the caller of dBReadField.
- * This function looks for a field name match, and if found, allocates a String to hold
- * the value of the field and inserts it into the data structure passed in.
- * 
- * Arguments:
- *
- * 1. Generic pointer to callback data structure filled in by dbReadField.
- * 2. Number of fields.
- * 3. An array of field value strings filled in by SQLite.
- * 4. An array of column names filled in by SQLite. NULL-terminated.
- *
- * Return value:
- * Integer. Always 0.
+ * Find the index number by column name
  */
 
-static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *colnames)
+static Bool findColumnIndexByName(sqlite3_stmt *stmt, String ColName, int *index)
 {
-	callbackDataPtr_t cbd = objptr;
-	int i;
+	int i,numColumns = sqlite3_column_count(stmt);
+	String p;
 	
-	ASSERT_FAIL(objptr)
-	ASSERT_FAIL(cbd->ctx)
-	ASSERT_FAIL(cbd->valueName)
-	
-	/* Find index to column */
-	
-	for(i = 0; colnames[i]; i++){
-		if(!strcmp(colnames[i], cbd->valueName)){
-			break;
+	if(!numColumns){
+		return FAIL;
+	}
+	for(i = 0; i < numColumns; i++){
+		p = (String) sqlite3_column_origin_name(stmt, i);
+		if(!strcmp(p, ColName)){
+			*index = i;
+			return PASS;
 		}
 	}
-	if(colnames[i] && i < argc){ /* If a result was found */
-		cbd->res = talloc_strdup(cbd->ctx, argv[i]);
-		MALLOC_FAIL(cbd->res);
-	
-	}
-	
-	return 0;
+	return FAIL;		
 }
+
 
 /*
  * Return a single result from a select.
@@ -214,18 +192,17 @@ static int dbReadFieldCallback(void *objptr, int argc, String *argv, String *col
  * Return Value:
  *
  * The value in the column referenced argument as a String.
- * A NULL indicates the record was not found.
+ * A NULL indicates the record was not found, or an error occurred.
  * Result must be talloc_free'd when no longer required
  */
 
 static const String dbReadField(void *db, TALLOC_CTX *ctx, const char *id, String table, 
 String keyColName, String key, String valueColName)
 {
-	String errorMessage;
-	String sql;
-	callbackData_t cbd;
-	
-	
+	int res, index ;
+	String sql,p,q;
+	sqlite3_stmt *stmt = NULL;
+
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(keyColName)
 	ASSERT_FAIL(key)
@@ -234,21 +211,57 @@ String keyColName, String key, String valueColName)
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
 	
-	cbd.valueName = valueColName;
-	cbd.res = NULL;
-	cbd.ctx = ctx;
 	
-	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s='%s' LIMIT 1", table, keyColName, key);
-	MALLOC_FAIL(sql);
-	sqlite3_exec((sqlite3 *) db, sql, dbReadFieldCallback, (void *) &cbd , &errorMessage);
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite select error on %s select: %s", id, errorMessage);
-		sqlite3_free(errorMessage);
-	}
 
+	/* Generate query */
+	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s=:key LIMIT 1", table, keyColName);
+	MALLOC_FAIL(sql);
+	
+	/* Parse Sql */
+	if(SQLITE_OK != (res = sqlite3_prepare_v2((sqlite3 *) db, sql, -1, &stmt, NULL))){
+		debug(DEBUG_UNEXPECTED, "%s: Error on sqlite3_prepare(): %d. sql = %s", id, res, sql);
+		talloc_free(sql);
+		return NULL;
+
+	}
+	/* Free sql string */
 	talloc_free(sql);
 	
-	return cbd.res;		
+	/* Bind the key */
+	index = sqlite3_bind_parameter_index(stmt, ":key");
+	sqlite3_bind_text(stmt, index, key, -1, SQLITE_TRANSIENT);
+	
+	/* Execute the parsed statement */
+	res = sqlite3_step(stmt);
+	if(SQLITE_ROW == res){
+		/* Found a matching record */
+		if(FAIL == findColumnIndexByName(stmt, valueColName, &index)){
+			debug(DEBUG_UNEXPECTED,"%s: Column name not found: %s", id, valueColName);
+			sqlite3_finalize(stmt);
+			return NULL;
+		}
+		/* Extract value from column */
+		p = (String) sqlite3_column_text(stmt, index);
+		if(p){
+			MALLOC_FAIL(q = talloc_strdup(ctx, p))
+			sqlite3_finalize(stmt);
+			return q;
+		}
+		debug(DEBUG_UNEXPECTED, "%s: sqlite3_column_text() returned NULL", id);
+		sqlite3_finalize(stmt);
+		return NULL;
+	}
+	else{
+		sqlite3_finalize(stmt);
+		if(SQLITE_DONE == res){
+			debug(DEBUG_INCOMPLETE, "%s: Record not found", id);
+			return NULL;
+		}
+		else{
+			debug(DEBUG_UNEXPECTED,"%s: Error on sqlite3_step(): %d.", id, res);
+			return NULL;
+		}	
+	}
 	
 }
 
