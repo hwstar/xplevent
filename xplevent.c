@@ -998,7 +998,7 @@ int main(int argc, char *argv[])
  		((dbDirectFlag) && ((utilityCommand == UC_GET_SCRIPT) || /* Direct script get OR ...*/
  		((dbDirectFlag) && (utilityCommand == UC_PUT_SCRIPT))))){ /* Direct script put */
 			/* Open the database */
-			if(!(Globals->db = DBOpen(Globals->dbFile))){
+			if(!(Globals->db = DBOpen(Globals, Globals->dbFile))){
 				fatal("Database file does not exist or is not writaeble: %s", Globals->dbFile);
 			}
  		}
