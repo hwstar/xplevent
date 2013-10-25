@@ -30,14 +30,26 @@
 #include <sqlite3.h>
 #include <talloc.h>
 #include <time.h>
+#include <errno.h>
 #include  "defs.h"
 #include "types.h"
 #include "notify.h"
 #include "db.h"
 #include "xplevent.h"
 
+#define SQLITE_BHAND_MAX_RETRIES 10
+#define DB_MAGIC 0x026DA723
+
 typedef enum {TXTY_DEFERRED = 0, TXTY_IMMEDIATE, TXTY_EXCLUSIVE} txType_t;
 
+typedef struct dbObj_s {
+	unsigned magic;
+	unsigned backoffMS;
+	unsigned busyCount;
+	sqlite3 *db;
+} dbObj_t, *dbObjPtr_t;
+	
+	
 typedef struct callbackData_s {
 	TALLOC_CTX *ctx;
 	String valueName;
@@ -46,25 +58,88 @@ typedef struct callbackData_s {
 	
 typedef callbackData_t * callbackDataPtr_t;
 
+/*
+ * SQLITE Busy handler
+ */
+ 
 
-static Bool simpleTX(void *db, const char *id, const char *sql, int *res)
+static int busyHandler(void *objPtr, int timesInvoked)
+{
+	dbObjPtr_t db = objPtr;
+	struct timespec ts = (struct timespec){0, db->backoffMS * 100000};
+	
+	debug(DEBUG_EXPECTED,"db.c busyHandler invoked");
+	
+	if(timesInvoked > SQLITE_BHAND_MAX_RETRIES){
+		return 0; /* Give up */
+	}
+	/* Wait for prescribed backoff time */
+
+	
+	for(;;){
+		if(-1 == nanosleep(&ts, NULL)){
+			if(EINTR == errno){
+				continue;
+			}
+			else{
+				debug(DEBUG_UNEXPECTED,"db.c busyHandler: nanosleep returned: %d", errno);
+				return 0;
+			}
+		}
+		break;
+	}
+			
+	
+	db->busyCount++;
+	
+	
+	return -1;
+	
+		
+}
+
+
+/*
+ * Log an error message and return FAIL
+ */
+ 
+static Bool logErr(dbObjPtr_t db, int errCode, const char *id, String msg)
+{
+	sqlite3_mutex *m;
+	sqlite3 *sl3 = db->db;
+	
+	m = sqlite3_db_mutex(sl3);
+	sqlite3_mutex_enter(m);
+	String eStr = (String) sqlite3_errmsg(sl3);
+	debug(DEBUG_UNEXPECTED, "%s: %s: %s", id, msg, eStr);
+	sqlite3_mutex_leave(m);
+	return FAIL;
+}
+
+
+/*
+ * Perform a simple transaction
+ */
+ 
+
+static Bool simpleTX(dbObjPtr_t db, const char *id, const char *sql, int *res)
 {
 	int r;
 	sqlite3_stmt *stmt = NULL;
 		
 	/* Prepare */
-	if(SQLITE_OK != (r = sqlite3_prepare_v2(db, sql,1 + strlen(sql), &stmt, NULL))){
+	if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
 		if(res){
 			*res = r;
 		}
-		debug(DEBUG_UNEXPECTED, "%s: Sqlite error on prepare statement: %s, error code = %d " , id, sql, r);
+		return logErr(db, r, id, "Error on prepare statement");
 		return FAIL;
 	}
 	
 	/* Step */
 	if(stmt){
 		if(SQLITE_DONE != (r = sqlite3_step(stmt))){
-			debug(DEBUG_UNEXPECTED, "%s: Sqlite error on step: %s, error code = %d " , id, sql, r);
+			logErr(db, r, id, "Error on step");
 		}
 		sqlite3_reset(stmt);
 	}
@@ -95,7 +170,7 @@ static Bool simpleTX(void *db, const char *id, const char *sql, int *res)
 * Boolean. Returns PASS if successful, FAIL if otherwise.
 */
 
-static Bool dbTxBegin(void *db, const char *id, txType_t txType)
+static Bool dbTxBegin(dbObjPtr_t db, const char *id, txType_t txType)
 {
 	int res;
 	static String beginTx = "BEGIN DEFERRED";
@@ -136,7 +211,7 @@ static Bool dbTxBegin(void *db, const char *id, txType_t txType)
 * None
 */
 
-static void dbTxEnd(void *db, const char *id, Bool type)
+static void dbTxEnd(dbObjPtr_t db, const char *id, Bool type)
 {
 	int res;
 	
@@ -196,7 +271,7 @@ static Bool findColumnIndexByName(sqlite3_stmt *stmt, String ColName, int *index
  * Result must be talloc_free'd when no longer required
  */
 
-static const String dbReadField(void *db, TALLOC_CTX *ctx, const char *id, String table, 
+static const String dbReadField(dbObjPtr_t db, TALLOC_CTX *ctx, const char *id, String table, 
 String keyColName, String key, String valueColName)
 {
 	int res, index ;
@@ -218,7 +293,7 @@ String keyColName, String key, String valueColName)
 	MALLOC_FAIL(sql);
 	
 	/* Parse Sql */
-	if(SQLITE_OK != (res = sqlite3_prepare_v2((sqlite3 *) db, sql, -1, &stmt, NULL))){
+	if(SQLITE_OK != (res = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
 		debug(DEBUG_UNEXPECTED, "%s: Error on sqlite3_prepare(): %d. sql = %s", id, res, sql);
 		talloc_free(sql);
 		return NULL;
@@ -282,7 +357,7 @@ String keyColName, String key, String valueColName)
  * Boolean. PASS indicates success,  FAIL indicates failure.
  */
  
-static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, const char *id, String table, String colName, String key)
+static Bool dbDeleteRow(dbObjPtr_t db, TALLOC_CTX *ctx, const char *id, String table, String colName, String key)
 {
 	String sql;
 	String errorMessage;
@@ -299,7 +374,7 @@ static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, const char *id, String table,
 	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s='%s'", table, colName, key);
 	MALLOC_FAIL(sql)
 	
-	sqlite3_exec((sqlite3 *) db, sql, NULL, NULL, &errorMessage);
+	sqlite3_exec((sqlite3 *) db->db, sql, NULL, NULL, &errorMessage);
 
 	if(errorMessage){
 		debug(DEBUG_UNEXPECTED,"Sqlite DELETE error on %s: %s", id, errorMessage);
@@ -326,12 +401,18 @@ static Bool dbDeleteRow(void *db, TALLOC_CTX *ctx, const char *id, String table,
 
 void *DBOpen(String file)
 {
-	sqlite3 *db;
+	dbObjPtr_t db;
 	
 	ASSERT_FAIL(file)
+	
+	MALLOC_FAIL(db = talloc_zero(NULL, dbObj_t))
+	db->magic = DB_MAGIC;
+	db->backoffMS = 250;
+	
+	
 	/* Open Database File */
 	if(!access(file, R_OK | W_OK)){
-		if((sqlite3_open_v2(file, &db, SQLITE_OPEN_READWRITE, NULL))){
+		if((sqlite3_open_v2(file, &(db->db), SQLITE_OPEN_READWRITE, NULL))){
 			debug(DEBUG_UNEXPECTED,"Sqlite file open error on file: %s", file);
 			return NULL;
 		}
@@ -340,6 +421,8 @@ void *DBOpen(String file)
 		debug(DEBUG_UNEXPECTED,"Sqlite file access error on file: %s", file);
 		return NULL;
 	}
+	/* busyHandler(db, 0); Test call our handler */
+	sqlite3_busy_handler(db->db, busyHandler, db);
 	return (void *) db;
 }
 
@@ -358,8 +441,12 @@ void *DBOpen(String file)
 
 void DBClose(void *db)
 {
-	if(db){
-		sqlite3_close((sqlite3 *) db);
+	dbObjPtr_t theDB = db;
+	if(theDB){
+		ASSERT_FAIL(DB_MAGIC == theDB->magic)
+		sqlite3_close(theDB->db);
+		theDB->magic = 0;
+		talloc_free(theDB);
 	}
 }
 
@@ -384,22 +471,24 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 
 
 	String p = NULL;
+	dbObjPtr_t theDB = db;
 
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(key)
 		
 	/* Transaction start */
-	if(dbTxBegin(db, __func__, TXTY_DEFERRED) != PASS){
+	if(dbTxBegin(theDB, __func__, TXTY_DEFERRED) != PASS){
 		return NULL;
 	}
 		
-	p = dbReadField(db, ctx, __func__, "nvstate", "key", key, "value");
+	p = dbReadField(theDB, ctx, __func__, "nvstate", "key", key, "value");
 	
 	/* Transaction commit */
 	
-	dbTxEnd(db, __func__, PASS);
+	dbTxEnd(theDB, __func__, PASS);
 
 	return p;
 }
@@ -424,6 +513,7 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *db, const String key)
 Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String value)
 {
 	Bool res = PASS;
+	dbObjPtr_t theDB = db;
 	String errorMessage;
 	
 	String sql = NULL;
@@ -431,7 +521,8 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	time_t now;
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(key)
 	ASSERT_FAIL(value)
 	
@@ -439,16 +530,16 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
+	if(dbTxBegin(theDB, __func__, TXTY_EXCLUSIVE) != PASS){
 		return FAIL;
 	}
 	
 
 
-	p = dbReadField(db, ctx, __func__, "nvstate", "key", key, "value");
+	p = dbReadField(theDB, ctx, __func__, "nvstate", "key", key, "value");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, __func__, "nvstate", "key",  key);
+		res = dbDeleteRow(theDB, ctx, __func__, "nvstate", "key",  key);
 	}
 	
 	if(res == PASS){
@@ -457,7 +548,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 	
 		MALLOC_FAIL(sql)
 	
-		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(theDB->db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
@@ -473,7 +564,7 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *db, const String key, const String va
 
 	/* Transaction end */
 	
-	dbTxEnd(db, __func__, res);
+	dbTxEnd(theDB, __func__, res);
 
 	return res;
 	
@@ -501,18 +592,20 @@ const String DBFetchScript(TALLOC_CTX *ctx, void *db, const String scriptName)
 {
 
 	String script = NULL;
+	dbObjPtr_t theDB = db;
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(scriptName)
 
-	if(dbTxBegin(db, __func__, TXTY_DEFERRED) == FAIL){
+	if(dbTxBegin(theDB, __func__, TXTY_DEFERRED) == FAIL){
 		return NULL;
 	}
 	
-	script = dbReadField(db, ctx, __func__, "scripts", "scriptname", scriptName, "scriptcode");
+	script = dbReadField(theDB, ctx, __func__, "scripts", "scriptname", scriptName, "scriptcode");
 	
-	dbTxEnd(db, __func__, PASS);
+	dbTxEnd(theDB, __func__, PASS);
 	
 	return script;
 }
@@ -538,23 +631,25 @@ const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *db, const String tagSubAd
 
 	String scriptName = NULL;
 	String script = NULL;
+	dbObjPtr_t theDB = db;
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(tagSubAddr)
 
-	if(dbTxBegin(db, __func__, TXTY_DEFERRED) == FAIL){
+	if(dbTxBegin(theDB, __func__, TXTY_DEFERRED) == FAIL){
 		return NULL;
 	}
 	
-	scriptName = dbReadField(db, ctx, __func__, "trigaction", "source", tagSubAddr, "action");
+	scriptName = dbReadField(theDB, ctx, __func__, "trigaction", "source", tagSubAddr, "action");
 	
 	if(scriptName){
-		script = dbReadField(db, ctx, __func__, "scripts", "scriptname", scriptName, "scriptcode");
+		script = dbReadField(theDB, ctx, __func__, "scripts", "scriptname", scriptName, "scriptcode");
 		talloc_free(scriptName);
 	}
 	
-	dbTxEnd(db, __func__, PASS);
+	dbTxEnd(theDB, __func__, PASS);
 	
 	return script;
 }
@@ -585,11 +680,13 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	Bool res = PASS;
 	String errorMessage;
 	String sql = NULL;
+	dbObjPtr_t theDB = db;
 	String p;
 	time_t now;
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(source)
 	ASSERT_FAIL(schema)
 	ASSERT_FAIL(nvpairs)
@@ -604,10 +701,10 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	
 
 
-	p = dbReadField(db, ctx, __func__, "triglog", "source", source, "nvpairs");
+	p = dbReadField(theDB, ctx, __func__, "triglog", "source", source, "nvpairs");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, __func__, "triglog", "source", source);
+		res = dbDeleteRow(theDB, ctx, __func__, "triglog", "source", source);
 	}
 	
 	if(res == PASS){
@@ -616,7 +713,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 	
 		MALLOC_FAIL(sql)
 	
-		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(theDB->db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
@@ -632,7 +729,7 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *db, const String source, const Strin
 
 	/* Transaction end */
 	
-	dbTxEnd(db, __func__, res);
+	dbTxEnd(theDB, __func__, res);
 
 	return res;
 	
@@ -660,26 +757,28 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 {
 	Bool res = PASS;
 	String errorMessage;
+	dbObjPtr_t theDB = db;
 	String sql = NULL;
 	String p;
 	time_t now;
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(source)
 
 	time(&now);
 	
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
+	if(dbTxBegin(theDB, __func__, TXTY_EXCLUSIVE) != PASS){
 		return FAIL;
 	}
 	
-	p = dbReadField(db, ctx, __func__, "hbeatlog", "source", source, "source");
+	p = dbReadField(theDB, ctx, __func__, "hbeatlog", "source", source, "source");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, __func__, "hbeatlog", "source", source);
+		res = dbDeleteRow(theDB, ctx, __func__, "hbeatlog", "source", source);
 	}
 	
 	if(res == PASS){
@@ -688,7 +787,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 	
 		MALLOC_FAIL(sql)
 	
-		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(theDB->db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
@@ -703,7 +802,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 
 	/* Transaction end */
 	
-	dbTxEnd(db, __func__, res);
+	dbTxEnd(theDB, __func__, res);
 
 	return res;
 	
@@ -730,6 +829,7 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *db, const String source)
 
 Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String script)
 {
+	dbObjPtr_t theDB = db;
 	Bool res = PASS;
 	int i;
 	unsigned scriptBufSize = 2048;
@@ -742,7 +842,8 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 
 	
 	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
+	ASSERT_FAIL(theDB)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(name)
 	ASSERT_FAIL(script)
 
@@ -774,7 +875,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 		
 	/* Transaction begin */
 	
-	if(dbTxBegin(db, __func__, TXTY_EXCLUSIVE) != PASS){
+	if(dbTxBegin(theDB, __func__, TXTY_EXCLUSIVE) != PASS){
 		talloc_free(scriptBuf);
 		return FAIL;
 	}
@@ -782,7 +883,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	p = dbReadField(db, ctx, __func__, "scripts", "scriptname", name, "scriptcode");
 	if(p){
 		talloc_free(p);
-		res = dbDeleteRow(db, ctx, __func__, "scripts", "scriptname", name);
+		res = dbDeleteRow(theDB, ctx, __func__, "scripts", "scriptname", name);
 	}
 	
 	if(res == PASS){
@@ -791,7 +892,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 	
 		MALLOC_FAIL(sql)
 	
-		sqlite3_exec(db, sql, NULL, NULL, &errorMessage);
+		sqlite3_exec(theDB->db, sql, NULL, NULL, &errorMessage);
 	
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
@@ -811,7 +912,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *db, const String name, const String scrip
 
 	/* Transaction end */
 	
-	dbTxEnd(db, __func__, res);
+	dbTxEnd(theDB, __func__, res);
 
 	return res;
 	
@@ -846,25 +947,27 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *db,  void *data, String table,
 	Bool res;
 	String errorMessage;
 	String sql = NULL;
+	dbObjPtr_t theDB = db;
 
 	
 	ASSERT_FAIL(ctx)
 	ASSERT_FAIL(db)
+	ASSERT_FAIL(DB_MAGIC == theDB->magic)
 	ASSERT_FAIL(table)
 	ASSERT_FAIL(callback)
 	
-	res = dbTxBegin(db, __func__, TXTY_DEFERRED);
+	res = dbTxBegin(theDB, __func__, TXTY_DEFERRED);
 	if(res == PASS)
 		sql = talloc_asprintf(ctx , "SELECT * FROM %s LIMIT %u", table, limit);
 		MALLOC_FAIL(sql);
-		sqlite3_exec((sqlite3 *) db, sql, callback, data , &errorMessage);
+		sqlite3_exec(theDB->db, sql, callback, data , &errorMessage);
 		if(errorMessage){
 			debug(DEBUG_UNEXPECTED,"%s: Sqlite select error on select: ", __func__, errorMessage);
 			sqlite3_free(errorMessage);
 			res = FAIL;
 		}
 	
-	dbTxEnd(db, __func__, res);
+	dbTxEnd(theDB, __func__, res);
 	
 	if(sql){
 		talloc_free(sql);
