@@ -133,7 +133,6 @@ static Bool simpleTX(dbObjPtr_t db, const char *id, const char *sql, int *res)
 			*res = r;
 		}
 		return logErr(db, r, id, "Error on prepare statement");
-		return FAIL;
 	}
 	
 	/* Step */
@@ -228,28 +227,6 @@ static void dbTxEnd(dbObjPtr_t db, const char *id, Bool type)
 	}
 }
 
-/*
- * Find the index number by column name
- */
-
-static Bool findColumnIndexByName(sqlite3_stmt *stmt, String ColName, int *index)
-{
-	int i,numColumns = sqlite3_column_count(stmt);
-	String p;
-	
-	if(!numColumns){
-		return FAIL;
-	}
-	for(i = 0; i < numColumns; i++){
-		p = (String) sqlite3_column_origin_name(stmt, i);
-		if(!strcmp(p, ColName)){
-			*index = i;
-			return PASS;
-		}
-	}
-	return FAIL;		
-}
-
 
 /*
  * Return a single result from a select.
@@ -274,27 +251,20 @@ static Bool findColumnIndexByName(sqlite3_stmt *stmt, String ColName, int *index
 static const String dbReadField(dbObjPtr_t db, TALLOC_CTX *ctx, const char *id, String table, 
 String keyColName, String key, String valueColName)
 {
-	int res, index ;
+	int r, index ;
 	String sql,p,q;
 	sqlite3_stmt *stmt = NULL;
 
-	ASSERT_FAIL(table)
-	ASSERT_FAIL(keyColName)
-	ASSERT_FAIL(key)
-	ASSERT_FAIL(valueColName)
-	ASSERT_FAIL(id)
-	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(db)
 	
-	
-
 	/* Generate query */
-	sql = talloc_asprintf(ctx , "SELECT * FROM %s WHERE %s=:key LIMIT 1", table, keyColName);
+	sql = talloc_asprintf(ctx , "SELECT %s AS result FROM %s WHERE %s=:key LIMIT 1", valueColName, table, keyColName);
 	MALLOC_FAIL(sql);
 	
+	debug(DEBUG_INCOMPLETE, "%s: Sql = %s", id, sql);
+	
 	/* Parse Sql */
-	if(SQLITE_OK != (res = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
-		debug(DEBUG_UNEXPECTED, "%s: Error on sqlite3_prepare(): %d. sql = %s", id, res, sql);
+	if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
+		logErr(db, r, id, "Error on sqlite3_prepare()");
 		talloc_free(sql);
 		return NULL;
 
@@ -304,39 +274,41 @@ String keyColName, String key, String valueColName)
 	
 	/* Bind the key */
 	index = sqlite3_bind_parameter_index(stmt, ":key");
-	sqlite3_bind_text(stmt, index, key, -1, SQLITE_TRANSIENT);
+	r = sqlite3_bind_text(stmt, index, key, -1, SQLITE_TRANSIENT);
 	
-	/* Execute the parsed statement */
-	res = sqlite3_step(stmt);
-	if(SQLITE_ROW == res){
-		/* Found a matching record */
-		if(FAIL == findColumnIndexByName(stmt, valueColName, &index)){
-			debug(DEBUG_UNEXPECTED,"%s: Column name not found: %s", id, valueColName);
+	if(SQLITE_OK == r){
+		/* Execute the parsed statement */
+		r = sqlite3_step(stmt);
+		if(SQLITE_ROW == r){
+			/* Extract value from column */
+			p = (String) sqlite3_column_text(stmt, 0);
+			if(p){
+				debug(DEBUG_INCOMPLETE, "%s: sqlite3_column_text() returned result: %s", id, p );
+				MALLOC_FAIL(q = talloc_strdup(ctx, p))
+				sqlite3_finalize(stmt);
+				return q;
+			}
+			logErr(db, r, id, "sqlite3_column_text() returned NULL");
 			sqlite3_finalize(stmt);
-			return NULL;
-		}
-		/* Extract value from column */
-		p = (String) sqlite3_column_text(stmt, index);
-		if(p){
-			MALLOC_FAIL(q = talloc_strdup(ctx, p))
-			sqlite3_finalize(stmt);
-			return q;
-		}
-		debug(DEBUG_UNEXPECTED, "%s: sqlite3_column_text() returned NULL", id);
-		sqlite3_finalize(stmt);
-		return NULL;
-	}
-	else{
-		sqlite3_finalize(stmt);
-		if(SQLITE_DONE == res){
-			debug(DEBUG_INCOMPLETE, "%s: Record not found", id);
 			return NULL;
 		}
 		else{
-			debug(DEBUG_UNEXPECTED,"%s: Error on sqlite3_step(): %d.", id, res);
-			return NULL;
-		}	
+			sqlite3_finalize(stmt);
+			if(SQLITE_DONE == r){
+				debug(DEBUG_INCOMPLETE, "%s: Record not found", id);
+				return NULL;
+			}
+			else{
+				logErr(db, r, id,"Error on sqlite3_step()");
+				return NULL;
+			}	
+		}
 	}
+	else{
+		sqlite3_finalize(stmt);
+		logErr(db, r, id, "Error on sqlite_bind_text()");
+		return NULL;
+	}	
 	
 }
 
@@ -360,29 +332,40 @@ String keyColName, String key, String valueColName)
 static Bool dbDeleteRow(dbObjPtr_t db, TALLOC_CTX *ctx, const char *id, String table, String colName, String key)
 {
 	String sql;
-	String errorMessage;
 	Bool res = PASS;
-	
-	ASSERT_FAIL(id)
-	ASSERT_FAIL(ctx)
-	ASSERT_FAIL(table)
-	ASSERT_FAIL(colName)
-	ASSERT_FAIL(key)
-	ASSERT_FAIL(db)
+	int r,index;
+	sqlite3_stmt *stmt = NULL;
 	
 	
-	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s='%s'", table, colName, key);
+	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s=:key", table, colName);
 	MALLOC_FAIL(sql)
+	debug(DEBUG_INCOMPLETE, "%s: Sql = %s", id, sql);
 	
-	sqlite3_exec((sqlite3 *) db->db, sql, NULL, NULL, &errorMessage);
-
-	if(errorMessage){
-		debug(DEBUG_UNEXPECTED,"Sqlite DELETE error on %s: %s", id, errorMessage);
-		sqlite3_free(errorMessage);
-		res = FAIL;
+	/* Parse Sql */
+	if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
+		talloc_free(sql);
+		return logErr(db, r, id, "Error on prepare statement");
 	}
-	
+	/* Release the SQL string */
 	talloc_free(sql);
+	
+	/* Bind the key */
+	index = sqlite3_bind_parameter_index(stmt, ":key");
+	r = sqlite3_bind_text(stmt, index, key, -1, SQLITE_TRANSIENT);
+	
+	if(SQLITE_OK == r){
+		/* Execute the parsed statement */
+		r = sqlite3_step(stmt);
+		if(SQLITE_DONE != r){
+			res = logErr(db, r, id, "Error on step statement");
+		}
+	}
+	else{
+		res = logErr(db, r, id, "Error on sqlite_bind_text()");
+	}	
+	
+
+	sqlite3_finalize(stmt);
 	
 	return res;
 }
