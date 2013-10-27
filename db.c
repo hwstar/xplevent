@@ -60,6 +60,17 @@ typedef callbackData_t * callbackDataPtr_t;
 
 /*
  * SQLITE Busy handler
+ * 
+ * This is registered when DBOpen is called.
+ * 
+ * Arguments
+ * 
+ * 1. Pointer to the database object.
+ * 2. Number of times SQLITE has invoked this for the current transaction.
+ * 
+ * Return value:
+ * 
+ * TRUE if the operation is to continue, otherwise FALSE
  */
  
 
@@ -71,7 +82,7 @@ static int busyHandler(void *objPtr, int timesInvoked)
 	debug(DEBUG_EXPECTED,"db.c busyHandler invoked");
 	
 	if(timesInvoked > SQLITE_BHAND_MAX_RETRIES){
-		return 0; /* Give up */
+		return FALSE; /* Give up */
 	}
 	/* Wait for prescribed backoff time */
 
@@ -83,7 +94,7 @@ static int busyHandler(void *objPtr, int timesInvoked)
 			}
 			else{
 				debug(DEBUG_UNEXPECTED,"db.c busyHandler: nanosleep returned: %d", errno);
-				return 0;
+				return FALSE;
 			}
 		}
 		break;
@@ -93,7 +104,7 @@ static int busyHandler(void *objPtr, int timesInvoked)
 	db->busyCount++;
 	
 	
-	return -1;
+	return TRUE;
 	
 		
 }
@@ -101,9 +112,19 @@ static int busyHandler(void *objPtr, int timesInvoked)
 
 /*
  * Log an error message and return FAIL
+ * 
+ * Arguments:
+ * 
+ * 1. Pointer to the database object
+ * 2. Involing function name
+ * 3. Message string
+ * 
+ * Return value:
+ * 
+ * Always FAIL
  */
  
-static Bool logErr(dbObjPtr_t db, int errCode, const char *id, String msg)
+static Bool logErr(dbObjPtr_t db, int line, const char *id, String msg)
 {
 	sqlite3_mutex *m;
 	sqlite3 *sl3 = db->db;
@@ -111,14 +132,25 @@ static Bool logErr(dbObjPtr_t db, int errCode, const char *id, String msg)
 	m = sqlite3_db_mutex(sl3);
 	sqlite3_mutex_enter(m);
 	String eStr = (String) sqlite3_errmsg(sl3);
-	debug(DEBUG_UNEXPECTED, "%s: %s: %s", id, msg, eStr);
+	debug(DEBUG_UNEXPECTED, "File: %s, Line %s: %s: %s: %s", __FILE__, line, id, msg, eStr);
 	sqlite3_mutex_leave(m);
 	return FAIL;
 }
 
 
 /*
- * Perform a simple transaction
+ * Perform a simple transaction which has no prepared statements.
+ * 
+ * Arguments:
+ * 
+ * 1. Pointer to the database object
+ * 2. Invoking function name
+ * 3. SQL string to execute
+ * 4. Pointer to a place to store the result
+ * 
+ * Return value
+ * 
+ * PASS if successful, otherwise FAIL
  */
  
 
@@ -132,13 +164,13 @@ static Bool simpleTX(dbObjPtr_t db, const char *id, const char *sql, int *res)
 		if(res){
 			*res = r;
 		}
-		return logErr(db, r, id, "Error on prepare statement");
+		return logErr(db, __LINE__, id, "Error on sqlite3_prepare_v2()");
 	}
 	
 	/* Step */
 	if(stmt){
 		if(SQLITE_DONE != (r = sqlite3_step(stmt))){
-			logErr(db, r, id, "Error on step");
+			logErr(db, __LINE__, id, "Error on sqlite3_step()");
 		}
 		sqlite3_reset(stmt);
 	}
@@ -207,23 +239,20 @@ static Bool dbTxBegin(dbObjPtr_t db, const char *id, txType_t txType)
 *
 * Returns:
 *
-* None
+* PASS if successful, otherwise FAIL
 */
 
-static void dbTxEnd(dbObjPtr_t db, const char *id, Bool type)
+static Bool dbTxEnd(dbObjPtr_t db, const char *id, Bool type)
 {
 	int res;
 	
 	/* Transaction commit */
 	if(type == PASS){
-		simpleTX(db, id, "COMMIT", &res);
-		return;
-
+		return simpleTX(db, id, "COMMIT", &res);
 	}
 	/* Transaction rollback */
 	else{
-		simpleTX(db, id, "ROLLBACK", &res);
-		return;
+		return simpleTX(db, id, "ROLLBACK", &res);
 	}
 }
 
@@ -264,7 +293,7 @@ String keyColName, String key, String valueColName)
 	
 	/* Parse Sql */
 	if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
-		logErr(db, r, id, "Error on sqlite3_prepare()");
+		logErr(db, __LINE__, id, "Error on sqlite3_prepare()");
 		talloc_free(sql);
 		return NULL;
 
@@ -288,7 +317,7 @@ String keyColName, String key, String valueColName)
 				sqlite3_finalize(stmt);
 				return q;
 			}
-			logErr(db, r, id, "sqlite3_column_text() returned NULL");
+			logErr(db, __LINE__, id, "sqlite3_column_text() returned NULL");
 			sqlite3_finalize(stmt);
 			return NULL;
 		}
@@ -299,14 +328,14 @@ String keyColName, String key, String valueColName)
 				return NULL;
 			}
 			else{
-				logErr(db, r, id,"Error on sqlite3_step()");
+				logErr(db, __LINE__, id,"Error on sqlite3_step()");
 				return NULL;
 			}	
 		}
 	}
 	else{
 		sqlite3_finalize(stmt);
-		logErr(db, r, id, "Error on sqlite_bind_text()");
+		logErr(db, __LINE__, id, "Error on sqlite_bind_text()");
 		return NULL;
 	}	
 	
@@ -339,12 +368,13 @@ static Bool dbDeleteRow(dbObjPtr_t db, TALLOC_CTX *ctx, const char *id, String t
 	
 	sql = talloc_asprintf(ctx, "DELETE FROM %s WHERE %s=:key", table, colName);
 	MALLOC_FAIL(sql)
+	
 	debug(DEBUG_INCOMPLETE, "%s: Sql = %s", id, sql);
 	
 	/* Parse Sql */
 	if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
 		talloc_free(sql);
-		return logErr(db, r, id, "Error on prepare statement");
+		return logErr(db, __LINE__, id, "Error on prepare statement");
 	}
 	/* Release the SQL string */
 	talloc_free(sql);
@@ -357,11 +387,11 @@ static Bool dbDeleteRow(dbObjPtr_t db, TALLOC_CTX *ctx, const char *id, String t
 		/* Execute the parsed statement */
 		r = sqlite3_step(stmt);
 		if(SQLITE_DONE != r){
-			res = logErr(db, r, id, "Error on step statement");
+			res = logErr(db, __LINE__, id, "Error on step statement");
 		}
 	}
 	else{
-		res = logErr(db, r, id, "Error on sqlite_bind_text()");
+		res = logErr(db, __LINE__, id, "Error on sqlite_bind_text()");
 	}	
 	
 
@@ -497,8 +527,9 @@ const String DBReadNVState(TALLOC_CTX *ctx, void *dbObjPtr, const String key)
 Bool DBWriteNVState(TALLOC_CTX *ctx, void *dbObjPtr, const String key, const String value)
 {
 	Bool res = PASS;
+	int r, index;
 	dbObjPtr_t db = dbObjPtr;
-	String errorMessage;
+	sqlite3_stmt *stmt = NULL;
 	
 	String sql = NULL;
 	String p;
@@ -526,26 +557,45 @@ Bool DBWriteNVState(TALLOC_CTX *ctx, void *dbObjPtr, const String key, const Str
 		res = dbDeleteRow(db, ctx, __func__, "nvstate", "key",  key);
 	}
 	
-	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES ('%s','%s','%lld')",
-		"nvstate", key, value, (long long) now);
+	if(PASS == res){
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (key,value,timestamp) VALUES (:key,:value,'%lld')",
+		"nvstate",(long long) now);
 	
 		MALLOC_FAIL(sql)
+		
+		debug(DEBUG_INCOMPLETE, "%s: Sql = %s", __func__, sql);
+		
+		/* Parse Sql */
+		if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
+			res = logErr(db, __LINE__, __func__, "Error on sqlite3_prepare_v2()");
+		}
+		/* Release the SQL string */
+		talloc_free(sql);
+		
+		if(PASS == res){
+			/* Bind the key */
+			index = sqlite3_bind_parameter_index(stmt, ":key");
+			r = sqlite3_bind_text(stmt, index, key, -1, SQLITE_TRANSIENT);
+		
+			/* Bind the value */
+			if(SQLITE_OK == r){
+				index = sqlite3_bind_parameter_index(stmt, ":value");
+				r = sqlite3_bind_text(stmt, index, value, -1, SQLITE_TRANSIENT);
+			}
+			if(SQLITE_OK == r){
+				/* Execute the parsed statement */
+				r = sqlite3_step(stmt);
+				if(SQLITE_DONE != r){
+					res = logErr(db, __LINE__, __func__, "Error on sqlite3_step()");
+				}
+			}
+			else{
+				res = logErr(db, __LINE__, __func__, "Error on sqlite3_bind_text()");
+			}	
 	
-		sqlite3_exec(db->db, sql, NULL, NULL, &errorMessage);
-	
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
-			sqlite3_free(errorMessage);
-			res = FAIL;
+			sqlite3_finalize(stmt);
 		}
 	}
-	
-	if(sql){
-		talloc_free(sql);
-	}
-	
-
 	/* Transaction end */
 	
 	dbTxEnd(db, __func__, res);
@@ -662,8 +712,9 @@ const String DBFetchScriptByTag(TALLOC_CTX *ctx, void *dbObjPtr, const String ta
 Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *dbObjPtr, const String source, const String schema, const String nvpairs)
 {
 	Bool res = PASS;
-	String errorMessage;
 	String sql = NULL;
+	int r, index;
+	sqlite3_stmt *stmt = NULL;
 	dbObjPtr_t db = dbObjPtr;
 	String p;
 	time_t now;
@@ -692,25 +743,54 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *dbObjPtr, const String source, const
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES ('%s','%s','%s','%lld')",
-		"triglog", source, schema, nvpairs, (long long) now);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,schema,nvpairs,timestamp) VALUES (:source,:schema,:nvpairs,'%lld')",
+		"triglog",(long long) now);
 	
 		MALLOC_FAIL(sql)
-	
-		sqlite3_exec(db->db, sql, NULL, NULL, &errorMessage);
-	
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
-			sqlite3_free(errorMessage);
-			res = FAIL;
+		
+		debug(DEBUG_INCOMPLETE, "%s: Sql = %s", __func__, sql);	
+		
+		/* Parse Sql */
+		if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
+			res = logErr(db,  __LINE__, __func__, "Error on sqlite3_prepare_v2()");
 		}
+		/* Release the SQL string */
+		talloc_free(sql);
+		
+		if(PASS == res){
+			/* Bind the source */
+			index = sqlite3_bind_parameter_index(stmt, ":source");
+			r = sqlite3_bind_text(stmt, index, source, -1, SQLITE_TRANSIENT);
+		
+			/* Bind the schema */
+			if(SQLITE_OK == r){
+				index = sqlite3_bind_parameter_index(stmt, ":schema");
+				r = sqlite3_bind_text(stmt, index, schema, -1, SQLITE_TRANSIENT);
+			}
+			
+			/* Bind the nvpairs */
+			if(SQLITE_OK == r){
+				index = sqlite3_bind_parameter_index(stmt, ":nvpairs");
+				r = sqlite3_bind_text(stmt, index, nvpairs, -1, SQLITE_TRANSIENT);
+			}
+			
+			if(SQLITE_OK == r){
+				/* Execute the parsed statement */
+				r = sqlite3_step(stmt);
+				if(SQLITE_DONE != r){
+					res = logErr(db, __LINE__, __func__, "Error on sqlite3_step()");
+				}
+			}
+			else{
+				res = logErr(db, __LINE__, __func__, "Error on sqlite3_bind_text()");
+			}	
+	
+			sqlite3_finalize(stmt);
+		}
+	
+	
 	}
 	
-	if(sql){
-		talloc_free(sql);
-	}	
-
-
 	/* Transaction end */
 	
 	dbTxEnd(db, __func__, res);
@@ -740,7 +820,8 @@ Bool DBUpdateTrigLog(TALLOC_CTX *ctx, void *dbObjPtr, const String source, const
 Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *dbObjPtr, const String source)
 {
 	Bool res = PASS;
-	String errorMessage;
+	int r,index;
+	sqlite3_stmt *stmt = NULL;
 	dbObjPtr_t db = dbObjPtr;
 	String sql = NULL;
 	String p;
@@ -766,22 +847,39 @@ Bool DBUpdateHeartbeatLog(TALLOC_CTX *ctx, void *dbObjPtr, const String source)
 	}
 	
 	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES ('%s','%lld')",
-		"hbeatlog", source, (long long) now);
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (source,timestamp) VALUES (:source,'%lld')",
+		"hbeatlog", (long long) now);
 	
 		MALLOC_FAIL(sql)
-	
-		sqlite3_exec(db->db, sql, NULL, NULL, &errorMessage);
-	
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
-			sqlite3_free(errorMessage);
-			res = FAIL;
+		
+		debug(DEBUG_INCOMPLETE, "%s: Sql = %s", __func__, sql);
+				
+		/* Parse Sql */
+		if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
+			res = logErr(db, __LINE__, __func__, "Error on sqlite3_prepare_v2()");
 		}
-	}
-	
-	if(sql){
+		/* Release the SQL string */
 		talloc_free(sql);
+		
+		if(PASS == res){
+			/* Bind the source */
+			index = sqlite3_bind_parameter_index(stmt, ":source");
+			r = sqlite3_bind_text(stmt, index, source, -1, SQLITE_TRANSIENT);
+
+			
+			if(SQLITE_OK == r){
+				/* Execute the parsed statement */
+				r = sqlite3_step(stmt);
+				if(SQLITE_DONE != r){
+					res = logErr(db, __LINE__, __func__, "Error on sqlite3_step()");
+				}
+			}
+			else{
+				res = logErr(db, __LINE__, __func__, "Error on sqlite3_bind_text()");
+			}	
+			sqlite3_finalize(stmt);
+		}
+	
 	}	
 
 	/* Transaction end */
@@ -815,12 +913,11 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *dbObjPtr, const String name, const String
 {
 	dbObjPtr_t db = dbObjPtr;
 	Bool res = PASS;
-	int i;
+	int i,index,r;
 	unsigned scriptBufSize = 2048;
 	unsigned scriptByteCount = 0;
-	
+	sqlite3_stmt *stmt = NULL;
 	String scriptBuf;
-	String errorMessage;
 	String sql = NULL;
 	String p;
 
@@ -870,29 +967,49 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *dbObjPtr, const String name, const String
 		res = dbDeleteRow(db, ctx, __func__, "scripts", "scriptname", name);
 	}
 	
-	if(res == PASS){
-		sql = talloc_asprintf(ctx, "INSERT INTO %s (scriptname,scriptcode) VALUES ('%s','%s')",
-		"scripts", name, scriptBuf);
+	if(PASS == res){
+		sql = talloc_asprintf(ctx, "INSERT INTO %s (scriptname,scriptcode) VALUES (:scriptname,:scriptcode)",
+		"scripts");
 	
 		MALLOC_FAIL(sql)
+		
+		debug(DEBUG_INCOMPLETE, "%s: Sql = %s", __func__, sql);	
+		
+		/* Parse Sql */
+		if(SQLITE_OK != (r = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL))){
+			res = logErr(db, __LINE__, __func__, "Error on sqlite3_prepare_v2()");
+		}
+		/* Release the SQL string */
+		talloc_free(sql);
+		
+		if(PASS == res){
+			/* Bind the script name */
+			index = sqlite3_bind_parameter_index(stmt, ":scriptname");
+			r = sqlite3_bind_text(stmt, index, name, -1, SQLITE_TRANSIENT);
+		
+			/* Bind the script code */
+			if(SQLITE_OK == r){
+				index = sqlite3_bind_parameter_index(stmt, ":scriptcode");
+				r = sqlite3_bind_text(stmt, index, scriptBuf, -1, SQLITE_TRANSIENT);
+			}
+
+			if(SQLITE_OK == r){
+				/* Execute the parsed statement */
+				r = sqlite3_step(stmt);
+				if(SQLITE_DONE != r){
+					res = logErr(db, __LINE__, __func__, "Error on sqlite3_step()");
+				}
+			}
+			else{
+				res = logErr(db, __LINE__, __func__, "Error on sqlite3_bind_text()");
+			}	
 	
-		sqlite3_exec(db->db, sql, NULL, NULL, &errorMessage);
-	
-		if(errorMessage){
-			debug(DEBUG_UNEXPECTED,"Sqlite INSERT error on %s: %s", __func__, errorMessage);
-			sqlite3_free(errorMessage);
-			talloc_free(scriptBuf);
-			res = FAIL;
+			sqlite3_finalize(stmt);
 		}
 	}
 	
 	/* Free our local copy of the script */
 	talloc_free(scriptBuf);
-	
-	if(sql){
-		talloc_free(sql);
-	}
-	
 
 	/* Transaction end */
 	
@@ -905,7 +1022,7 @@ Bool DBIRScript(TALLOC_CTX *ctx, void *dbObjPtr, const String name, const String
 /*
  * Return a multiple results from a wildcard select.
  * 
- * Warning: Do not use this on large tables.
+ * Warning: Do not use this on large tables. Uses sqlite3_exec. Do not call with tainted data.
  *
  * Arguments:
  *
@@ -964,6 +1081,7 @@ Bool DBReadRecords(TALLOC_CTX *ctx, void *dbObjPtr,  void *data, String table,
 /*
  * Return a field value by name
  * 
+ * 
  * Arguments:
  * 1. List of field values as an array of strings
  * 2. List of column names as an array of strings
@@ -995,6 +1113,7 @@ const String DBGetFieldByName(const String *argv, const String *colnames, const 
 
 /*
  * Generate an empty database file with the correct tables in it
+ * 
  * 
  * Note: This function will refuse to overwrite an existing file unless the force flag is set
  * 
