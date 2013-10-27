@@ -132,7 +132,7 @@ static Bool logErr(dbObjPtr_t db, int line, const char *id, String msg)
 	m = sqlite3_db_mutex(sl3);
 	sqlite3_mutex_enter(m);
 	String eStr = (String) sqlite3_errmsg(sl3);
-	debug(DEBUG_UNEXPECTED, "File: %s, Line %s: %s: %s: %s", __FILE__, line, id, msg, eStr);
+	debug(DEBUG_UNEXPECTED, "File: %s, Line %d: %s: %s: %s", __FILE__, line, id, msg, eStr);
 	sqlite3_mutex_leave(m);
 	return FAIL;
 }
